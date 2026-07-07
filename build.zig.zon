@@ -1,0 +1,16 @@
+.{
+    .name = .zpci,
+    .fingerprint = 0xb89162c052736aa,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .zstdx = .{ .path = "../zstdx" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "test",
+        "docs",
+    },
+}
