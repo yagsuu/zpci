@@ -1,6 +1,8 @@
 //! Default host test suite aggregate. Spec: docs/guidelines/testing.md.
-//!
-//! Wave 0 scaffold: no test modules yet. Each implementation wave appends
-//! the tests it lands.
 
-comptime {}
+comptime {
+    _ = @import("core/errors_test.zig");
+    _ = @import("core/ids_test.zig");
+    _ = @import("core/bdf_test.zig");
+    _ = @import("memory/bar_test.zig");
+}
