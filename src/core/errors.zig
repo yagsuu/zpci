@@ -1,0 +1,25 @@
+//! Package error categories. Spec: docs/specs/core/errors.md.
+
+pub const Error = error{
+    OutOfBounds,
+    AbsentFunction,
+    BadHeaderType,
+    MalformedField,
+    MalformedCapability,
+    MalformedBar,
+    CycleDetected,
+    UnsupportedRevision,
+    UnsupportedCapability,
+    StorageExhausted,
+    ResourceExhausted,
+    BridgeWindowUnencodable,
+    BusRangeExhausted,
+    UnsupportedAccessWidth,
+    UnalignedAccess,
+    InvalidIdentifier,
+    InvalidRouting,
+    BarMemoryOutOfBounds,
+    ProgrammingReadbackMismatch,
+    ProgrammingWriteFailed,
+    ProgrammingPartial,
+};
