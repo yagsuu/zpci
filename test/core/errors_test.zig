@@ -7,7 +7,6 @@ const zpci = @import("zpci");
 const Error = zpci.core.Error;
 
 test "unit: every spec-named variant exists in zpci.core.Error" {
-    // A rename of any variant fails to compile before this test runs.
     const variants = comptime .{
         "OutOfBounds",
         "AbsentFunction",

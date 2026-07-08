@@ -29,8 +29,6 @@ test "unit: Bdf.of encodes fields at the PCIe-mandated bit offsets" {
     try std.testing.expectEqual(@as(u5, 0x1F), x.device);
     try std.testing.expectEqual(@as(u3, 0x07), x.function);
 
-    // Raw u16: bus in high byte, device in bits 7..3, function in bits 2..0.
-    // Expected: (0x12 << 8) | (0x1F << 3) | 0x07 = 0x12FF.
     try std.testing.expectEqual(@as(u16, 0x12FF), x.asU16());
 }
 
@@ -79,7 +77,6 @@ test "unit: Bdf multifunction helpers" {
 
 test "unit: Bdf.df packs device and function into one byte" {
     const x = Bdf.of(0x10, 0x1F, 0x07);
-    // Low byte of the u16 encoding: (device << 3) | function = 0xFF.
     try std.testing.expectEqual(@as(u8, 0xFF), x.df());
 
     const zero = Bdf.of(0x10, 0, 0);
@@ -91,8 +88,6 @@ test "unit: Sbdf.of packs segment into the high half" {
     try std.testing.expectEqual(@as(u16, 0xBEEF), x.segment.value);
     try std.testing.expectEqual(@as(u8, 0x12), x.bdf.bus);
 
-    // Full u32: segment | bus | device | function.
-    // (0xBEEF << 16) | (0x12 << 8) | (0x03 << 3) | 0x02 = 0xBEEF_121A.
     try std.testing.expectEqual(@as(u32, 0xBEEF_121A), x.asU32());
 }
 

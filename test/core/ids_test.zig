@@ -111,9 +111,9 @@ test "unit: ClassCode.eql compares all three components" {
     const a = ClassCode.of(0x01, 0x08, 0x02);
     const b = ClassCode.from(0x01, 0x08, 0x02);
     try std.testing.expect(a.eql(b));
-    try std.testing.expect(!a.eql(ClassCode.of(0x01, 0x08, 0x00))); // prog_if differs
-    try std.testing.expect(!a.eql(ClassCode.of(0x01, 0x06, 0x02))); // subclass differs
-    try std.testing.expect(!a.eql(ClassCode.of(0x00, 0x08, 0x02))); // base_class differs
+    try std.testing.expect(!a.eql(ClassCode.of(0x01, 0x08, 0x00)));
+    try std.testing.expect(!a.eql(ClassCode.of(0x01, 0x06, 0x02)));
+    try std.testing.expect(!a.eql(ClassCode.of(0x00, 0x08, 0x02)));
 }
 
 test "unit: BaseClass.eql routes generic branching" {

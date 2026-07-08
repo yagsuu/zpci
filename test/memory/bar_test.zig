@@ -7,10 +7,7 @@ const zpci = @import("zpci");
 
 const BarMemory = zpci.memory.BarMemory;
 
-/// Byte-backed `BarMemory` backend local to this test file. Kept out of
-/// `src/memory/bar.zig` so the fake never joins the public surface.
-/// Wire bytes are little-endian regardless of host endianness, matching
-/// docs/specs/memory/bar.md §Byte-backed fake.
+/// Byte-backed `BarMemory` test backend using little-endian wire bytes.
 const FakeBarMemory = struct {
     bytes: []u8,
 

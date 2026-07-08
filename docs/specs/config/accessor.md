@@ -247,8 +247,6 @@ The host-test fake implements the same `ConfigSpace` contract as hardware-backed
 
 ```zig
 pub const FakeConfig = struct {
-    entries: []Entry,
-
     pub const Entry = struct {
         sbdf: core.Sbdf,
         bytes: []u8,
@@ -264,6 +262,8 @@ pub const FakeConfig = struct {
     pub fn configSpace(self: *FakeConfig) ConfigSpace;
 };
 ```
+
+The code block specifies the fake's API shape, not its internal storage representation.
 
 Rules:
 
