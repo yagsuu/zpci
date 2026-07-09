@@ -6,111 +6,25 @@ const stdx = @import("stdx");
 const zpci = @import("zpci");
 
 const ConfigSpace = zpci.config.ConfigSpace;
+const TestConfigSpace = zpci.testing.config.TestConfigSpace;
 const Sbdf = zpci.core.Sbdf;
 
+comptime {
+    if (@hasDecl(zpci.config, "TestConfigSpace")) {
+        @compileError("zpci.config must not expose TestConfigSpace; use zpci.testing.config.TestConfigSpace");
+    }
+    if (@hasDecl(zpci.config, "FakeConfig")) {
+        @compileError("zpci.config must not expose FakeConfig; use zpci.testing.config.TestConfigSpace");
+    }
+    if (@hasDecl(zpci.testing.config, "FakeConfig")) {
+        @compileError("zpci.testing.config must not expose FakeConfig; use TestConfigSpace");
+    }
+    if (@hasDecl(zpci.testing.config, "FakeConfigSpace")) {
+        @compileError("zpci.testing.config must not expose FakeConfigSpace; use TestConfigSpace");
+    }
+}
+
 const function_window_size: usize = 0x1000;
-
-/// Byte-backed host-test backend for docs/specs/config/accessor.md §`FakeConfig`.
-/// Dispatch uses the first matching `Sbdf`; missing functions read as PCI absence bytes and drop writes.
-const FakeConfig = struct {
-    backing: Backing,
-
-    pub const Entry = struct {
-        sbdf: Sbdf,
-        bytes: []u8,
-    };
-
-    const Backing = union(enum) {
-        single: Entry,
-        multi: []Entry,
-    };
-
-    fn initSingle(sbdf: Sbdf, bytes: []u8) FakeConfig {
-        std.debug.assert(bytes.len == function_window_size);
-        return .{ .backing = .{ .single = .{ .sbdf = sbdf, .bytes = bytes } } };
-    }
-
-    fn init(entries: []Entry) FakeConfig {
-        for (entries) |e| std.debug.assert(e.bytes.len == function_window_size);
-        return .{ .backing = .{ .multi = entries } };
-    }
-
-    fn configSpace(self: *FakeConfig) ConfigSpace {
-        return ConfigSpace.init(@ptrCast(self), &vtable);
-    }
-
-    fn functionBytes(self: *FakeConfig, sbdf: Sbdf) ?[]u8 {
-        switch (self.backing) {
-            .single => |entry| {
-                if (entry.sbdf.eql(sbdf)) return entry.bytes;
-            },
-            .multi => |entries| {
-                for (entries) |entry| {
-                    if (entry.sbdf.eql(sbdf)) return entry.bytes;
-                }
-            },
-        }
-
-        return null;
-    }
-
-    const vtable: ConfigSpace.VTable = .{
-        .read8 = read8,
-        .read16 = read16,
-        .read32 = read32,
-        .write8 = write8,
-        .write16 = write16,
-        .write32 = write32,
-    };
-
-    fn read8(context: *anyopaque, sbdf: Sbdf, offset: usize) ConfigSpace.Error!u8 {
-        const self: *FakeConfig = @ptrCast(@alignCast(context));
-        const bytes = self.functionBytes(sbdf) orelse return 0xFF;
-        return bytes[offset];
-    }
-
-    fn read16(context: *anyopaque, sbdf: Sbdf, offset: usize) ConfigSpace.Error!u16 {
-        const self: *FakeConfig = @ptrCast(@alignCast(context));
-        const bytes = self.functionBytes(sbdf) orelse return 0xFFFF;
-        const wrapped = stdx.bytes.load(stdx.layout.Le(u16), bytes, offset) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
-        return wrapped.native();
-    }
-
-    fn read32(context: *anyopaque, sbdf: Sbdf, offset: usize) ConfigSpace.Error!u32 {
-        const self: *FakeConfig = @ptrCast(@alignCast(context));
-        const bytes = self.functionBytes(sbdf) orelse return 0xFFFF_FFFF;
-        const wrapped = stdx.bytes.load(stdx.layout.Le(u32), bytes, offset) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
-        return wrapped.native();
-    }
-
-    fn write8(context: *anyopaque, sbdf: Sbdf, offset: usize, value: u8) ConfigSpace.Error!void {
-        const self: *FakeConfig = @ptrCast(@alignCast(context));
-        const bytes = self.functionBytes(sbdf) orelse return;
-        bytes[offset] = value;
-    }
-
-    fn write16(context: *anyopaque, sbdf: Sbdf, offset: usize, value: u16) ConfigSpace.Error!void {
-        const self: *FakeConfig = @ptrCast(@alignCast(context));
-        const bytes = self.functionBytes(sbdf) orelse return;
-        const encoded = stdx.layout.Le(u16).fromNative(value);
-        stdx.bytes.store(stdx.layout.Le(u16), bytes, offset, encoded) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
-    }
-
-    fn write32(context: *anyopaque, sbdf: Sbdf, offset: usize, value: u32) ConfigSpace.Error!void {
-        const self: *FakeConfig = @ptrCast(@alignCast(context));
-        const bytes = self.functionBytes(sbdf) orelse return;
-        const encoded = stdx.layout.Le(u32).fromNative(value);
-        stdx.bytes.store(stdx.layout.Le(u32), bytes, offset, encoded) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
-    }
-};
 
 /// Restricted backend that reports `UnsupportedAccessWidth` for any 4-byte
 /// access. Used to prove the accessor propagates backend width failures
@@ -188,8 +102,8 @@ test "layout: function_window_size matches PCIe 4 KiB config window" {
 test "unit: read8/write8 round-trip at every alignment" {
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config = backend.configSpace();
 
     try config.write8(sbdf, 0x00, 0xAB);
     try config.write8(sbdf, 0x01, 0xCD);
@@ -202,8 +116,8 @@ test "unit: read8/write8 round-trip at every alignment" {
 test "unit: read16/write16 round-trip encodes little-endian" {
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config = backend.configSpace();
 
     try config.write16(sbdf, 0x00, 0xBEEF);
     try std.testing.expectEqual(@as(u16, 0xBEEF), try config.read16(sbdf, 0x00));
@@ -214,8 +128,8 @@ test "unit: read16/write16 round-trip encodes little-endian" {
 test "unit: read32/write32 round-trip encodes little-endian" {
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config = backend.configSpace();
 
     try config.write32(sbdf, 0x10, 0xDEAD_BEEF);
     try std.testing.expectEqual(@as(u32, 0xDEAD_BEEF), try config.read32(sbdf, 0x10));
@@ -225,8 +139,8 @@ test "unit: read32/write32 round-trip encodes little-endian" {
 test "malformed: read/write beyond 4 KiB reports OutOfBounds" {
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config = backend.configSpace();
 
     try std.testing.expectError(error.OutOfBounds, config.read8(sbdf, function_window_size));
     try std.testing.expectError(error.OutOfBounds, config.read16(sbdf, function_window_size - 1));
@@ -240,8 +154,8 @@ test "malformed: containment beats alignment for end-of-window offsets" {
     // read32(0xFFF) is both unaligned and overruns; containment must win.
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config = backend.configSpace();
 
     try std.testing.expectError(error.OutOfBounds, config.read32(sbdf, 0xFFF));
     try std.testing.expectError(error.OutOfBounds, config.write32(sbdf, 0xFFF, 0));
@@ -251,8 +165,8 @@ test "malformed: containment beats alignment for end-of-window offsets" {
 test "malformed: offset arithmetic overflow reports OutOfBounds" {
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config = backend.configSpace();
 
     try std.testing.expectError(error.OutOfBounds, config.read32(sbdf, std.math.maxInt(usize)));
     try std.testing.expectError(error.OutOfBounds, config.write32(sbdf, std.math.maxInt(usize) - 2, 0));
@@ -261,8 +175,8 @@ test "malformed: offset arithmetic overflow reports OutOfBounds" {
 test "malformed: unaligned read16/write16 reports UnalignedAccess after containment succeeds" {
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config = backend.configSpace();
 
     try std.testing.expectError(error.UnalignedAccess, config.read16(sbdf, 1));
     try std.testing.expectError(error.UnalignedAccess, config.read16(sbdf, 3));
@@ -273,8 +187,8 @@ test "malformed: unaligned read16/write16 reports UnalignedAccess after containm
 test "malformed: unaligned read32/write32 reports UnalignedAccess after containment succeeds" {
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config = backend.configSpace();
 
     try std.testing.expectError(error.UnalignedAccess, config.read32(sbdf, 1));
     try std.testing.expectError(error.UnalignedAccess, config.read32(sbdf, 2));
@@ -285,8 +199,8 @@ test "malformed: unaligned read32/write32 reports UnalignedAccess after containm
 test "malformed: failed writes leave storage unchanged" {
     var buf: [function_window_size]u8 = @splat(0xA5);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config = backend.configSpace();
     const before = buf;
 
     try std.testing.expectError(error.OutOfBounds, config.write8(sbdf, function_window_size, 0));
@@ -295,19 +209,19 @@ test "malformed: failed writes leave storage unchanged" {
     try std.testing.expectError(error.UnalignedAccess, config.write16(sbdf, 1, 0xBEEF));
     try std.testing.expectEqualSlices(u8, &before, &buf);
 
-    var backend = NoDwordConfig{ .bytes = @splat(0x5A) };
-    const restricted = backend.configSpace();
-    const restricted_before = backend.bytes;
+    var restricted_backend = NoDwordConfig{ .bytes = @splat(0x5A) };
+    const restricted = restricted_backend.configSpace();
+    const restricted_before = restricted_backend.bytes;
 
     try std.testing.expectError(error.UnsupportedAccessWidth, restricted.write32(sbdf, 0x10, 0xDEAD_BEEF));
-    try std.testing.expectEqualSlices(u8, &restricted_before, &backend.bytes);
+    try std.testing.expectEqualSlices(u8, &restricted_before, &restricted_backend.bytes);
 }
 
 test "unit: read8 accepts any contained offset" {
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config = backend.configSpace();
 
     inline for (.{ 0, 1, 2, 3, 5, 7, 0xFFF }) |o| {
         _ = try config.read8(sbdf, o);
@@ -317,12 +231,12 @@ test "unit: read8 accepts any contained offset" {
 test "unit: multi-function dispatch services the first matching Sbdf" {
     var buf_a: [function_window_size]u8 = @splat(0);
     var buf_b: [function_window_size]u8 = @splat(0);
-    var entries = [_]FakeConfig.Entry{
+    var entries = [_]TestConfigSpace.Entry{
         .{ .sbdf = Sbdf.of(0, 0, 1, 0), .bytes = &buf_a },
         .{ .sbdf = Sbdf.of(0, 0, 2, 0), .bytes = &buf_b },
     };
-    var fake = FakeConfig.init(&entries);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.init(&entries);
+    const config = backend.configSpace();
 
     try config.write32(Sbdf.of(0, 0, 1, 0), 0x00, 0xAAAA_AAAA);
     try config.write32(Sbdf.of(0, 0, 2, 0), 0x00, 0xBBBB_BBBB);
@@ -338,12 +252,12 @@ test "unit: multi-function dispatch takes the first entry when Sbdfs alias" {
     var buf_first: [function_window_size]u8 = @splat(0xAA);
     var buf_second: [function_window_size]u8 = @splat(0xBB);
     const sbdf = Sbdf.of(0, 0, 3, 0);
-    var entries = [_]FakeConfig.Entry{
+    var entries = [_]TestConfigSpace.Entry{
         .{ .sbdf = sbdf, .bytes = &buf_first },
         .{ .sbdf = sbdf, .bytes = &buf_second },
     };
-    var fake = FakeConfig.init(&entries);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.init(&entries);
+    const config = backend.configSpace();
 
     try std.testing.expectEqual(@as(u8, 0xAA), try config.read8(sbdf, 0x00));
 
@@ -355,8 +269,8 @@ test "unit: multi-function dispatch takes the first entry when Sbdfs alias" {
 
 test "unit: unmatched Sbdf reads as absence marker and drops writes" {
     var buf: [function_window_size]u8 = @splat(0);
-    var fake = FakeConfig.initSingle(Sbdf.of(0, 0, 0, 0), &buf);
-    const config = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(Sbdf.of(0, 0, 0, 0), &buf);
+    const config = backend.configSpace();
     const absent = Sbdf.of(0, 0, 5, 0);
 
     try std.testing.expectEqual(@as(u16, 0xFFFF), try config.read16(absent, 0x00));
@@ -394,8 +308,8 @@ test "malformed: containment/alignment fail before the backend runs" {
 test "unit: ConfigSpace handle copies share the same backend context" {
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
-    var fake = FakeConfig.initSingle(sbdf, &buf);
-    const config_a = fake.configSpace();
+    var backend = TestConfigSpace.initSingle(sbdf, &buf);
+    const config_a = backend.configSpace();
     const config_b = config_a;
 
     try config_a.write32(sbdf, 0x20, 0xCAFE_BABE);

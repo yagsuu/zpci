@@ -41,7 +41,7 @@ Owned:
 - ECAM enumeration over caller-supplied `{segment, base, bus_start, bus_end}` descriptors.
 - Device/function tree construction and traversal.
 - Bridge traversal using programmed bus-number fields before assignment and programmed bus-number/window fields during assignment.
-- Host-testable fake config-space and BAR-memory access over real byte buffers.
+- Host-test support namespace with test config-space and BAR-memory access over real byte buffers.
 
 Not owned:
 
@@ -94,7 +94,7 @@ caller
   -> constructs explicit accessors
       |- Ecam over real config MMIO
       |- Pio over `stdx.arch.x86_64.Port`
-      |- byte-backed config fake for host tests
+      |- byte-backed test config accessor
       `- BAR-memory accessor for MSI-X table/PBA programming
 
 single function
@@ -167,15 +167,17 @@ pub const memory = @import("memory.zig");
 pub const resources = @import("resources.zig");
 pub const interrupts = @import("interrupts.zig");
 pub const topology = @import("topology.zig");
+pub const testing = @import("testing.zig");
 ```
 
 Rules:
 
 - `src/zpci.zig` performs no validation, allocation, config-space reads/writes, BAR probes, resource assignment, programming, or enumeration.
 - Public names are exported from namespace facades such as `src/config.zig` or `src/resources.zig`.
-- Implementation files live under the matching directory, e.g. `src/config/ecam.zig`, `src/resources/assignment.zig`.
+- Implementation files live under the matching directory, e.g. `src/config/ecam.zig`, `src/resources/assignment.zig`; reusable test-support helpers live under `src/testing/`.
 - Namespace facades re-export selected public names from implementation modules.
 - Namespace facades do not perform behavior.
+- `src/testing.zig` and `src/testing/*` expose host-test helpers only. Production zpci modules do not import `testing`; testing helpers return ordinary production accessors instead of alternate I/O seams.
 
 ### `src/core.zig`
 
@@ -280,6 +282,18 @@ pub const tree = @import("topology/tree.zig");
 pub const bridge = @import("topology/bridge.zig");
 ```
 
+### `src/testing.zig`
+
+```zig
+//! Host-test support namespace. Spec: docs/specs/index.md.
+
+pub const config = @import("testing/config.zig");
+pub const memory = @import("testing/memory.zig");
+```
+
+`src/testing/config.zig` is owned by `docs/specs/config/accessor.md` and exposes `TestConfigSpace` as `zpci.testing.config.TestConfigSpace`. `src/testing/memory.zig` is owned by `docs/specs/memory/bar.md` and exposes `TestBarMemory` as `zpci.testing.memory.TestBarMemory`.
+
+
 ## Core public concepts
 
 ### Segment descriptors
@@ -357,7 +371,7 @@ Rules:
 - Multi-byte accesses validate containment inside the 4 KiB function window.
 - Endianness is little-endian.
 - Access-width alignment rules are owned by `docs/specs/config/accessor.md`.
-- The byte-backed fake accessor used by tests implements the same contract as hardware-backed accessors.
+- The byte-backed test accessor used by tests implements the same contract as hardware-backed accessors.
 - ECAM config access is specified by `docs/specs/config/ecam.md`.
 - PIO config access is specified by `docs/specs/config/pio.md`.
 

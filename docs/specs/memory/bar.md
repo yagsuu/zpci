@@ -26,7 +26,7 @@ Owned:
 - Validation common to every access: length-relative containment and 32-bit natural alignment.
 - Native integer semantics at the public API boundary.
 - Lifetime, copying, allocation, waiting, and concurrency contracts for the accessor handle.
-- Required behavior for host-testable byte-backed fakes at this boundary.
+- Required behavior for host-testable byte-backed test backends at this boundary.
 
 Deferred:
 
@@ -64,7 +64,7 @@ pub const BarMemory = struct {
 };
 ```
 
-Backends may expose convenience constructors (`FakeBarMemory.accessor()`, a firmware-produced UEFI-mapping wrapper, a VMM device-model wrapper). Those constructors return this `BarMemory` value.
+Backends may expose convenience constructors (`TestBarMemory.accessor()`, a firmware-produced UEFI-mapping wrapper, a VMM device-model wrapper). Those constructors return this `BarMemory` value.
 
 ## One read/write surface `[zpci]`
 
@@ -117,7 +117,7 @@ The accessor boundary is responsible for making little-endian BAR-memory storage
 
 Backend rules:
 
-- Byte-backed fakes use `zstdx.bytes.load` and `zstdx.bytes.store` with `zstdx.layout.Le(u32)` for the dword payloads.
+- Byte-backed test backends use `zstdx.bytes.load` and `zstdx.bytes.store` with `zstdx.layout.Le(u32)` for the dword payloads.
 - MMIO-backed producers perform volatile 32-bit loads and stores; endianness follows the platform's MMIO conventions.
 - Consumers of `BarMemory` see native `u32` values; they never see raw little-endian bytes.
 
@@ -174,17 +174,19 @@ Rules:
 | `read32` | never | backend-defined non-sleeping I/O | O(1) validation + backend I/O | none | backend-defined | backend-defined |
 | `write32` | never | backend-defined non-sleeping I/O | O(1) validation + backend I/O | written BAR-memory state on success | backend-defined | backend-defined |
 
-## Byte-backed fake `[zpci]`
+## Testing `TestBarMemory` `[zpci]`
 
-The host-test fake implements the same `BarMemory` contract as hardware-backed accessors.
+`zpci.testing.memory.TestBarMemory` is the canonical host-test backend for `BarMemory`. It implements the same accessor contract as hardware-backed accessors while staying out of the production `zpci.memory` namespace.
 
 ```zig
-pub const FakeBarMemory = struct {
+pub const TestBarMemory = struct {
     bytes: []u8,
 
-    pub fn accessor(self: *FakeBarMemory) BarMemory;
+    pub fn accessor(self: *TestBarMemory) BarMemory;
 };
 ```
+
+Callers reach this type as `zpci.testing.memory.TestBarMemory`.
 
 Rules:
 
@@ -200,7 +202,7 @@ The vtable seam supports dispatching, sparse, and responder-side backends withou
 
 - A VMM emulating MSI-X tables for many devices implements one `BarMemory` per device model. The vtable dispatches directly to the device's table storage.
 - A UEFI firmware backend wraps a mapped virtual address and issues volatile 32-bit accesses.
-- A host test uses `FakeBarMemory`.
+- A host test uses `zpci.testing.memory.TestBarMemory`.
 
 None of these need distinct types at the zpci boundary. Callers consume `BarMemory`.
 
@@ -214,7 +216,7 @@ const bar = @import("memory/bar.zig");
 pub const BarMemory = bar.BarMemory;
 ```
 
-`src/zpci.zig` re-exports the `memory` namespace facade. Callers reach the accessor as `zpci.memory.BarMemory` and the fake, when needed by tests, as the fake type exposed by the implementation module through the same facade.
+`src/zpci.zig` re-exports the `memory` namespace facade. Callers reach the accessor as `zpci.memory.BarMemory`; tests reach the test backend as `zpci.testing.memory.TestBarMemory`.
 
 ## Usage
 
@@ -231,12 +233,12 @@ const table = zpci.memory.BarMemory.init(
 );
 ```
 
-Host test using the byte-backed fake:
+Host test using the byte-backed test backend:
 
 ```zig
 var backing: [16]u8 = std.mem.zeroes([16]u8);
-var fake = zpci.memory.FakeBarMemory{ .bytes = &backing };
-const table = fake.accessor();
+var backend = zpci.testing.memory.TestBarMemory{ .bytes = &backing };
+const table = backend.accessor();
 
 try table.write32(0x0, 0xFEE0_0000);
 try table.write32(0x4, 0x0000_0000);

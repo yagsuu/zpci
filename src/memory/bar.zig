@@ -58,3 +58,4 @@ pub const BarMemory = struct {
         if (offset % width != 0) return error.UnalignedAccess;
     }
 };
+

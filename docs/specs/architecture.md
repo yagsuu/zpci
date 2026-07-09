@@ -37,7 +37,7 @@ caller
   -> Segment[]                            (ECAM apertures, caller-supplied)
   -> RootWindows                          (IO/MMIO32/MMIO64 pools, caller-supplied)
   -> InterruptRouting                     (MSI/MSI-X message + vector identity)
-  -> ConfigSpace                          (caller-constructed: Ecam | Pio | fake)
+  -> ConfigSpace                          (caller-constructed: Ecam | Pio | testing.config.TestConfigSpace)
   -> BarMemory                            (caller-supplied accessor for MSI-X table/PBA)
 
 reader (per function)
@@ -87,6 +87,8 @@ interrupts/    MSI and MSI-X capability/table programming.
 topology/      Enumeration, borrowed device tree, bridge traversal.
                zpci has no architecture-specific source in the initial library;
                x86_64 port I/O is consumed from zstdx.
+testing/      Reusable host-test fixtures and byte-backed accessors.
+               Imports production domains; production domains never import it.
 zpci.zig +     Public package facade plus namespace facades. Re-exports only;
 src/<dom>.zig  no behavior.
 ```
@@ -116,7 +118,8 @@ zpci.zig
    |
    v
 namespace facades (config.zig, header.zig, bar.zig, capabilities.zig,
-                   memory.zig, resources.zig, interrupts.zig, topology.zig)
+                   memory.zig, resources.zig, interrupts.zig, topology.zig,
+                   testing.zig)
    |
    v
 top-level implementation modules
@@ -137,6 +140,7 @@ Rules:
 - `resources/` imports `core/`, `config/`, `header/`, and `bar`. It does not import `interrupts/`, `topology/`, or `memory/`.
 - `interrupts/` imports `core/`, `config/`, `header/`, `capabilities/`, and `memory/`. It does not import `resources/` or `topology/`.
 - `topology/` imports `core/`, `config/`, and `header/`. It does not import `bar`, `capabilities/`, `resources/`, `memory/`, or `interrupts/`; callers compose those modules with topology nodes themselves.
+- `testing/` imports production modules such as `core/`, `config/`, and `memory/` as needed. Production modules do not import `testing/`.
 - Lower layers never import higher layers. A leaf importing a sibling-leaf is a layering violation.
 - Cycles are forbidden. A new import that would close a cycle requires moving the shared concept down into `core/` (semantic-free) or up into the caller.
 
@@ -164,7 +168,7 @@ Crossing the boundary:
 
 zpci has exactly three I/O surfaces. Every other module is pure over these.
 
-1. **`ConfigSpace`** — config-space reads (`read8`/`read16`/`read32`) and writes (`write8`/`write16`/`write32`) at an `(Sbdf, offset)` location inside the 4 KiB function window. Implementations: `Ecam`, `Pio`, byte-backed fake.
+1. **`ConfigSpace`** — config-space reads (`read8`/`read16`/`read32`) and writes (`write8`/`write16`/`write32`) at an `(Sbdf, offset)` location inside the 4 KiB function window. Implementations: `Ecam`, `Pio`, `testing.config.TestConfigSpace`, and caller-owned responder backends.
 2. **`BarMemory`** — explicit caller-provided BAR memory accessor for reads and writes of BAR-mapped memory (MSI-X table, PBA). Owned by `docs/specs/memory/bar.md`. Distinct from `ConfigSpace`. zpci never maps, infers, or owns BAR memory.
 3. **`stdx.arch.x86_64.Port`** — zstdx-owned x86_64 port-I/O primitive consumed by `config.Pio`. zpci does not own a port-I/O type, does not allocate ports, and does not provide a serialization wrapper. Callers go through `Pio` for config-space access; the underlying `Port` methods are not part of the zpci public surface.
 
@@ -180,7 +184,7 @@ Rules:
 - Reads from `ConfigSpace` and `BarMemory` return native integer values.
 - Wire types defined as `extern struct` use native integer fields under the LE-host assumption; no `zstdx.layout.Le(uN)` wrapper is required around them.
 - Big-endian host support is deferred; if promoted, wire-struct fields and accessor boundaries revisit endianness.
-- Byte-backed fakes may still use `zstdx.bytes.load(zstdx.layout.Le(uN), ...)` for byte-stable safety, but it is not required.
+- Byte-backed test accessors may still use `zstdx.bytes.load(zstdx.layout.Le(uN), ...)` for byte-stable safety, but it is not required.
 
 ## Validation phases
 
@@ -217,7 +221,7 @@ Shared mechanics live in `core/` (semantic-free), in the per-domain facade for r
 
 Every module in zpci builds and tests under `zig build test` on the host.
 
-- Decode, sizing, traversal, capability walking, assignment, programming, and interrupt programming are all pure over `ConfigSpace` and (for MSI-X) `BarMemory`. The byte-backed fake accessors used by host tests implement the same contract as `Ecam`, `Pio`, and the BAR-memory accessor.
+- Decode, sizing, traversal, capability walking, assignment, programming, and interrupt programming are all pure over `ConfigSpace` and (for MSI-X) `BarMemory`. The byte-backed test accessors under `zpci.testing` implement the same contract as `Ecam`, `Pio`, and the BAR-memory accessor.
 - `Ecam`, `Pio`, and the `stdx.arch.x86_64` primitives consumed by `Pio` keep their hardware-touching surface trivial. They are the only lines not exercised by host tests; their hardware paths are gated and stubbed off-target so the surrounding modules compile and run host-side.
 - No mocks. Host tests use real byte buffers.
 

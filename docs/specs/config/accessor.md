@@ -32,8 +32,8 @@ Owned:
 - Validation common to every config access: 4 KiB function-window containment and natural width alignment.
 - Native integer semantics at the public API boundary.
 - Lifetime, copying, allocation, waiting, and concurrency contracts for the accessor handle.
-- Required behavior for ECAM, PIO, and byte-backed fake implementations at this boundary.
-- `FakeConfig` byte-backed host-test implementation with single-function and multi-function-dispatch constructors.
+- Required behavior for ECAM, PIO, and byte-backed test implementations at this boundary.
+- `TestConfigSpace` byte-backed host-test implementation with single-function and multi-function-dispatch constructors.
 
 Deferred:
 
@@ -85,9 +85,9 @@ pub const ConfigSpace = struct {
 };
 ```
 
-Backends may expose convenience constructors such as `Ecam.configSpace()` or `FakeConfig.configSpace()`, but those constructors return this `ConfigSpace` value. Facades do not wrap, allocate, validate, or select backends.
+Backends may expose convenience constructors such as `Ecam.configSpace()` or `TestConfigSpace.configSpace()`, but those constructors return this `ConfigSpace` value. Facades do not wrap, allocate, validate, or select backends.
 
-`ConfigSpace` is the only public function-pointer seam for config-space I/O. Views and iterators store `ConfigSpace` plus an `Sbdf` and walk state; they never store ECAM, PIO, or fake-specific backend pointers directly.
+`ConfigSpace` is the only public function-pointer seam for config-space I/O. Views and iterators store `ConfigSpace` plus an `Sbdf` and walk state; they never store ECAM, PIO, or test-backend-specific pointers directly.
 
 ## One read/write surface `[zpci]`
 
@@ -179,7 +179,7 @@ The accessor boundary is responsible for making PCI config-space little-endian s
 
 Backend rules:
 
-- Byte-backed fake implementations use `zstdx.bytes.load` and `zstdx.bytes.store` with `zstdx.layout.Le(u16)` or `zstdx.layout.Le(u32)` for multi-byte values.
+- Byte-backed test implementations use `zstdx.bytes.load` and `zstdx.bytes.store` with `zstdx.layout.Le(u16)` or `zstdx.layout.Le(u32)` for multi-byte values.
 - ECAM and PIO specs own their hardware load/store details, but they expose the same native-integer behavior through `ConfigSpace`.
 - Header, BAR, capability, resource, and interrupt modules consume native integers or typed wire/storage wrappers through their owning specs; they do not perform raw backend I/O.
 
@@ -241,29 +241,31 @@ Rules:
 
 The accessor contract itself introduces no hidden allocation, global state, synchronization, or buffering.
 
-## `FakeConfig` `[zpci]`
+## Testing `TestConfigSpace` `[zpci]`
 
-The host-test fake implements the same `ConfigSpace` contract as hardware-backed accessors.
+`zpci.testing.config.TestConfigSpace` is the canonical host-test backend for `ConfigSpace`. It implements the same accessor contract as hardware-backed accessors while staying out of the production `zpci.config` namespace.
 
 ```zig
-pub const FakeConfig = struct {
+pub const TestConfigSpace = struct {
     pub const Entry = struct {
         sbdf: core.Sbdf,
         bytes: []u8,
     };
 
-    /// Single-function fake. `bytes.len` must be exactly 4096.
-    pub fn initSingle(sbdf: core.Sbdf, bytes: []u8) FakeConfig;
+    /// Single-function test backend. `bytes.len` must be exactly 4096.
+    pub fn initSingle(sbdf: core.Sbdf, bytes: []u8) TestConfigSpace;
 
-    /// Multi-function fake dispatched by `Sbdf`. Each `entries[i].bytes.len`
+    /// Multi-function test backend dispatched by `Sbdf`. Each `entries[i].bytes.len`
     /// must be exactly 4096.
-    pub fn init(entries: []Entry) FakeConfig;
+    pub fn init(entries: []Entry) TestConfigSpace;
 
-    pub fn configSpace(self: *FakeConfig) ConfigSpace;
+    pub fn configSpace(self: *TestConfigSpace) ConfigSpace;
 };
 ```
 
-The code block specifies the fake's API shape, not its internal storage representation.
+The code block specifies the test backend's API shape, not its internal storage representation.
+
+Callers reach this type as `zpci.testing.config.TestConfigSpace`.
 
 Rules:
 
@@ -279,7 +281,7 @@ Rules:
 The vtable seam supports dispatching and sparse backends without change. Real consumers include:
 
 - ECAM- and PIO-backed producers used by firmware and drivers;
-- byte-backed fakes used by host tests;
+- `zpci.testing.config.TestConfigSpace` byte-backed test backends used by host tests;
 - **responder-side dispatchers**: VMMs emulating PCI devices, or model-based test scaffolds that answer config transactions per emulated device.
 
 None of these need distinct types at the zpci boundary. Callers consume `ConfigSpace`.
@@ -304,6 +306,8 @@ pub const ConfigSpace = accessor.ConfigSpace;
 ```
 
 Callers reach it as `zpci.config.ConfigSpace`.
+
+`TestConfigSpace` is intentionally not re-exported from `src/config.zig`; callers use `zpci.testing.config.TestConfigSpace`.
 
 ## Usage
 
@@ -336,12 +340,12 @@ const command = try config.read16(sbdf, 0x04);
 try config.write16(sbdf, 0x04, command | 0x0004); // Bus Master Enable
 ```
 
-Byte-backed fake read implementation:
+Byte-backed test read implementation:
 
 ```zig
 fn read16(context: *anyopaque, sbdf: zpci.core.Sbdf, offset: usize) ConfigSpace.Error!u16 {
-    const fake: *FakeConfig = @ptrCast(@alignCast(context));
-    const bytes = try fake.functionBytes(sbdf);
+    const backend: *TestConfigSpace = @ptrCast(@alignCast(context));
+    const bytes = try backend.functionBytes(sbdf);
     return (zstdx.bytes.load(zstdx.layout.Le(u16), bytes, offset) catch return error.OutOfBounds).native();
 }
 ```

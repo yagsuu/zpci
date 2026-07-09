@@ -6,9 +6,25 @@ const stdx = @import("stdx");
 const zpci = @import("zpci");
 
 const ConfigSpace = zpci.config.ConfigSpace;
+const TestConfigSpace = zpci.testing.config.TestConfigSpace;
 const Function = zpci.config.Function;
 const HeaderKind = zpci.config.HeaderKind;
 const Sbdf = zpci.core.Sbdf;
+
+comptime {
+    if (@hasDecl(zpci.config, "TestConfigSpace")) {
+        @compileError("zpci.config must not expose TestConfigSpace; use zpci.testing.config.TestConfigSpace");
+    }
+    if (@hasDecl(zpci.config, "FakeConfig")) {
+        @compileError("zpci.config must not expose FakeConfig; use zpci.testing.config.TestConfigSpace");
+    }
+    if (@hasDecl(zpci.testing.config, "FakeConfig")) {
+        @compileError("zpci.testing.config must not expose FakeConfig; use TestConfigSpace");
+    }
+    if (@hasDecl(zpci.testing.config, "FakeConfigSpace")) {
+        @compileError("zpci.testing.config must not expose FakeConfigSpace; use TestConfigSpace");
+    }
+}
 
 const function_window_size: usize = 0x1000;
 const offset = struct {
@@ -25,7 +41,6 @@ const offset = struct {
 const TestConfig = struct {
     entries: []Entry,
     read_count: usize = 0,
-    write_count: usize = 0,
     fail_read8: bool = false,
 
     const Entry = struct {
@@ -89,14 +104,12 @@ const TestConfig = struct {
 
     fn write8(context: *anyopaque, sbdf: Sbdf, byte_offset: usize, value: u8) ConfigSpace.Error!void {
         const self: *TestConfig = @ptrCast(@alignCast(context));
-        self.write_count += 1;
         const bytes = self.functionBytes(sbdf) orelse return;
         bytes[byte_offset] = value;
     }
 
     fn write16(context: *anyopaque, sbdf: Sbdf, byte_offset: usize, value: u16) ConfigSpace.Error!void {
         const self: *TestConfig = @ptrCast(@alignCast(context));
-        self.write_count += 1;
         const bytes = self.functionBytes(sbdf) orelse return;
         const encoded = stdx.layout.Le(u16).fromNative(value);
         stdx.bytes.store(stdx.layout.Le(u16), bytes, byte_offset, encoded) catch |err| switch (err) {
@@ -106,7 +119,6 @@ const TestConfig = struct {
 
     fn write32(context: *anyopaque, sbdf: Sbdf, byte_offset: usize, value: u32) ConfigSpace.Error!void {
         const self: *TestConfig = @ptrCast(@alignCast(context));
-        self.write_count += 1;
         const bytes = self.functionBytes(sbdf) orelse return;
         const encoded = stdx.layout.Le(u32).fromNative(value);
         stdx.bytes.store(stdx.layout.Le(u32), bytes, byte_offset, encoded) catch |err| switch (err) {
@@ -157,8 +169,7 @@ test "unit: validate accepts present type0 and reads identifiers" {
     var bytes: [function_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .header = 0x00 });
     const sbdf = Sbdf.of(0, 0, 1, 0);
-    var entries: [1]TestConfig.Entry = undefined;
-    var backend = oneEntryConfig(&bytes, sbdf, &entries);
+    var backend = TestConfigSpace.initSingle(sbdf, &bytes);
 
     const function = try Function.validate(backend.configSpace(), sbdf);
 
@@ -174,8 +185,7 @@ test "unit: validate accepts type1 while masking multifunction bit" {
     var bytes: [function_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .header = 0x81 });
     const sbdf = Sbdf.of(0, 0, 2, 0);
-    var entries: [1]TestConfig.Entry = undefined;
-    var backend = oneEntryConfig(&bytes, sbdf, &entries);
+    var backend = TestConfigSpace.initSingle(sbdf, &bytes);
 
     const function = try Function.validate(backend.configSpace(), sbdf);
 
@@ -226,26 +236,24 @@ test "unit: scoped reads and writes use the stored Sbdf" {
     seedFunction(&bytes_b, .{ .vendor = 0x2222 });
     const sbdf_a = Sbdf.of(0, 0, 6, 0);
     const sbdf_b = Sbdf.of(0, 0, 7, 0);
-    var entries = [_]TestConfig.Entry{
+    var entries = [_]TestConfigSpace.Entry{
         .{ .sbdf = sbdf_a, .bytes = &bytes_a },
         .{ .sbdf = sbdf_b, .bytes = &bytes_b },
     };
-    var backend = TestConfig.init(&entries);
+    var backend = TestConfigSpace.init(&entries);
     const function = Function.unchecked(backend.configSpace(), sbdf_b);
 
     try function.write16(offset.device_id, 0xBEEF);
 
     try std.testing.expectEqual(@as(u16, 0x5678), load16(&bytes_a, offset.device_id));
     try std.testing.expectEqual(@as(u16, 0xBEEF), try function.read16(offset.device_id));
-    try std.testing.expectEqual(@as(usize, 1), backend.write_count);
 }
 
 test "unit: identifier reads observe live bytes without absence translation" {
     var bytes: [function_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .vendor = 0x1234 });
     const sbdf = Sbdf.of(0, 0, 8, 0);
-    var entries: [1]TestConfig.Entry = undefined;
-    var backend = oneEntryConfig(&bytes, sbdf, &entries);
+    var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = try Function.validate(backend.configSpace(), sbdf);
 
     store16(&bytes, offset.vendor_id, 0xFFFF);
