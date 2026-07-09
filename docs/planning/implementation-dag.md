@@ -201,7 +201,7 @@ Parallel; all depend only on `config-accessor` + core.
 
 ### Facade integration
 - `src/config.zig` — re-exports `ConfigSpace`, `Function`, `Ecam`, `Segment`,
-  `Pio`, `HeaderKind`, and `FakeConfig` under the domain facade.
+  `Pio`, and `HeaderKind` under the domain facade.
 
 ## Wave 4 — Headers
 
