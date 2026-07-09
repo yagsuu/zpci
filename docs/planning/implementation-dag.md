@@ -146,7 +146,7 @@ no zpci sibling imports.
 - Target: `src/memory/bar.zig`.
 - Change: `BarMemory` accessor (context + vtable + `len_bytes`), `Error` set,
   `read32` / `write32` with alignment and containment validation, a byte-backed
-  `FakeBarMemory` helper for host tests.
+  `TestBarMemory` helper for host tests.
 - Acceptance: OOB, unaligned, and successful round-trip tests against a
   `[]u8` fake; alignment enforcement at 4-byte natural width.
 
@@ -161,7 +161,7 @@ no zpci sibling imports.
 - Target: `src/config/accessor.zig`.
 - Change: `ConfigSpace` (context + vtable), `ConfigSpace.Error`, width-specific
   reads / writes with 4 KiB function-window containment and natural-width
-  alignment; `FakeConfig` byte-backed host fake with single-function and
+  alignment; `TestConfigSpace` byte-backed host backend with single-function and
   multi-function-dispatch constructors as required by the spec.
 - Acceptance: containment, alignment, and multi-function-dispatch fake tests;
   every `Error` variant produced.
@@ -178,7 +178,7 @@ Parallel; all depend only on `config-accessor` + core.
   dispatch (`BadHeaderType`), common-identifier reads, width-specific convenience
   wrappers.
 - Acceptance: presence, bad-header-type, common-id reads, and every width
-  wrapper covered against `FakeConfig`.
+  wrapper covered against `TestConfigSpace`.
 
 ### `config-ecam`
 - Spec: `docs/specs/config/ecam.md`.
@@ -222,7 +222,7 @@ Parallel; three sibling nodes, no cross-imports between `type0` and `type1`.
 - Change: `Type0Header` `extern struct` with layout `comptime` block;
   `bar_count`; `header.type0.View` with typed reads plus `setInterruptLine`
   and `setExpansionRomBase`.
-- Acceptance: layout asserts; reads and writes exercised over `FakeConfig`.
+- Acceptance: layout asserts; reads and writes exercised over `TestConfigSpace`.
 
 ### `header-type1`
 - Spec: `docs/specs/header/type1.md`.
@@ -233,7 +233,7 @@ Parallel; three sibling nodes, no cross-imports between `type0` and `type1`.
   bridge control, secondary-status RW1C `clearSecondaryStatus`, expansion
   ROM base).
 - Acceptance: layout asserts; RW1C semantics; window base/limit round-trip
-  through `FakeConfig`.
+  through `TestConfigSpace`.
 
 ### Facade integration
 - `src/header.zig` — re-exports `common`, `type0`, `type1`, and the top-level
@@ -250,7 +250,7 @@ Parallel; three sibling nodes, no cross-imports between `type0` and `type1`.
   → restore Command); `BarRef` for downstream programming; error mapping to
   `MalformedBar` / `ProgrammingPartial`.
 - Acceptance: 32-bit / 64-bit / IO decode; 64-bit pairing edge cases;
-  save/restore correctness on any probe path (`FakeConfig` bytes match
+  save/restore correctness on any probe path (`TestConfigSpace` bytes match
   pre-probe state); decode-disable restored on failure.
 
 ## Wave 6 — Capability walks and PCIe decode
@@ -327,7 +327,7 @@ Parallel; no cross-imports between these four nodes.
   preservation; routing-input validation.
 - Acceptance: multi-vector alignment; 32-bit-address enforcement on
   `!addr_64_capable`; ext-msg-data enforcement; rollback on injected
-  `FakeConfig` write failure.
+  `TestConfigSpace` write failure.
 
 ### `interrupts-msix`
 - Spec: `docs/specs/interrupts/msix.md`.
@@ -341,7 +341,7 @@ Parallel; no cross-imports between these four nodes.
   containment validation.
 - Acceptance: per-entry self-masking order (mask → address / data →
   unmask); batch commit boundary + per-entry rollback under injected
-  `FakeBarMemory` write failure; bounds enforcement against
+  `TestBarMemory` write failure; bounds enforcement against
   `tableSize()`.
 
 ### Facade integration
@@ -389,7 +389,7 @@ Parallel; five nodes.
   `bus_end`, per-bridge save → subordinate → primary → secondary → verify,
   per-bridge rollback, cross-bridge failure boundary.
 - Acceptance: exhaustion (`BusRangeExhausted`) on saturating input; per-
-  bridge rollback under injected `FakeConfig` write failure; ordering
+  bridge rollback under injected `TestConfigSpace` write failure; ordering
   invariant that no successor bridge is written after a failure.
 
 ### `topology-enumerate`

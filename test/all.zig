@@ -8,5 +8,7 @@ comptime {
     _ = @import("core/ids_test.zig");
     _ = @import("core/bdf_test.zig");
     _ = @import("header/common_test.zig");
+    _ = @import("header/type0_test.zig");
+    _ = @import("header/type1_test.zig");
     _ = @import("memory/bar_test.zig");
 }

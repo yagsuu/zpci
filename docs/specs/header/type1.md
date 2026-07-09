@@ -139,7 +139,7 @@ Absolute config-space offsets for the same fields:
 
 ```zig
 pub const BridgeControl = packed struct(u16) {
-    parity_error_response: bool = false,
+    parity_response: bool = false,
     serr_enable: bool = false,
     isa_enable: bool = false,
     vga_enable: bool = false,
