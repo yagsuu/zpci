@@ -137,7 +137,7 @@ Save reads run through the target function's `ConfigSpace` handle. For one funct
 - `command_before` — the current `Command` register (16 bits at offset `0x04` per `docs/specs/header/common.md`).
 - For each `Assignment` with `source == .endpoint_bar`:
   - The BAR low dword (`function.read32(bar_offset)`).
-  - For a 64-bit memory BAR (`assignment.requirement.source.endpoint_bar.slot_count == 2`), additionally the BAR high dword (`function.read32(bar_offset + 4)`). `BarRef.slot_count` is authoritative; programming does not re-decode from the saved low dword.
+  - For a 64-bit memory BAR (`assignment.requirement.kind == .mmio64` or `.mmio64_pref`), additionally the BAR high dword (`function.read32(bar_offset + 4)`). Programming uses `Requirement.kind` for the dword count; it does not re-decode the saved low dword.
 - For each `Assignment` with `source == .endpoint_expansion_rom`:
   - The expansion ROM base dword (`function.read32(rom_offset)`).
 - For each `Assignment` with `source == .bridge_window`, all registers the write phase will touch for that window's variant per §Write phase. The variant is determined by calling `resources.bridge.encodeWindow(assignment)` and inspecting the tag; the encoding itself is discarded and recomputed in the write phase.
@@ -156,7 +156,7 @@ For one function group, the write phase runs in this fixed order:
 1. **BAR writes.** For each `.endpoint_bar` `Assignment` in ascending `BarRef.index` order:
    - Compute `new_low` per §BAR RMW.
    - `function.write32(bar_offset, new_low)`; readback.
-   - For 64-bit memory BARs, `function.write32(bar_offset + 4, @truncate(assignment.base >> 32))`; readback.
+   - For `.mmio64` / `.mmio64_pref` requirements, `function.write32(bar_offset + 4, @truncate(assignment.base >> 32))`; readback.
 2. **Expansion ROM write.** For each `.endpoint_expansion_rom` `Assignment` (at most one per function per `docs/specs/header/type0.md` / `docs/specs/header/type1.md`):
    - Compute `new_rom` per §Expansion ROM RMW.
    - `function.write32(rom_offset, new_rom)`; readback.

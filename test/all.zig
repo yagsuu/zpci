@@ -1,6 +1,7 @@
 //! Default host test suite aggregate. Spec: docs/guidelines/testing.md.
 
 comptime {
+    _ = @import("bar_test.zig");
     _ = @import("config/accessor_test.zig");
     _ = @import("config/ecam_test.zig");
     _ = @import("config/space_test.zig");

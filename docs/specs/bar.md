@@ -127,22 +127,17 @@ pub const View = struct {
 
     pub fn init(function: config.Function, layout: Layout) View;
 
-    /// Reads the function's header kind through `header.common.View`
-    /// and picks the layout. Returns `null` when the header kind has
-    /// no BARs (currently unreachable — every zpci-supported header
-    /// kind has BARs, but the accessor is forward-compatible).
-    pub fn of(function: config.Function) config.ConfigSpace.Error!?View;
+    /// Effects: reads the function's header kind through `header.common.View`
+    /// and picks the layout.
+    /// Returns: matching BAR view, or `null` when the header kind has no BARs
+    /// (currently unreachable: every zpci-supported header kind has BARs).
+    pub fn detect(function: config.Function) config.ConfigSpace.Error!?View;
 
     pub fn count(self: View) usize;
     pub fn iterator(self: View) Iterator;
     pub fn get(self: View, index: usize) Error!Entry;
     pub fn size(self: View, index: usize) Error!Entry;
     pub fn sizeAll(self: View, scratch: []Entry) Error![]Entry;
-
-    /// Constructs a `BarRef` naming the low slot at `index`. Asserts
-    /// `index < count()` and asserts `index` is not the high half of
-    /// a 64-bit memory BAR (programmer error).
-    pub fn ref(self: View, index: usize) BarRef;
 };
 
 pub const Iterator = struct {
@@ -155,13 +150,9 @@ pub const max_entries: usize = 6;
 
 pub const BarRef = struct {
     function: config.Function,
-    layout: Layout,
     index: usize,
-    /// Slot count of the BAR at `index`: `1` for IO / 32-bit-memory /
-    /// unimplemented, `2` for 64-bit-memory. Captured at `View.ref`
-    /// construction so resource programming can decide dword count
-    /// without re-decoding.
-    slot_count: usize,
+
+    pub fn init(function: config.Function, index: usize) BarRef;
 };
 
 Rules:
@@ -170,7 +161,7 @@ Rules:
 - `get(index)` asserts `index < count()` and asserts `index` is not the high half of a 64-bit memory BAR occupying `(index - 1, index)` (programmer error). Callers using `Iterator` or `sizeAll` never trip this; callers that index by number must skip the high half after decoding the low.
 - `size(index)` asserts the same invariants as `get(index)` before running the per-slot sizing probe.
 - `sizeAll(scratch)` probes every BAR under a single decode-disable window; see §Batch sizing.
-- `ref(index)` asserts `index < count()` and asserts `index` is not the high half of a 64-bit memory BAR (programmer error). The returned `BarRef` captures the BAR's `layout` and `slot_count` so resource programming can decide dword count without re-decoding.
+- `BarRef.init(function, index)` asserts `index < max_entries` and constructs a pure borrowed reference to a BAR low slot. It performs no config I/O and does not validate the function's live header kind; `resources.programming` asserts the type-0/type-1 bound when committing a plan. Callers constructing `BarRef` manually must pass a low-slot index, not the high half of a 64-bit BAR.
 - The `Iterator` walks slots in order; it never reads the high slot of a 64-bit pair as a separate `Entry`.
 
 ## Sizing probe `[std]`
@@ -308,8 +299,8 @@ pub const Error = ConfigSpace.Error || error{
 ## View / borrowing behavior
 
 - `View`, `Iterator`, and `BarRef` borrow `config.Function`. They do not allocate.
-- The view caches nothing across calls. Each method reads live.
-- `BarRef` is small and copyable; resource programming may store it without retaining the iterator.
+- The view caches nothing across calls. Each method reads live config space.
+- `BarRef` is small, copyable, and pure to construct; resource programming may store it without retaining the iterator or view.
 - Lifetime follows the underlying `ConfigSpace` backend.
 
 ## zstdx usage
@@ -391,13 +382,6 @@ for (entries) |entry| switch (entry.kind) {
 };
 ```
 
-Take a `BarRef` for resource programming:
-
-```zig
-const ref = view.ref(0);
-_ = ref; // passed to resources.programming.commit
-```
-
 ## Behavior contract
 
 | Operation | Allocation | Waiting | Bounds | Invalidation | Concurrency | Ordering |
@@ -407,7 +391,7 @@ _ = ref; // passed to resources.programming.commit
 | `View.get` | never | config I/O only | O(1) | none | backend-defined | one or two reads |
 | `View.size` | never | config I/O only | O(1) | restored BAR + Command | backend-defined | save → disable → probe → restore |
 | `View.sizeAll` | never | config I/O only | O(count) probes + one decode-disable window | restored BARs + Command | backend-defined | disable → probes → restores → enable |
-| `View.ref` | never | never | none | none | borrowed | none |
+| `BarRef.init` | never | never | asserts `index < max_entries` | none | borrowed | none |
 
 ## Non-goals
 

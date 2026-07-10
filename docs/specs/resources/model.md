@@ -222,14 +222,14 @@ A pure map from `bar.Entry` to `Requirement`:
 |---|---|
 | `.none` | `null` |
 | `.io` with `size == 0` | `null` |
-| `.io` with `size > 0` | `.{ .kind = .io, .size, .alignment = size, .source = .{ .endpoint_bar = .{ .function, .index = entry.index } } }` |
+| `.io` with `size > 0` | `.{ .kind = .io, .size, .alignment = size, .source = .{ .endpoint_bar = bar.BarRef.init(function, entry.index) } }` |
 | `.memory` with `size == 0` | `null` |
 | `.memory` with `width = .bits_32` and not prefetchable | `.{ .kind = .mmio32, ... }` |
 | `.memory` with `width = .bits_32` and prefetchable | `.{ .kind = .mmio32_pref, ... }` |
 | `.memory` with `width = .bits_64` and not prefetchable | `.{ .kind = .mmio64, ... }` |
 | `.memory` with `width = .bits_64` and prefetchable | `.{ .kind = .mmio64_pref, ... }` |
 
-In every non-`null` case: `size = entry.kind.size`, `alignment = size`, `source = .{ .endpoint_bar = .{ .function = function, .index = entry.index } }`.
+In every non-`null` case: `size = entry.kind.size`, `alignment = size`, `source = .{ .endpoint_bar = bar.BarRef.init(function, entry.index) }`.
 
 Rules:
 
