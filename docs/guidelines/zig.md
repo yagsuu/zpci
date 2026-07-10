@@ -149,6 +149,10 @@ Rules:
 
 ## Comments and docs
 
+Comments are part of the source contract. They must be useful, terse, and
+well-shaped; a weak comment is worse than no comment because it becomes stale
+authority.
+
 Omit comments unless they satisfy one of the allowed categories below.
 
 Use comments for:
@@ -157,12 +161,16 @@ Use comments for:
 - exported API docs for semantic facts the type or signature cannot carry;
 - non-obvious invariants, hazards, external constraints, and why the obvious alternative is wrong.
 
-Module headers (`//!`) must be one to three terse lines. They state the module's purpose and owning spec path.
-They must not describe project status, future work, implementation history, milestones, or process flow.
+Module headers (`//!`) must be one to three terse lines. They state the module's
+purpose and owning spec path.
 
-Exported `///` docs must state semantic facts the type or signature cannot carry: ownership, lifetime, units,
-allocation behavior, blocking or waiting behavior, capacity behavior, concurrency/access contract,
-pointer/index/iterator invalidation, memory ordering, and public error conditions.
+They must not describe project status, future work, implementation history,
+milestones, or process flow.
+
+Exported `///` docs must state semantic facts the type or signature cannot
+carry: ownership, lifetime, units, allocation behavior, blocking or waiting
+behavior, capacity behavior, concurrency/access contract, pointer/index/iterator
+invalidation, memory ordering, and public error conditions.
 
 Do not use comments for:
 
@@ -174,22 +182,34 @@ Do not use comments for:
 - commented-out code;
 - decorative banners;
 - TODO/FIXME/XXX in landed code;
-- restating a function signature or field declaration.
+- restating a function signature, field declaration, branch condition, or obvious control flow.
 
-Code comments may cite stable specs or ADRs. They must not cite planning docs, milestones, task IDs, roadmap
-stages, chats, reviews, or informal agreements.
+Code comments may cite stable specs or ADRs. They must not cite planning docs,
+milestones, task IDs, roadmap stages, chats, reviews, or informal agreements.
 
 **Prose style.**
 
+- Prefer deletion over explanation when the code, type, name, or spec citation already carries the fact.
 - Comments are complete sentences: capital letter, terminal period. End-of-line comments may be phrases without punctuation.
+- Use one load-bearing sentence when possible. Use one paragraph when necessary. Use bullets only for parallel contract facts.
+- Start with the invariant, hazard, or reason; do not start with filler such as "This function", "Note that", or "We need to".
+- Keep doc blocks visually tight: no decorative blank lines, no boxed sections, and no mixed indentation.
+- Structured `///` contract lines are encouraged when labels improve scanning across a family of declarations.
+  Use `Label: terse fact.` lines with consistent label names and order, such as `Privilege:`, `Faults:`,
+  `Requirements:`, `Ordering:`, `Effects:`, `Returns:`, and `Clobbers:`.
+  These lines may be fragments, but they must be parallel, punctuated consistently, and free of filler.
+  Do not align colons or pad fields with spaces.
 - Spacing around comments follows `Vertical rhythm`: a `///` block touches its declaration, an in-function comment touches the statement or block it describes, and the blank line goes above the annotation.
 
 **Always motivate.**
 
 - Say why. Code records what; comments record why. Without rationale, the next reviewer cannot tell intent from accident.
-- Say how. Each non-trivial test has a one-line description of goal and methodology above the body. Each non-trivial module documents its mental model in the module header or a top-level comment block, not in scattered margin notes.
+- Say how. Each non-trivial test has a one-line description of goal and methodology above the body.
+- Non-trivial modules document their mental model in the module header or one top-level comment block, not in scattered margin notes.
 
-Comments are concise prose. Prefer one load-bearing paragraph over several vague paragraphs.
+Review comments with the same standard as code: delete stale or redundant
+comments, tighten vague prose, and reject comments whose formatting makes the
+source harder to scan.
 
 ## Control flow
 

@@ -2,7 +2,7 @@
 
 Implementation conventions for zpci source and specs. Terse rules; deviations need a reason in review.
 
-These conventions extend `docs/guidelines/zig.md`.
+These conventions extend `docs/guidelines/zig.md` and `docs/guidelines/spec-writing.md`.
 
 ## Authority order
 
@@ -11,8 +11,9 @@ When rules conflict, follow this order:
 1. approved domain specs under `docs/specs/<domain>/`;
 2. approved aggregator and cross-cutting specs (`docs/specs/index.md`, `docs/specs/architecture.md`) for layering, ownership boundaries, and the public re-export catalog — illustrative type declarations inside them lose to the owning domain spec, which is corrected in place;
 3. this conventions document;
-4. baseline `docs/guidelines/zig.md`;
-5. planning notes under `docs/planning/`, which are never authoritative for landed code.
+4. baseline `docs/guidelines/spec-writing.md`;
+5. baseline `docs/guidelines/zig.md`;
+6. planning notes under `docs/planning/`, which are never authoritative for landed code.
 
 ## Spec ownership
 
@@ -22,6 +23,13 @@ Every public module is owned by one spec under `docs/specs/`.
 - A module without an approved owning spec does not land.
 - Planning documents do not define public API contracts.
 - Specs define contracts; source implements them.
+
+## Spec writing
+
+Spec ownership, status values, document format, per-operation contract sections,
+and spec testing requirements are defined in
+`docs/guidelines/spec-writing.md`. New and substantially revised specs under
+`docs/specs/` follow that guide.
 
 ## Directory ownership
 
