@@ -82,6 +82,7 @@ const NoDwordConfig = struct {
 };
 
 test "layout: extended capability window covers PCIe extended dword slots" {
+    // Compare public extended-window constants against the PCIe dword range and derived slot count.
     try std.testing.expectEqual(@as(u16, 0x100), ext.window.start);
     try std.testing.expectEqual(@as(u16, 0xFFC), ext.window.end);
     try std.testing.expectEqual(@as(u16, 4), ext.window.step);
@@ -93,6 +94,7 @@ test "layout: extended capability window covers PCIe extended dword slots" {
 }
 
 test "unit: iterator treats absent extended config and zero head as empty" {
+    // Seed both empty head encodings and assert traversal and search terminate without yielding.
     const heads = [_]u32{
         0xFFFF_FFFF,
         0x0000_0000,
@@ -113,6 +115,7 @@ test "unit: iterator treats absent extended config and zero head as empty" {
 }
 
 test "unit: iterator yields a single extended capability and terminates" {
+    // Seed one root header and assert decoded id, version, offset, and terminal next handling.
     var bytes: [function_window_size]u8 = @splat(0);
     storeHeader(&bytes, ext.window.start, 0x0001, 3, 0);
     const sbdf = Sbdf.of(0, 0, 1, 0);
@@ -128,6 +131,7 @@ test "unit: iterator yields a single extended capability and terminates" {
 }
 
 test "unit: iterator traverses multiple extended capabilities through the end slot" {
+    // Chain non-contiguous headers through the final slot to prove next-pointer order and end-boundary handling.
     var bytes: [function_window_size]u8 = @splat(0);
     storeHeader(&bytes, ext.window.start, 0x0001, 1, 0x120);
     storeHeader(&bytes, 0x120, 0x0002, 5, ext.window.end);
@@ -145,6 +149,7 @@ test "unit: iterator traverses multiple extended capabilities through the end sl
 }
 
 test "unit: find returns the first matching capability and null for a terminated miss" {
+    // Search a three-node chain to prove matching returns the node and terminated misses return null.
     var bytes: [function_window_size]u8 = @splat(0);
     storeHeader(&bytes, ext.window.start, 0x000A, 1, 0x108);
     storeHeader(&bytes, 0x108, 0x000B, 2, 0x110);
@@ -160,6 +165,7 @@ test "unit: find returns the first matching capability and null for a terminated
 }
 
 test "malformed: iterator rejects next pointers outside extended capability slots" {
+    // Table invalid below-window and misaligned next offsets reached after one valid node.
     const next_offsets = [_]u16{
         0x0FC,
         0x102,
@@ -180,6 +186,7 @@ test "malformed: iterator rejects next pointers outside extended capability slot
 }
 
 test "malformed: iterator detects cycles before yielding a repeated capability" {
+    // Build a two-node loop and assert traversal rejects the repeated slot after yielding each unique node.
     var bytes: [function_window_size]u8 = @splat(0);
     storeHeader(&bytes, ext.window.start, 0x0010, 1, 0x108);
     storeHeader(&bytes, 0x108, 0x0011, 2, ext.window.start);
@@ -195,6 +202,7 @@ test "malformed: iterator detects cycles before yielding a repeated capability" 
 }
 
 test "malformed: cursor rejects bases outside extended capability slots" {
+    // Table below-window, past-window, and misaligned bases to prove cursor construction validates placement.
     const bases = [_]u16{
         0x0FC,
         0x1000,
@@ -212,6 +220,7 @@ test "malformed: cursor rejects bases outside extended capability slots" {
 }
 
 test "unit: cursor reads and writes relative to an extended capability base" {
+    // Seed payload bytes and verify base-relative reads and writes hit exact extended-config offsets.
     var bytes: [function_window_size]u8 = @splat(0);
     store32(&bytes, 0x130, 0xDEAD_BEEF);
     const sbdf = Sbdf.of(0, 0, 7, 0);
@@ -228,6 +237,7 @@ test "unit: cursor reads and writes relative to an extended capability base" {
 }
 
 test "malformed: cursor maps containment and alignment failures to MalformedCapability" {
+    // Exercise end-window containment and alignment checks; the sentinel byte proves rejected writes do not run.
     var bytes: [function_window_size]u8 = @splat(0x5A);
     const sbdf = Sbdf.of(0, 0, 8, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -247,6 +257,7 @@ test "malformed: cursor maps containment and alignment failures to MalformedCapa
 }
 
 test "malformed: cursor propagates backend width failures after prevalidation succeeds" {
+    // Use a backend without dword access to prove locally valid cursor operations propagate backend failures.
     var backend = NoDwordConfig{};
     const sbdf = Sbdf.of(0, 0, 9, 0);
     const function = Function.unchecked(backend.configSpace(), sbdf);

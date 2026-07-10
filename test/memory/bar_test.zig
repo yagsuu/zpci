@@ -4,6 +4,7 @@ const std = @import("std");
 
 const zpci = @import("zpci");
 
+// Keep host-test backends out of the production memory namespace.
 comptime {
     if (@hasDecl(zpci.memory, "TestBarMemory")) {
         @compileError("zpci.memory must not expose TestBarMemory; use zpci.testing.memory.TestBarMemory");
@@ -17,6 +18,7 @@ comptime {
 }
 
 test "unit: BarMemory reports the caller-owned length" {
+    // Build an accessor over a fixed byte slice and read back the exposed BAR window length.
     var backing: [16]u8 = @splat(0);
     var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
     const table = backend.accessor();
@@ -24,7 +26,8 @@ test "unit: BarMemory reports the caller-owned length" {
     try std.testing.expectEqual(@as(usize, 16), table.len());
 }
 
-test "unit: read32 returns native integer from little-endian bytes" {
+test "unit: read32 returns native integers from little-endian bytes" {
+    // Decode two dwords with non-palindromic byte order so endian mistakes change the value.
     var backing: [8]u8 = .{ 0xEF, 0xBE, 0xAD, 0xDE, 0x21, 0x00, 0x00, 0x00 };
     var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
     const table = backend.accessor();
@@ -33,7 +36,8 @@ test "unit: read32 returns native integer from little-endian bytes" {
     try std.testing.expectEqual(@as(u32, 0x0000_0021), try table.read32(4));
 }
 
-test "unit: write32 encodes as little-endian in the byte buffer" {
+test "unit: write32 encodes native integers as little-endian bytes" {
+    // Store two dwords and compare exact bytes so swapped endian or wrong offsets fail.
     var backing: [8]u8 = @splat(0);
     var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
     const table = backend.accessor();
@@ -48,7 +52,8 @@ test "unit: write32 encodes as little-endian in the byte buffer" {
     );
 }
 
-test "unit: round-trip write then read at every aligned offset" {
+test "unit: aligned dword offsets remain independent across the buffer" {
+    // Write every aligned slot in a 16-byte window, then read them back to catch offset aliasing.
     var backing: [16]u8 = @splat(0);
     var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
     const table = backend.accessor();
@@ -63,16 +68,17 @@ test "unit: round-trip write then read at every aligned offset" {
     }
 }
 
-test "malformed: read past the region reports BarMemoryOutOfBounds" {
+test "malformed: read starting exactly at the end reports BarMemoryOutOfBounds" {
+    // Request a 4-byte window at len() to prove containment happens before backend reads.
     var backing: [16]u8 = @splat(0);
     var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
     const table = backend.accessor();
 
     try std.testing.expectError(error.BarMemoryOutOfBounds, table.read32(backing.len));
-    try std.testing.expectError(error.BarMemoryOutOfBounds, table.read32(backing.len - 3));
 }
 
 test "malformed: write past the region reports BarMemoryOutOfBounds and leaves storage unchanged" {
+    // Try exact-end and overrun offsets, then compare the whole slice to prove failed writes are atomic.
     var backing: [16]u8 = .{
         0x11, 0x22, 0x33, 0x44,
         0x55, 0x66, 0x77, 0x88,
@@ -93,6 +99,7 @@ test "malformed: write past the region reports BarMemoryOutOfBounds and leaves s
 }
 
 test "malformed: unaligned read of an in-region offset reports UnalignedAccess" {
+    // Use offsets 1, 2, and 3 so every possible nonzero dword remainder maps to alignment failure.
     var backing: [16]u8 = @splat(0);
     var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
     const table = backend.accessor();
@@ -103,6 +110,7 @@ test "malformed: unaligned read of an in-region offset reports UnalignedAccess" 
 }
 
 test "malformed: unaligned write of an in-region offset reports UnalignedAccess" {
+    // Mirror the read alignment cases so writes cannot bypass the shared validation rule.
     var backing: [16]u8 = @splat(0);
     var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
     const table = backend.accessor();
@@ -113,6 +121,7 @@ test "malformed: unaligned write of an in-region offset reports UnalignedAccess"
 }
 
 test "malformed: containment beats alignment for end-of-region offsets" {
+    // Offset len - 3 is both unaligned and too short; the public contract requires bounds to win.
     var backing: [16]u8 = @splat(0);
     var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
     const table = backend.accessor();
@@ -121,6 +130,7 @@ test "malformed: containment beats alignment for end-of-region offsets" {
 }
 
 test "unit: zero-length region rejects any read or write" {
+    // A zero-byte BAR window reports length zero and cannot contain even one dword access.
     var backing: [0]u8 = .{};
     var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
     const table = backend.accessor();
@@ -130,21 +140,8 @@ test "unit: zero-length region rejects any read or write" {
     try std.testing.expectError(error.BarMemoryOutOfBounds, table.write32(0, 0));
 }
 
-test "unit: MSI-X-style entry programming through a caller table buffer" {
-    var backing: [16]u8 = @splat(0);
-    var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
-    const table = backend.accessor();
-
-    try table.write32(0x0, 0xFEE0_0000);
-    try table.write32(0x4, 0x0000_0000);
-    try table.write32(0x8, 0x0000_0021);
-    try table.write32(0xC, 0x0000_0000);
-
-    try std.testing.expectEqual(@as(u32, 0xFEE0_0000), try table.read32(0x0));
-    try std.testing.expectEqual(@as(u32, 0x0000_0021), try table.read32(0x8));
-}
-
 test "unit: BarMemory handle copies share the same backend context" {
+    // Write through one copied handle and read through another to prove copies are borrowed views.
     var backing: [8]u8 = @splat(0);
     var backend: zpci.testing.memory.TestBarMemory = .{ .bytes = &backing };
     const table_a = backend.accessor();

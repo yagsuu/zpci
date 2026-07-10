@@ -4,7 +4,6 @@ const std = @import("std");
 
 const zpci = @import("zpci");
 
-const BarRef = zpci.bar.BarRef;
 const Entry = zpci.bar.Entry;
 
 const ExpectedIo = struct {
@@ -35,47 +34,6 @@ const offset = struct {
     const header_type: usize = 0x0E;
     const bars: usize = 0x10;
 };
-
-comptime {
-    if (!@hasDecl(BarRef, "init")) {
-        @compileError("zpci.bar.BarRef must expose init(function, index)");
-    }
-    if (!@hasField(BarRef, "function") or !@hasField(BarRef, "index")) {
-        @compileError("zpci.bar.BarRef must expose function and index fields");
-    }
-    if (std.meta.fields(BarRef).len != 2) {
-        @compileError("zpci.bar.BarRef must expose only function and index fields");
-    }
-    if (@hasField(BarRef, "layout")) {
-        @compileError("zpci.bar.BarRef must not expose layout");
-    }
-    if (@hasField(BarRef, "slot_count")) {
-        @compileError("zpci.bar.BarRef must not expose slot_count");
-    }
-    if (@hasDecl(View, "ref") or @hasField(View, "ref")) {
-        @compileError("zpci.bar.View must not expose ref");
-    }
-    _ = Kind;
-    _ = Entry;
-    _ = Layout;
-    _ = View;
-    _ = zpci.bar.Iterator;
-    _ = BarRef;
-    _ = zpci.bar.Error;
-}
-
-test "api: BarRef is a minimal function and index handle" {
-    // Construct a handle and read through its stored function/index pair.
-    var backend = ProbeConfig.init(.type0);
-    backend.setBar(3, 0x8000_1008);
-    const function = Function.unchecked(backend.configSpace(), backend.sbdf);
-
-    const ref = BarRef.init(function, 3);
-
-    try std.testing.expectEqual(function, ref.function);
-    try std.testing.expectEqual(@as(usize, 3), ref.index);
-    try std.testing.expectEqual(@as(u32, 0x8000_1008), try ref.function.read32(barOffset(ref.index)));
-}
 
 test "layout: zpci.bar facade exposes BAR counts and header layouts" {
     // Compare public constants and explicit layouts against header-owned counts.

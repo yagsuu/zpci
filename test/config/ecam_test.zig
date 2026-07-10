@@ -23,6 +23,7 @@ fn ecamWindowOffset(sbdf: Sbdf, bus_start: u8) usize {
 }
 
 test "unit: Segment validates ranges and contains only matching SBDFs inside its buses" {
+    // Segment containment must include both bus endpoints, reject neighboring buses, and reject other segments.
     const base = VirtAddr.fromInt(0x1000);
     const segment = Segment{
         .segment = SegmentId.from(3),
@@ -48,6 +49,7 @@ test "unit: Segment validates ranges and contains only matching SBDFs inside its
 }
 
 test "unit: Segment.whole covers every bus for the selected segment" {
+    // Segment.whole must construct the full inclusive PCI bus range for exactly the selected segment.
     const whole = Segment.whole(SegmentId.from(7), VirtAddr.fromInt(0x2000));
 
     try std.testing.expect(whole.segment.eql(SegmentId.from(7)));
@@ -59,6 +61,7 @@ test "unit: Segment.whole covers every bus for the selected segment" {
 }
 
 test "malformed: Ecam.from rejects empty invalid and duplicate segment tables" {
+    // Ecam construction must reject every malformed segment table shape before exposing a backend.
     const base = VirtAddr.fromInt(0x3000);
     const empty: [0]Segment = .{};
     try std.testing.expectError(error.NoSegments, Ecam.from(&empty));
@@ -79,6 +82,7 @@ test "malformed: Ecam.from rejects empty invalid and duplicate segment tables" {
 }
 
 test "unit: Ecam.find matches segment id without applying bus containment" {
+    // find() must expose segment-id dispatch separately from per-access bus containment.
     const base = VirtAddr.fromInt(0x4000);
     var segments = [_]Segment{
         .{ .segment = SegmentId.from(3), .base = base, .bus_start = 0x20, .bus_end = 0x2F },
@@ -93,6 +97,7 @@ test "unit: Ecam.find matches segment id without applying bus containment" {
 }
 
 test "unit: ConfigSpace accesses use bus-relative ECAM addresses for nonzero bus_start" {
+    // ECAM accesses must subtract bus_start and preserve PCI little-endian storage for every width.
     const ecam_len = 6 * 1024 * 1024;
     const backing = try std.testing.allocator.alignedAlloc(u8, .fromByteUnits(@alignOf(u32)), ecam_len);
     defer std.testing.allocator.free(backing);
@@ -134,6 +139,7 @@ test "unit: ConfigSpace accesses use bus-relative ECAM addresses for nonzero bus
 }
 
 test "malformed: ConfigSpace reports OutOfBounds for unknown segments and buses outside the matched segment" {
+    // ECAM ConfigSpace must map missing segments, out-of-range buses, and bad offsets to OutOfBounds.
     var backing: [0x1000]u8 align(4) = @splat(0);
     var segments = [_]Segment{.{
         .segment = SegmentId.from(1),

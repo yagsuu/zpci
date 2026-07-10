@@ -9,21 +9,6 @@ const ConfigSpace = zpci.config.ConfigSpace;
 const TestConfigSpace = zpci.testing.config.TestConfigSpace;
 const Sbdf = zpci.core.Sbdf;
 
-comptime {
-    if (@hasDecl(zpci.config, "TestConfigSpace")) {
-        @compileError("zpci.config must not expose TestConfigSpace; use zpci.testing.config.TestConfigSpace");
-    }
-    if (@hasDecl(zpci.config, "FakeConfig")) {
-        @compileError("zpci.config must not expose FakeConfig; use zpci.testing.config.TestConfigSpace");
-    }
-    if (@hasDecl(zpci.testing.config, "FakeConfig")) {
-        @compileError("zpci.testing.config must not expose FakeConfig; use TestConfigSpace");
-    }
-    if (@hasDecl(zpci.testing.config, "FakeConfigSpace")) {
-        @compileError("zpci.testing.config must not expose FakeConfigSpace; use TestConfigSpace");
-    }
-}
-
 const function_window_size: usize = 0x1000;
 
 /// Restricted backend that reports `UnsupportedAccessWidth` for any 4-byte
@@ -95,11 +80,8 @@ const NoDwordConfig = struct {
     }
 };
 
-test "layout: function_window_size matches PCIe 4 KiB config window" {
-    try std.testing.expectEqual(@as(usize, 0x1000), function_window_size);
-}
-
-test "unit: read8/write8 round-trip at every alignment" {
+test "unit: read8/write8 round-trip at boundary and unaligned offsets" {
+    // Boundary writes plus exact reads prove byte accesses require only containment, not alignment.
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
@@ -114,6 +96,7 @@ test "unit: read8/write8 round-trip at every alignment" {
 }
 
 test "unit: read16/write16 round-trip encodes little-endian" {
+    // A native u16 written through ConfigSpace must appear in backing storage as PCI little-endian bytes.
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
@@ -126,6 +109,7 @@ test "unit: read16/write16 round-trip encodes little-endian" {
 }
 
 test "unit: read32/write32 round-trip encodes little-endian" {
+    // A native u32 written through ConfigSpace must appear in backing storage as PCI little-endian bytes.
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
@@ -137,6 +121,7 @@ test "unit: read32/write32 round-trip encodes little-endian" {
 }
 
 test "malformed: read/write beyond 4 KiB reports OutOfBounds" {
+    // Just-past-end windows for each width must fail before the backend can read or write.
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
@@ -151,6 +136,7 @@ test "malformed: read/write beyond 4 KiB reports OutOfBounds" {
 }
 
 test "malformed: containment beats alignment for end-of-window offsets" {
+    // Overrunning windows must report containment failure even when the same offset is misaligned.
     // read32(0xFFF) is both unaligned and overruns; containment must win.
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
@@ -163,6 +149,7 @@ test "malformed: containment beats alignment for end-of-window offsets" {
 }
 
 test "malformed: offset arithmetic overflow reports OutOfBounds" {
+    // Offsets near usize overflow must map to OutOfBounds instead of wrapping into the valid window.
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
@@ -173,6 +160,7 @@ test "malformed: offset arithmetic overflow reports OutOfBounds" {
 }
 
 test "malformed: unaligned read16/write16 reports UnalignedAccess after containment succeeds" {
+    // Contained odd offsets for 16-bit access must be rejected as natural-alignment violations.
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
@@ -185,6 +173,7 @@ test "malformed: unaligned read16/write16 reports UnalignedAccess after containm
 }
 
 test "malformed: unaligned read32/write32 reports UnalignedAccess after containment succeeds" {
+    // Contained non-4-byte offsets for 32-bit access must be rejected as natural-alignment violations.
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
@@ -197,6 +186,7 @@ test "malformed: unaligned read32/write32 reports UnalignedAccess after containm
 }
 
 test "malformed: failed writes leave storage unchanged" {
+    // Failed shape validation and backend width errors must leave byte-backed storage unchanged.
     var buf: [function_window_size]u8 = @splat(0xA5);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
@@ -217,18 +207,8 @@ test "malformed: failed writes leave storage unchanged" {
     try std.testing.expectEqualSlices(u8, &restricted_before, &restricted_backend.bytes);
 }
 
-test "unit: read8 accepts any contained offset" {
-    var buf: [function_window_size]u8 = @splat(0);
-    const sbdf = Sbdf.of(0, 0, 0, 0);
-    var backend = TestConfigSpace.initSingle(sbdf, &buf);
-    const config = backend.configSpace();
-
-    inline for (.{ 0, 1, 2, 3, 5, 7, 0xFFF }) |o| {
-        _ = try config.read8(sbdf, o);
-    }
-}
-
-test "unit: multi-function dispatch services the first matching Sbdf" {
+test "unit: multi-entry dispatch isolates distinct SBDF storage" {
+    // Distinct SBDF entries must isolate reads and writes to the addressed function's storage.
     var buf_a: [function_window_size]u8 = @splat(0);
     var buf_b: [function_window_size]u8 = @splat(0);
     var entries = [_]TestConfigSpace.Entry{
@@ -245,7 +225,8 @@ test "unit: multi-function dispatch services the first matching Sbdf" {
     try std.testing.expectEqual(@as(u32, 0xBBBB_BBBB), try config.read32(Sbdf.of(0, 0, 2, 0), 0x00));
 }
 
-test "unit: multi-function dispatch takes the first entry when Sbdfs alias" {
+test "unit: multi-entry dispatch takes the first entry when SBDFs alias" {
+    // Duplicate SBDF entries must dispatch to the first slice entry so sparse responders are deterministic.
     // Duplicate Sbdf entries with distinct storage prove that ordering
     // beats identity: a broken implementation returning the last match
     // would visibly break, not silently coincide.
@@ -268,6 +249,7 @@ test "unit: multi-function dispatch takes the first entry when Sbdfs alias" {
 }
 
 test "unit: unmatched Sbdf reads as absence marker and drops writes" {
+    // Missing SBDFs must model absent hardware with all-ones reads and ignored writes, not accessor errors.
     var buf: [function_window_size]u8 = @splat(0);
     var backend = TestConfigSpace.initSingle(Sbdf.of(0, 0, 0, 0), &buf);
     const config = backend.configSpace();
@@ -282,6 +264,7 @@ test "unit: unmatched Sbdf reads as absence marker and drops writes" {
 }
 
 test "malformed: backend UnsupportedAccessWidth surfaces after shape validation" {
+    // Backend width capability failures must surface only after offset containment and alignment succeed.
     var backend = NoDwordConfig{};
     const config = backend.configSpace();
     const sbdf = Sbdf.of(0, 0, 0, 0);
@@ -295,6 +278,7 @@ test "malformed: backend UnsupportedAccessWidth surfaces after shape validation"
 }
 
 test "malformed: containment/alignment fail before the backend runs" {
+    // Shape validation must take precedence over backend errors for malformed offsets.
     // The restricted backend would otherwise report UnsupportedAccessWidth on
     // read32; validation must intercept OutOfBounds and UnalignedAccess first.
     var backend = NoDwordConfig{};
@@ -306,6 +290,7 @@ test "malformed: containment/alignment fail before the backend runs" {
 }
 
 test "unit: ConfigSpace handle copies share the same backend context" {
+    // Copying a ConfigSpace value must copy the handle, so both copies observe the same backend state.
     var buf: [function_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);

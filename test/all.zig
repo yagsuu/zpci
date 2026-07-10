@@ -4,6 +4,7 @@ comptime {
     _ = @import("bar_test.zig");
     _ = @import("capabilities/extended_test.zig");
     _ = @import("capabilities/list_test.zig");
+    _ = @import("capabilities/pcie_test.zig");
     _ = @import("config/accessor_test.zig");
     _ = @import("config/ecam_test.zig");
     _ = @import("config/space_test.zig");

@@ -30,6 +30,7 @@ const offset = struct {
 };
 
 test "layout: Type0Header covers endpoint-specific PCI config bytes" {
+    // Pins the type-0 extern ABI by comparing public struct size and offsets with the endpoint layout.
     try std.testing.expectEqual(@as(usize, 6), bar_count);
     try std.testing.expectEqual(@as(usize, 48), @sizeOf(Type0Header));
     try std.testing.expectEqual(@as(usize, 0x00), @offsetOf(Type0Header, "bars"));
@@ -45,6 +46,7 @@ test "layout: Type0Header covers endpoint-specific PCI config bytes" {
 }
 
 test "layout: ExpansionRom maps enable and base address bits" {
+    // Pins expansion-ROM bit semantics by decoding enable, reserved, and shifted-base fields.
     try std.testing.expectEqual(@as(comptime_int, 32), @bitSizeOf(ExpansionRom));
     try std.testing.expectEqual(@as(comptime_int, 0), @bitOffsetOf(ExpansionRom, "enable"));
     try std.testing.expectEqual(@as(comptime_int, 1), @bitOffsetOf(ExpansionRom, "_reserved1"));
@@ -59,6 +61,7 @@ test "layout: ExpansionRom maps enable and base address bits" {
 }
 
 test "unit: View reads every type-0 endpoint field from seeded config bytes" {
+    // Seeds config bytes at every endpoint offset, then verifies the public view decodes them.
     const bars = [_]u32{
         0x1000_0004,
         0x2000_0000,
@@ -101,6 +104,7 @@ test "unit: View reads every type-0 endpoint field from seeded config bytes" {
 }
 
 test "unit: View writes exact type-0 endpoint bytes" {
+    // Writes through the public view, then checks the exact endpoint bytes and little-endian order.
     var bytes: [function_window_size]u8 = @splat(0xA5);
     const sbdf = Sbdf.of(0, 0, 2, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -117,6 +121,7 @@ test "unit: View writes exact type-0 endpoint bytes" {
 }
 
 test "unit: common returns a common-header view over the same function" {
+    // Reads a common-header field through the type-0 view to verify it preserves the same function.
     var bytes: [function_window_size]u8 = @splat(0);
     store16(&bytes, offset.vendor_id, 0x1234);
     const sbdf = Sbdf.of(0, 0, 3, 0);

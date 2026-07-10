@@ -6,8 +6,9 @@ const zpci = @import("zpci");
 
 const Error = zpci.core.Error;
 
-test "unit: every spec-named variant exists in zpci.core.Error" {
-    const variants = comptime .{
+test "contract: zpci.core.Error is the exact public category set" {
+    // Compare the public error-set names and count so missing variants or accidental extras fail.
+    const expected = comptime .{
         "OutOfBounds",
         "AbsentFunction",
         "BadHeaderType",
@@ -30,18 +31,16 @@ test "unit: every spec-named variant exists in zpci.core.Error" {
         "ProgrammingWriteFailed",
         "ProgrammingPartial",
     };
+    const actual = @typeInfo(Error).error_set.?;
 
-    inline for (variants) |name| {
-        const value: Error = @field(Error, name);
-        try std.testing.expect(@errorName(value).len > 0);
-    }
-}
+    try std.testing.expectEqual(@as(usize, expected.len), actual.len);
 
-test "unit: zpci.Error does not fold std.mem.Allocator.Error" {
-    // Spec §Allocating APIs: OutOfMemory is Allocator.Error's sole variant
-    // and must not appear in the package error set.
-    const info = @typeInfo(Error).error_set.?;
-    inline for (info) |field| {
-        try std.testing.expect(!std.mem.eql(u8, field.name, "OutOfMemory"));
+    inline for (expected) |name| {
+        var found = false;
+        inline for (actual) |field| {
+            found = found or std.mem.eql(u8, field.name, name);
+        }
+
+        try std.testing.expect(found);
     }
 }

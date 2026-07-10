@@ -52,35 +52,43 @@ Rules:
 
 ```zig
 pub const register = struct {
-    // v1 registers
-    pub const capabilities: u8              = 0x02;
-    pub const device_capabilities: u8       = 0x04;
-    pub const device_control: u8            = 0x08;
-    pub const device_status: u8             = 0x0A;
-    pub const link_capabilities: u8         = 0x0C;
-    pub const link_control: u8              = 0x10;
-    pub const link_status: u8               = 0x12;
-    pub const slot_capabilities: u8         = 0x14;
-    pub const slot_control: u8              = 0x18;
-    pub const slot_status: u8               = 0x1A;
-    pub const root_control: u8              = 0x1C;
-    pub const root_capabilities: u8         = 0x1E;
-    pub const root_status: u8               = 0x20;
+    pub const capabilities: u8 = 0x02;
 
-    // v2+ registers
-    pub const device_capabilities_2: u8     = 0x24;
-    pub const device_control_2: u8          = 0x28;
-    pub const device_status_2: u8           = 0x2A;
-    pub const link_capabilities_2: u8       = 0x2C;
-    pub const link_control_2: u8            = 0x30;
-    pub const link_status_2: u8             = 0x32;
-    pub const slot_capabilities_2: u8       = 0x34;
-    pub const slot_control_2: u8            = 0x38;
-    pub const slot_status_2: u8             = 0x3A;
+    pub const device = struct {
+        pub const capabilities: u8 = 0x04;
+        pub const control: u8 = 0x08;
+        pub const status: u8 = 0x0A;
+        pub const capabilities_2: u8 = 0x24;
+        pub const control_2: u8 = 0x28;
+        pub const status_2: u8 = 0x2A;
+    };
+
+    pub const link = struct {
+        pub const capabilities: u8 = 0x0C;
+        pub const control: u8 = 0x10;
+        pub const status: u8 = 0x12;
+        pub const capabilities_2: u8 = 0x2C;
+        pub const control_2: u8 = 0x30;
+        pub const status_2: u8 = 0x32;
+    };
+
+    pub const slot = struct {
+        pub const capabilities: u8 = 0x14;
+        pub const control: u8 = 0x18;
+        pub const status: u8 = 0x1A;
+        pub const capabilities_2: u8 = 0x34;
+        pub const control_2: u8 = 0x38;
+        pub const status_2: u8 = 0x3A;
+    };
+
+    pub const root = struct {
+        pub const control: u8 = 0x1C;
+        pub const capabilities: u8 = 0x1E;
+        pub const status: u8 = 0x20;
+    };
 };
 
 pub const total_size: u8 = 0x3C; // 60 bytes: 0x00..=0x3B
-pub const v2_start_offset: u8 = register.device_capabilities_2;
 ```
 
 The bytes at `0x00` (capability id) and `0x01` (next pointer) are owned by `docs/specs/capabilities/list.md` and are not reached through `View`. Bytes past `0x3B` are not owned by this spec.
@@ -705,7 +713,7 @@ pub const View = struct {
 `validate(function, cap)` behavior:
 
 1. Assert `cap.idTag() == .pci_express`. Programmer-error precondition, not a runtime error.
-2. Validate `capabilities.list.cap_window_start <= cap.offset <= capabilities.list.cap_window_end` and `cap.offset % capabilities.list.cap_window_step == 0`. Otherwise return `error.MalformedCapability`.
+2. Validate `capabilities.list.standard.window.start <= cap.offset <= capabilities.list.standard.window.end` and `cap.offset % capabilities.list.standard.window.step == 0`. Otherwise return `error.MalformedCapability`.
 3. Read `Capabilities` via `function.read16(cap.offset + register.capabilities)` and bit-cast to `Capabilities`. `ConfigSpace.Error` propagates directly.
 4. If `capabilities.version == 0`, return `error.UnsupportedRevision`.
 5. Return `View{ .function = function, .base = cap.offset, .version = capabilities.version }`.

@@ -33,6 +33,7 @@ const offset = struct {
 };
 
 test "layout: CommonHeader covers the first 16 common PCI config bytes" {
+    // Pins the common extern ABI by comparing public struct size and offsets with the PCI layout.
     try std.testing.expectEqual(@as(usize, 16), @sizeOf(CommonHeader));
     try std.testing.expectEqual(@as(usize, 0x00), @offsetOf(CommonHeader, "vendor_id"));
     try std.testing.expectEqual(@as(usize, 0x02), @offsetOf(CommonHeader, "device_id"));
@@ -49,6 +50,7 @@ test "layout: CommonHeader covers the first 16 common PCI config bytes" {
 }
 
 test "layout: Command maps the PCI command register bits" {
+    // Pins command-register bit semantics by checking bit offsets and decoding a mixed raw word.
     try std.testing.expectEqual(@as(comptime_int, 16), @bitSizeOf(Command));
     try std.testing.expectEqual(@as(comptime_int, 0), @bitOffsetOf(Command, "io_space"));
     try std.testing.expectEqual(@as(comptime_int, 1), @bitOffsetOf(Command, "memory_space"));
@@ -79,6 +81,7 @@ test "layout: Command maps the PCI command register bits" {
 }
 
 test "layout: Status maps PCI status bits and sticky-error mask" {
+    // Pins status-register bit semantics and the sticky-error mask with a mixed raw word.
     try std.testing.expectEqual(@as(comptime_int, 16), @bitSizeOf(Status));
     try std.testing.expectEqual(@as(comptime_int, 0), @bitOffsetOf(Status, "_reserved0"));
     try std.testing.expectEqual(@as(comptime_int, 3), @bitOffsetOf(Status, "interrupt_status"));
@@ -111,6 +114,7 @@ test "layout: Status maps PCI status bits and sticky-error mask" {
 }
 
 test "layout: Bist maps completion, start, and capable bits" {
+    // Pins BIST bit semantics by decoding completion, start, and capability bits from one raw byte.
     try std.testing.expectEqual(@as(comptime_int, 8), @bitSizeOf(Bist));
     try std.testing.expectEqual(@as(comptime_int, 0), @bitOffsetOf(Bist, "completion_code"));
     try std.testing.expectEqual(@as(comptime_int, 4), @bitOffsetOf(Bist, "_reserved4"));
@@ -125,6 +129,7 @@ test "layout: Bist maps completion, start, and capable bits" {
 }
 
 test "unit: View reads every common-header field from seeded config bytes" {
+    // Seeds config bytes at every common-header offset, then verifies the public view decodes them.
     var bytes: [function_window_size]u8 = @splat(0);
     seedCommonHeader(&bytes, .{
         .vendor = 0x1234,
@@ -164,6 +169,7 @@ test "unit: View reads every common-header field from seeded config bytes" {
 }
 
 test "unit: View writes exact common-header bytes" {
+    // Writes through the public view, then checks the exact PCI config bytes and little-endian order.
     var bytes: [function_window_size]u8 = @splat(0xA5);
     const sbdf = Sbdf.of(0, 0, 2, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -191,6 +197,7 @@ test "unit: View writes exact common-header bytes" {
 }
 
 test "malformed: missing function is rejected by validate and not translated by View" {
+    // Probes an absent SBDF to verify validation rejects it while unchecked reads expose absent bytes.
     var bytes: [function_window_size]u8 = @splat(0);
     seedCommonHeader(&bytes, .{ .vendor = 0x1234, .header = 0x00 });
     const present = Sbdf.of(0, 0, 3, 0);

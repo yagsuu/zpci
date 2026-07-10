@@ -2,3 +2,4 @@
 
 pub const extended = @import("capabilities/extended.zig");
 pub const list = @import("capabilities/list.zig");
+pub const pcie = @import("capabilities/pcie.zig");
