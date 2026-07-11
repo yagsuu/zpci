@@ -4,6 +4,7 @@ const std = @import("std");
 
 const config = @import("../config.zig");
 const list = @import("../capabilities/list.zig");
+const programming = @import("programming.zig");
 
 const ConfigSpace = config.ConfigSpace;
 const Function = config.Function;
@@ -41,6 +42,10 @@ pub const MessageControl = packed struct(u16) {
         std.debug.assert(@sizeOf(MessageControl) == 2);
         std.debug.assert(@alignOf(MessageControl) == 2);
         std.debug.assert(@bitSizeOf(MessageControl) == 16);
+    }
+
+    pub fn raw(self: MessageControl) u16 {
+        return @bitCast(self);
     }
 };
 
@@ -226,112 +231,53 @@ pub const View = struct {
     pub fn setMask(self: View, value: u32) ProgramError!void {
         std.debug.assert(self.pvmCapable());
 
+        var tx = ProgramTransaction.init(ConfigTarget.init(self));
         const offset = self.maskOffset();
-        const saved = self.read32(offset) catch return error.ProgrammingWriteFailed;
-        self.write32(offset, value) catch |err| {
-            std.debug.assert(isConfigError(err));
-            try self.restore32(offset, saved);
-            return error.ProgrammingWriteFailed;
-        };
-
-        const readback = self.read32(offset) catch |err| {
-            std.debug.assert(isConfigError(err));
-            try self.restore32(offset, saved);
-            return error.ProgrammingWriteFailed;
-        };
-        if (readback != value) {
-            try self.restore32(offset, saved);
-            return error.ProgrammingReadbackMismatch;
-        }
+        const saved = tx.read32(offset) catch return error.ProgrammingWriteFailed;
+        try tx.writeReadback32(offset, value, saved);
     }
 
     pub fn program(self: View, routing: Routing) ProgramError!void {
         try self.validateRouting(routing);
 
-        const saved = SaveFrame.read(self) catch return error.ProgrammingWriteFailed;
-        var log = RollbackLog{};
+        var tx = ProgramTransaction.init(ConfigTarget.init(self));
+        const saved = SaveFrame.read(self, &tx) catch return error.ProgrammingWriteFailed;
+
         var disabled_control = saved.control;
         disabled_control.msi_enable = false;
-
-        self.writeReadback16NoRollback(register.message_control, @bitCast(disabled_control)) catch |err| return err;
-        log.record16(register.message_control, saved.control_raw);
+        try tx.writeReadback16(register.message_control, disabled_control.raw(), saved.control.raw());
 
         switch (routing.pvm) {
             .unused => {},
-            .initial_mask => |value| self.writeReadback32Logged(
-                register.mask_bits_32,
-                register.mask_bits_64,
-                value,
-                saved.mask,
-                &log,
-            ) catch |err| {
-                return self.rollbackFailure(&log, err);
-            },
+            .initial_mask => |value| try tx.writeReadback32(self.maskOffset(), value, saved.mask),
         }
 
-        self.writeReadback32Logged(
-            register.message_address_lo,
-            register.message_address_lo,
-            @truncate(routing.address),
-            saved.address_lo,
-            &log,
-        ) catch |err| {
-            return self.rollbackFailure(&log, err);
-        };
+        try tx.writeReadback32(register.message_address_lo, @truncate(routing.address), saved.address_lo);
         if (self.addr64Capable()) {
-            self.writeReadback32Logged(
-                register.message_address_hi_64,
-                register.message_address_hi_64,
-                @truncate(routing.address >> 32),
-                saved.address_hi,
-                &log,
-            ) catch |err| {
-                return self.rollbackFailure(&log, err);
-            };
+            try tx.writeReadback32(register.message_address_hi_64, @truncate(routing.address >> 32), saved.address_hi);
         }
 
-        self.writeReadback16Logged(
-            self.messageDataOffset(),
-            routing.data,
-            saved.data,
-            &log,
-        ) catch |err| {
-            return self.rollbackFailure(&log, err);
-        };
+        try tx.writeReadback16(self.messageDataOffset(), routing.data, saved.data);
 
         switch (routing.ext_data) {
             .unused => {},
-            .value => |value| self.writeReadback16Logged(
-                self.extMessageDataOffset(),
-                value,
-                saved.ext_data,
-                &log,
-            ) catch |err| {
-                return self.rollbackFailure(&log, err);
-            },
+            .value => |value| try tx.writeReadback16(self.extMessageDataOffset(), value, saved.ext_data),
         }
 
         var enabled_control = saved.control;
         enabled_control.msi_enable = true;
         enabled_control.multiple_message_enable = @intFromEnum(routing.vector_count);
         enabled_control.ext_msg_data_enable = routing.ext_data == .value;
-        self.writeReadback16Logged(
-            register.message_control,
-            @bitCast(enabled_control),
-            saved.control_raw,
-            &log,
-        ) catch |err| {
-            return self.rollbackFailure(&log, err);
-        };
+        try tx.writeReadback16(register.message_control, enabled_control.raw(), saved.control.raw());
     }
 
     pub fn disable(self: View) ProgramError!void {
-        const saved_raw = self.read16(register.message_control) catch return error.ProgrammingWriteFailed;
+        var tx = ProgramTransaction.init(ConfigTarget.init(self));
+        const saved_raw = tx.read16(register.message_control) catch return error.ProgrammingWriteFailed;
         var control: MessageControl = @bitCast(saved_raw);
         control.msi_enable = false;
-        const disabled_raw: u16 = @bitCast(control);
 
-        try self.writeReadback16NoRollback(register.message_control, disabled_raw);
+        try tx.writeReadback16(register.message_control, control.raw(), saved_raw);
     }
 
     fn validateRouting(self: View, routing: Routing) ProgramError!void {
@@ -356,56 +302,6 @@ pub const View = struct {
 
     fn controlSnapshotVectorLimit(self: View) ProgramError!u6 {
         return controlCount(self.control_snapshot.multiple_message_capable).numVectors();
-    }
-
-    fn writeReadback16NoRollback(self: View, offset: u8, value: u16) ProgramError!void {
-        self.write16(offset, value) catch return error.ProgrammingWriteFailed;
-
-        const readback = self.read16(offset) catch return error.ProgrammingWriteFailed;
-        if (readback != value) return error.ProgrammingReadbackMismatch;
-    }
-
-    fn writeReadback16Logged(self: View, offset: u8, value: u16, saved: u16, log: *RollbackLog) ProgramError!void {
-        self.write16(offset, value) catch return error.ProgrammingWriteFailed;
-        log.record16(offset, saved);
-
-        const readback = self.read16(offset) catch return error.ProgrammingWriteFailed;
-        if (readback != value) return error.ProgrammingReadbackMismatch;
-    }
-
-    fn writeReadback32Logged(
-        self: View,
-        offset_32: u8,
-        offset_64: u8,
-        value: u32,
-        saved: u32,
-        log: *RollbackLog,
-    ) ProgramError!void {
-        const offset = if (self.addr64Capable()) offset_64 else offset_32;
-        self.write32(offset, value) catch return error.ProgrammingWriteFailed;
-        log.record32(offset, saved);
-
-        const readback = self.read32(offset) catch return error.ProgrammingWriteFailed;
-        if (readback != value) return error.ProgrammingReadbackMismatch;
-    }
-
-    fn rollbackFailure(self: View, log: *RollbackLog, err: ProgramError) ProgramError {
-        log.rollback(self) catch return error.ProgrammingPartial;
-        return err;
-    }
-
-    fn restore16(self: View, offset: u8, value: u16) ProgramError!void {
-        self.write16(offset, value) catch return error.ProgrammingPartial;
-
-        const readback = self.read16(offset) catch return error.ProgrammingPartial;
-        if (readback != value) return error.ProgrammingPartial;
-    }
-
-    fn restore32(self: View, offset: u8, value: u32) ProgramError!void {
-        self.write32(offset, value) catch return error.ProgrammingPartial;
-
-        const readback = self.read32(offset) catch return error.ProgrammingPartial;
-        if (readback != value) return error.ProgrammingPartial;
     }
 
     fn messageDataOffset(self: View) u8 {
@@ -448,8 +344,38 @@ pub const View = struct {
     }
 };
 
+const ConfigTarget = struct {
+    function: Function,
+    base: usize,
+
+    pub fn init(view: View) ConfigTarget {
+        return .{ .function = view.function, .base = view.base };
+    }
+
+    pub fn read16(self: ConfigTarget, offset: usize) ConfigSpace.Error!u16 {
+        return self.function.read16(self.base + offset);
+    }
+
+    pub fn read32(self: ConfigTarget, offset: usize) ConfigSpace.Error!u32 {
+        return self.function.read32(self.base + offset);
+    }
+
+    pub fn write16(self: ConfigTarget, offset: usize, value: u16) ConfigSpace.Error!void {
+        return self.function.write16(self.base + offset, value);
+    }
+
+    pub fn write32(self: ConfigTarget, offset: usize, value: u32) ConfigSpace.Error!void {
+        return self.function.write32(self.base + offset, value);
+    }
+};
+
+const ProgramTransaction = programming.Transaction(ConfigTarget, .{
+    .max_entries = 7,
+    .word16 = true,
+    .word32 = true,
+});
+
 const SaveFrame = struct {
-    control_raw: u16,
     control: MessageControl,
     address_lo: u32,
     address_hi: u32 = 0,
@@ -457,17 +383,15 @@ const SaveFrame = struct {
     ext_data: u16 = 0,
     mask: u32 = 0,
 
-    fn read(view: View) ConfigSpace.Error!SaveFrame {
-        const control_raw = try view.read16(register.message_control);
-        const control: MessageControl = @bitCast(control_raw);
-        const address_lo = try view.read32(register.message_address_lo);
-        const address_hi = if (view.addr64Capable()) try view.read32(register.message_address_hi_64) else 0;
-        const data = try view.read16(view.messageDataOffset());
-        const ext_data = if (view.extMessageDataCapable()) try view.read16(view.extMessageDataOffset()) else 0;
-        const mask = if (view.pvmCapable()) try view.read32(view.maskOffset()) else 0;
+    fn read(view: View, tx: *ProgramTransaction) programming.Error!SaveFrame {
+        const control: MessageControl = @bitCast(try tx.read16(register.message_control));
+        const address_lo = try tx.read32(register.message_address_lo);
+        const address_hi = if (view.addr64Capable()) try tx.read32(register.message_address_hi_64) else 0;
+        const data = try tx.read16(view.messageDataOffset());
+        const ext_data = if (view.extMessageDataCapable()) try tx.read16(view.extMessageDataOffset()) else 0;
+        const mask = if (view.pvmCapable()) try tx.read32(view.maskOffset()) else 0;
 
         return .{
-            .control_raw = control_raw,
             .control = control,
             .address_lo = address_lo,
             .address_hi = address_hi,
@@ -478,47 +402,6 @@ const SaveFrame = struct {
     }
 };
 
-const RollbackLog = struct {
-    entries: [max_entries]Entry = undefined,
-    len: usize = 0,
-
-    const max_entries: usize = 7;
-
-    const Entry = union(enum) {
-        word16: struct {
-            offset: u8,
-            value: u16,
-        },
-        word32: struct {
-            offset: u8,
-            value: u32,
-        },
-    };
-
-    fn record16(self: *RollbackLog, offset: u8, value: u16) void {
-        std.debug.assert(self.len < self.entries.len);
-        self.entries[self.len] = .{ .word16 = .{ .offset = offset, .value = value } };
-        self.len += 1;
-    }
-
-    fn record32(self: *RollbackLog, offset: u8, value: u32) void {
-        std.debug.assert(self.len < self.entries.len);
-        self.entries[self.len] = .{ .word32 = .{ .offset = offset, .value = value } };
-        self.len += 1;
-    }
-
-    fn rollback(self: *const RollbackLog, view: View) View.ProgramError!void {
-        var remaining = self.len;
-        while (remaining > 0) {
-            remaining -= 1;
-            switch (self.entries[remaining]) {
-                .word16 => |entry| try view.restore16(entry.offset, entry.value),
-                .word32 => |entry| try view.restore32(entry.offset, entry.value),
-            }
-        }
-    }
-};
-
 fn readMessageControl(function: Function, base: u8) ConfigSpace.Error!MessageControl {
     const raw = try function.read16(@as(usize, base) + register.message_control);
     return @bitCast(raw);
@@ -526,13 +409,4 @@ fn readMessageControl(function: Function, base: u8) ConfigSpace.Error!MessageCon
 
 fn controlCount(raw: u3) VectorCount {
     return @enumFromInt(raw);
-}
-
-fn isConfigError(err: ConfigSpace.Error) bool {
-    return switch (err) {
-        error.OutOfBounds,
-        error.UnsupportedAccessWidth,
-        error.UnalignedAccess,
-        => true,
-    };
 }

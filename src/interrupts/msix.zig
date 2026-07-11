@@ -5,6 +5,7 @@ const std = @import("std");
 const config = @import("../config.zig");
 const list = @import("../capabilities/list.zig");
 const memory = @import("../memory.zig");
+const programming = @import("programming.zig");
 
 pub const cap_id: u8 = 0x11;
 
@@ -228,9 +229,7 @@ pub const View = struct {
         vector_entry: VectorEntry,
     ) ProgramError!void {
         const entry_base = try self.checkedEntryBase(table_memory, vector_index);
-        var save: EntrySave = undefined;
-
-        try programEntryAt(table_memory, entry_base, vector_entry, &save);
+        try programEntryAt(table_memory, entry_base, vector_entry);
     }
 
     pub fn programEntries(
@@ -249,9 +248,8 @@ pub const View = struct {
         if (end > self.tableSize()) return error.InvalidRouting;
         if (end * table_entry_size > table_memory.len()) return error.BarMemoryOutOfBounds;
 
-        var save: EntrySave = undefined;
         for (entries, 0..) |vector_entry, i| {
-            try programEntryAt(table_memory, (start + i) * table_entry_size, vector_entry, &save);
+            try programEntryAt(table_memory, (start + i) * table_entry_size, vector_entry);
         }
     }
 
@@ -263,15 +261,12 @@ pub const View = struct {
     ) ProgramError!void {
         const entry_base = try self.checkedEntryBase(table_memory, vector_index);
         const offset = entry_base + entry.vector_control;
-        const saved = table_memory.read32(offset) catch return error.ProgrammingWriteFailed;
+        var tx = TableTransaction.init(.{ .table_memory = table_memory });
+        const saved = tx.read32(offset) catch return error.ProgrammingWriteFailed;
         var control = vectorControlFromRaw(saved);
         control.masked = masked;
-        const updated = vectorControlToRaw(control);
 
-        commitDword(table_memory, offset, updated) catch |err| {
-            try restoreDword(table_memory, offset, saved);
-            return err;
-        };
+        try tx.writeReadback32(offset, vectorControlToRaw(control), saved);
     }
 
     fn checkedEntryBase(
@@ -288,8 +283,8 @@ pub const View = struct {
     }
 
     fn commitMessageControl(self: View, update: MessageControlUpdate) ProgramError!void {
-        const offset = self.controlOffset();
-        const saved = self.function.read16(offset) catch return error.ProgrammingWriteFailed;
+        var tx = ConfigTransaction.init(ConfigTarget.init(self));
+        const saved = tx.read16(register.message_control) catch return error.ProgrammingWriteFailed;
         var control = messageControlFromRaw(saved);
 
         switch (update) {
@@ -297,10 +292,7 @@ pub const View = struct {
             .function_mask => |masked_value| control.function_mask = masked_value,
         }
 
-        const updated = messageControlToRaw(control);
-        self.function.write16(offset, updated) catch return error.ProgrammingWriteFailed;
-        const readback = self.function.read16(offset) catch return error.ProgrammingWriteFailed;
-        if (readback != updated) return error.ProgrammingReadbackMismatch;
+        try tx.writeReadback16(register.message_control, messageControlToRaw(control), saved);
     }
 
     fn controlOffset(self: View) usize {
@@ -308,149 +300,68 @@ pub const View = struct {
     }
 };
 
-const EntrySave = struct {
-    address_lo: u32,
-    address_hi: u32,
-    data: u32,
-    vector_control: u32,
+const ConfigTarget = struct {
+    function: config.Function,
+    base: usize,
+
+    pub fn init(view: View) ConfigTarget {
+        return .{ .function = view.function, .base = view.base };
+    }
+
+    pub fn read16(self: ConfigTarget, offset: usize) config.ConfigSpace.Error!u16 {
+        return self.function.read16(self.base + offset);
+    }
+
+    pub fn write16(self: ConfigTarget, offset: usize, value: u16) config.ConfigSpace.Error!void {
+        return self.function.write16(self.base + offset, value);
+    }
 };
 
-const RollbackDepth = enum {
-    vector_control,
-    address_lo,
-    address_hi,
-    data,
+const BarTarget = struct {
+    table_memory: memory.BarMemory,
+
+    pub fn read32(self: BarTarget, offset: usize) memory.BarMemory.Error!u32 {
+        return self.table_memory.read32(offset);
+    }
+
+    pub fn write32(self: BarTarget, offset: usize, value: u32) memory.BarMemory.Error!void {
+        return self.table_memory.write32(offset, value);
+    }
 };
+
+const ConfigTransaction = programming.Transaction(ConfigTarget, .{
+    .max_entries = 1,
+    .word16 = true,
+});
+const TableTransaction = programming.Transaction(BarTarget, .{
+    .max_entries = 5,
+    .word32 = true,
+});
 
 fn programEntryAt(
     table_memory: memory.BarMemory,
     entry_base: usize,
     vector_entry: VectorEntry,
-    save: *EntrySave,
 ) View.ProgramError!void {
-    save.* = try readEntrySave(table_memory, entry_base);
-    var masked_control = vectorControlFromRaw(save.vector_control);
+    var tx = TableTransaction.init(.{ .table_memory = table_memory });
+    const saved_address_lo = tx.read32(entry_base + entry.message_address_lo) catch return error.ProgrammingWriteFailed;
+    const saved_address_hi = tx.read32(entry_base + entry.message_address_hi) catch return error.ProgrammingWriteFailed;
+    const saved_data = tx.read32(entry_base + entry.message_data) catch return error.ProgrammingWriteFailed;
+    const saved_vector_control = tx.read32(entry_base + entry.vector_control) catch return error.ProgrammingWriteFailed;
+    var masked_control = vectorControlFromRaw(saved_vector_control);
     masked_control.masked = true;
     const masked_raw = vectorControlToRaw(masked_control);
-    var final_control = vectorControlFromRaw(save.vector_control);
+    var final_control = vectorControlFromRaw(saved_vector_control);
     final_control.masked = vector_entry.masked;
     const final_raw = vectorControlToRaw(final_control);
     const address_lo: u32 = @truncate(vector_entry.address);
     const address_hi: u32 = @truncate(vector_entry.address >> 32);
 
-    commitDword(table_memory, entry_base + entry.vector_control, masked_raw) catch |err| {
-        try rollbackEntry(table_memory, entry_base, save, .vector_control);
-        return err;
-    };
-
-    writeDword(table_memory, entry_base + entry.message_address_lo, address_lo) catch |err| {
-        try rollbackEntry(table_memory, entry_base, save, .vector_control);
-        return err;
-    };
-
-    readbackDword(table_memory, entry_base + entry.message_address_lo, address_lo) catch |err| {
-        try rollbackEntry(table_memory, entry_base, save, .address_lo);
-        return err;
-    };
-
-    writeDword(table_memory, entry_base + entry.message_address_hi, address_hi) catch |err| {
-        try rollbackEntry(table_memory, entry_base, save, .address_lo);
-        return err;
-    };
-
-    readbackDword(table_memory, entry_base + entry.message_address_hi, address_hi) catch |err| {
-        try rollbackEntry(table_memory, entry_base, save, .address_hi);
-        return err;
-    };
-
-    writeDword(table_memory, entry_base + entry.message_data, vector_entry.data) catch |err| {
-        try rollbackEntry(table_memory, entry_base, save, .address_hi);
-        return err;
-    };
-
-    readbackDword(table_memory, entry_base + entry.message_data, vector_entry.data) catch |err| {
-        try rollbackEntry(table_memory, entry_base, save, .data);
-        return err;
-    };
-
-    writeDword(table_memory, entry_base + entry.vector_control, final_raw) catch |err| {
-        try rollbackEntry(table_memory, entry_base, save, .data);
-        return err;
-    };
-
-    readbackDword(table_memory, entry_base + entry.vector_control, final_raw) catch |err| {
-        try rollbackEntry(table_memory, entry_base, save, .data);
-        return err;
-    };
-}
-
-fn readEntrySave(table_memory: memory.BarMemory, entry_base: usize) View.ProgramError!EntrySave {
-    return .{
-        .address_lo = table_memory.read32(entry_base + entry.message_address_lo) catch {
-            return error.ProgrammingWriteFailed;
-        },
-        .address_hi = table_memory.read32(entry_base + entry.message_address_hi) catch {
-            return error.ProgrammingWriteFailed;
-        },
-        .data = table_memory.read32(entry_base + entry.message_data) catch {
-            return error.ProgrammingWriteFailed;
-        },
-        .vector_control = table_memory.read32(entry_base + entry.vector_control) catch {
-            return error.ProgrammingWriteFailed;
-        },
-    };
-}
-
-fn rollbackEntry(
-    table_memory: memory.BarMemory,
-    entry_base: usize,
-    save: *const EntrySave,
-    depth: RollbackDepth,
-) View.ProgramError!void {
-    switch (depth) {
-        .data => try restoreDword(table_memory, entry_base + entry.message_data, save.data),
-        .address_hi, .address_lo, .vector_control => {},
-    }
-
-    switch (depth) {
-        .data, .address_hi => try restoreDword(
-            table_memory,
-            entry_base + entry.message_address_hi,
-            save.address_hi,
-        ),
-        .address_lo, .vector_control => {},
-    }
-
-    switch (depth) {
-        .data, .address_hi, .address_lo => try restoreDword(
-            table_memory,
-            entry_base + entry.message_address_lo,
-            save.address_lo,
-        ),
-        .vector_control => {},
-    }
-
-    try restoreDword(table_memory, entry_base + entry.vector_control, save.vector_control);
-}
-
-fn commitDword(table_memory: memory.BarMemory, offset: usize, value: u32) View.ProgramError!void {
-    try writeDword(table_memory, offset, value);
-    try readbackDword(table_memory, offset, value);
-}
-
-fn writeDword(table_memory: memory.BarMemory, offset: usize, value: u32) View.ProgramError!void {
-    table_memory.write32(offset, value) catch return error.ProgrammingWriteFailed;
-}
-
-fn readbackDword(table_memory: memory.BarMemory, offset: usize, expected: u32) View.ProgramError!void {
-    const readback = table_memory.read32(offset) catch return error.ProgrammingWriteFailed;
-    if (readback != expected) return error.ProgrammingReadbackMismatch;
-}
-
-fn restoreDword(table_memory: memory.BarMemory, offset: usize, value: u32) View.ProgramError!void {
-    table_memory.write32(offset, value) catch return error.ProgrammingPartial;
-    const readback = table_memory.read32(offset) catch return error.ProgrammingPartial;
-    if (readback != value) return error.ProgrammingPartial;
+    try tx.writeReadback32(entry_base + entry.vector_control, masked_raw, saved_vector_control);
+    try tx.writeReadback32(entry_base + entry.message_address_lo, address_lo, saved_address_lo);
+    try tx.writeReadback32(entry_base + entry.message_address_hi, address_hi, saved_address_hi);
+    try tx.writeReadback32(entry_base + entry.message_data, vector_entry.data, saved_data);
+    try tx.writeReadback32(entry_base + entry.vector_control, final_raw, masked_raw);
 }
 
 fn decodeTableLocation(raw: u32) error{MalformedField}!TableLocation {

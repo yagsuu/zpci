@@ -237,7 +237,7 @@ test "unit: table and PBA reads reconstruct values and reject invalid bounds bef
 }
 
 test "unit: config writes preserve reserved bits and map write/readback failures" {
-    // Exercise Message Control RMW commits through config bytes, including preserved bits and failure mapping.
+    // Exercise Message Control RMW commits, preserved bits, failure mapping, and restore.
     var bytes: [function_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{
         .table_size_minus_one = 0x123,
@@ -284,7 +284,8 @@ test "unit: config writes preserve reserved bits and map write/readback failures
     backend.resetLog();
     backend.corrupt_readback16 = messageControlRaw(.{ .msix_enable = false });
     try std.testing.expectError(error.ProgrammingReadbackMismatch, view.enable());
-    try expectMessageControlRaw(&bytes, .{ .msix_enable = true });
+    try expectMessageControlRaw(&bytes, .{ .msix_enable = false });
+    try std.testing.expectEqual(@as(usize, 2), backend.write16_count);
 }
 
 test "unit: programEntry self-masks, preserves reserved bits, and writes fields in order" {
@@ -394,7 +395,11 @@ test "unit: programEntries handles empty input, upfront bounds, and failure boun
     try std.testing.expectError(error.BarMemoryOutOfBounds, view.programEntries(
         short_backend.accessor(),
         0,
-        &.{ .{ .address = 0, .data = 0, .masked = false }, .{ .address = 1, .data = 1, .masked = true }, .{ .address = 2, .data = 2, .masked = false } },
+        &.{
+            .{ .address = 0, .data = 0, .masked = false },
+            .{ .address = 1, .data = 1, .masked = true },
+            .{ .address = 2, .data = 2, .masked = false },
+        },
     ));
     try std.testing.expectEqual(@as(usize, 0), short_backend.op_count);
 
