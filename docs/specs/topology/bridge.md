@@ -77,12 +77,12 @@ pub const BusRange = struct {
 };
 
 pub const Window = struct {
-    /// Inclusive base address, in bytes. Zero when disabled.
+    /// Inclusive byte base decoded from the bridge window registers.
     base: u64,
-    /// Inclusive limit address, in bytes. Zero when disabled.
+    /// Inclusive byte limit decoded from the bridge window registers.
     limit: u64,
     /// True when the bridge has a non-empty forwarding range configured
-    /// (equivalently: the wire encoding satisfies base <= limit).
+    /// (equivalently: the decoded base is <= decoded limit).
     enabled: bool,
 
     /// True when `enabled` and the closed range `[address, address + size - 1]`
@@ -184,7 +184,7 @@ Behavior:
    - `prefetchable_memory.base = (@as(u64, pref_base_lo & 0xFFF0) << 16) | (@as(u64, pref_base_upper) << 32)`.
    - `prefetchable_memory.limit = (@as(u64, pref_limit_lo & 0xFFF0) << 16) | 0x000F_FFFF | (@as(u64, pref_limit_upper) << 32)`.
    - `prefetchable_memory.is_64bit = pref_is_64bit`.
-   - `prefetchable_memory.enabled = pref_base_lo <= pref_limit_lo`.
+   - `prefetchable_memory.enabled = prefetchable_memory.base <= prefetchable_memory.limit`.
 5. Return `WindowState{ .io, .memory, .prefetchable_memory }`.
 
 Rules:
@@ -259,7 +259,7 @@ Compile-time size assertions:
 comptime {
     std.debug.assert(@sizeOf(BusRange) == 3);
     std.debug.assert(@sizeOf(Window) == 24);
-    std.debug.assert(@sizeOf(PrefetchableWindow) == 32);
+    std.debug.assert(@sizeOf(PrefetchableWindow) == 24);
 }
 ```
 

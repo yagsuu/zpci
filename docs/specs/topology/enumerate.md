@@ -117,7 +117,7 @@ Rules:
   - Walk the bridge function's standard capability list per `docs/specs/capabilities/list.md`.
   - If a PCI Express capability (`id == 0x10`) is present and the bridge is v2+ (per `docs/specs/capabilities/pcie.md` §Version rules), read `DeviceControl2` at capability offset `+0x28`.
   - `ari_forwarding_enable` is bit 5 of `DeviceControl2` per `docs/specs/capabilities/pcie.md`.
-- If the bridge has no PCIe capability, or the PCIe capability is v1 only, or any config read during ARI detection fails, enumeration MUST fall back to classic mode for the child bus without propagating the error.
+- If the bridge has no PCIe capability, or the PCIe capability is v1 only, or the capability list is malformed, enumeration MUST fall back to classic mode for the child bus without propagating the error. Config-space read failures during ARI detection still propagate per §Errors.
 - In ARI mode on a child bus: enumeration MUST probe `(bus, 0, 0..256)` and MUST NOT probe devices `1..31`. Functions 1..255 in ARI mode are siblings under a common device-0 record; no separate "multifunction bit" is consulted (ARI removes that gating).
 - In classic mode: enumeration probes `(bus, 0..32, 0)` then §Multifunction discovery on each present device.
 
@@ -188,7 +188,7 @@ Consequences:
    5. If `input.nodes[my_idx].header_kind == .type1`:
       1. Read `secondary_bus = res.read8(0x19)` and `subordinate_bus = res.read8(0x1A)`. Propagate `ConfigSpace.Error`.
       2. If §Bridge recursion validity holds for `(bus, secondary_bus, subordinate_bus, seg)`:
-         - Determine `child_ari_mode = ariForwardingEnabled(res) catch false`.
+         - Determine `child_ari_mode = try ariForwardingEnabled(res)`; `ariForwardingEnabled` translates malformed-list cases to `false` but propagates `ConfigSpace.Error`.
          - Call `walkBus(seg, secondary_bus, parent = my_idx, depth = depth + 1, ari_mode = child_ari_mode)`.
 
 `ariForwardingEnabled(bridge_function)` behavior:

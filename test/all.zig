@@ -18,5 +18,10 @@ comptime {
     _ = @import("header/type1_test.zig");
     _ = @import("memory/bar_test.zig");
     _ = @import("resources/model_test.zig");
+    _ = @import("resources/assignment_test.zig");
+    _ = @import("resources/bridge_test.zig");
+    _ = @import("resources/bus_test.zig");
+    _ = @import("topology/enumerate_test.zig");
     _ = @import("topology/tree_test.zig");
+    _ = @import("topology/bridge_test.zig");
 }

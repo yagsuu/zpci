@@ -1,6 +1,6 @@
 # Resource bus numbers
 
-Defines the pure DFS numbering and commit step that writes the three bus-number bytes (`primary_bus_number` at `0x18`, `secondary_bus_number` at `0x19`, `subordinate_bus_number` at `0x1A`) on type-1 bridges. Owns the `Bridge`, `BridgeIndex`, `Input` types, the depth-first numbering algorithm bounded by a caller-supplied segment aperture, the per-bridge save-then-write-then-verify sequence, the per-bridge rollback on failure, and the failure boundary across bridges.
+Defines the pure DFS numbering and commit step that writes the three bus-number bytes (`primary_bus_number` at `0x18`, `secondary_bus_number` at `0x19`, `subordinate_bus_number` at `0x1A`) on type-1 bridges. Owns the `Bridge`, `BridgeIndex`, `Input` types, the depth-first numbering algorithm bounded by a caller-supplied segment aperture, the batched write order that preserves descendant reachability, input-wide readback/rollback discipline, and the failure boundary for partially-restored commits.
 
 Per `docs/guidelines/conventions.md` §Authority order, this domain spec is the sole authority on bus-number numbering, write order, and rollback discipline. Any conflicting declarations in `docs/specs/index.md` or `docs/specs/architecture.md` are illustrative and are corrected to match this spec.
 
@@ -24,9 +24,9 @@ Owned:
 - `commit(input) Error!void` — the one entry point that numbers and programs bus numbers on a caller-projected bridge set.
 - `Bridge`, `BridgeIndex`, `max_bridges`, `max_depth`, `Input`.
 - The depth-first numbering algorithm bounded by `Input.bus_end`.
-- The per-bridge write order: subordinate → primary → secondary.
-- The save-then-write-then-verify discipline with per-bridge rollback on failure.
-- The failure boundary across bridges: prior successful bridges stay programmed, the failing bridge is rolled back per §Rollback, subsequent bridges are not attempted.
+- The batched write order: save all bridges, write all subordinates, write all primaries, then write secondaries in reverse DFS order.
+- The save-then-write-then-verify discipline with input-wide rollback on failure.
+- The failure boundary: successful rollback restores every journaled byte; failed rollback returns `ProgrammingPartial` and leaves touched bridge state unspecified.
 
 Deferred:
 
@@ -153,21 +153,23 @@ Rules:
 - Depth in the DFS walk MUST NOT exceed `max_depth`. In debug builds a violation is a programmer-error assertion; real PCIe hierarchies do not approach 32 levels.
 - Determinism: same `input` produces byte-identical triples.
 
-### Phase 2 — Per-bridge commit `[zpci]`
+### Phase 2 — Batched commit `[zpci]`
 
-For each bridge in `Input.bridges` DFS preorder, using the triple recorded in Phase 1:
+`commit` uses the triples recorded in Phase 1 and preserves descendant bridge reachability by deferring every `secondary_bus_number` write until no descendant handle is needed.
 
-1. **Save phase** — read the three bytes at `0x18`, `0x19`, `0x1A` through `bridge.function.read8`. A read failure returns `ProgrammingWriteFailed`; no writes issued.
-2. **Write subordinate** — `bridge.function.write8(0x1A, subordinate)`; readback under §Readback discipline. On failure, run §Rollback and return the original error (`ProgrammingWriteFailed` or `ProgrammingReadbackMismatch`).
-3. **Write primary** — `bridge.function.write8(0x18, primary)`; readback. On failure, §Rollback + return original error.
-4. **Write secondary** — `bridge.function.write8(0x19, secondary)`; readback. On failure, §Rollback + return original error.
+Behavior:
+
+1. **Save phase** — read the three bytes at `0x18`, `0x19`, `0x1A` for every bridge in `Input.bridges` DFS preorder. A read failure returns `ProgrammingWriteFailed`; no writes issued.
+2. **Subordinate phase** — for every bridge in DFS preorder, write `subordinate_bus_number` at `0x1A`; readback under §Readback discipline.
+3. **Primary phase** — for every bridge in DFS preorder, write `primary_bus_number` at `0x18`; readback.
+4. **Secondary phase** — for every bridge in reverse DFS preorder, write `secondary_bus_number` at `0x19`; readback.
 
 Rules:
 
-- The subordinate-first order keeps the bridge's active forwarding range untouched until `secondary` is written last. When starting from unprogrammed state (`secondary_bus_number == 0`), forwarding stays off until step 4. When reprogramming an already-forwarding bridge, forwarding continues via the old `[secondary_old, subordinate_old]` range until step 4 flips `secondary` atomically.
+- Deferring `secondary_bus_number` writes keeps each bridge reachable through its caller-supplied `config.Function` until every descendant has been programmed.
+- Reverse DFS for the secondary phase flips child routing before parent routing, so parent writes cannot invalidate unprogrammed descendants.
 - Bus-number registers are not decode-gated. `commit` MUST NOT touch the `Command` register.
 - Each write is immediately followed by a readback at the same offset and width.
-- `commit` walks bridges in `Input.bridges` DFS preorder; each bridge's Phase 2 completes before the next bridge starts.
 
 ### Readback discipline `[zpci]`
 
@@ -179,9 +181,13 @@ After every write in Phase 2 (including rollback writes), programming issues an 
 
 ### Rollback `[zpci]`
 
-When Phase 2 returns an error for one bridge, `commit` attempts to restore that bridge's three saved bytes in reverse write order.
+When Phase 2 returns an error, `commit` attempts to restore every journaled write in reverse phase order:
 
-For each journaled write in reverse (secondary, then primary, then subordinate — whichever were actually written):
+1. Restore written `secondary_bus_number` bytes in DFS preorder.
+2. Restore written `primary_bus_number` bytes in reverse DFS preorder.
+3. Restore written `subordinate_bus_number` bytes in reverse DFS preorder.
+
+For each restore:
 
 1. Write the saved byte to the same offset.
 2. Readback and compare against the saved value under §Readback discipline.
@@ -191,22 +197,21 @@ After every journaled write is successfully restored, `commit` returns the origi
 
 Rules:
 
-- Rollback is per-bridge. Prior committed bridges in `Input.bridges` are NOT reverted.
+- Rollback is input-wide because Phase 2 batches writes by register to preserve descendant reachability.
 - Rollback MUST NOT retry a failed restore. A single failure aborts rollback with `ProgrammingPartial`.
-- The save-phase read failure at step 1 of Phase 2 needs no rollback because no writes were issued.
+- The save-phase read failure needs no rollback because no writes were issued.
 
-### Failure boundary across bridges `[zpci]`
+### Failure boundary `[zpci]`
 
-`commit` walks bridges in DFS preorder. On failure at bridge K:
+On failure during Phase 2:
 
-- Bridges `0..K-1` remain programmed with their Phase 1 triples.
-- Bridge K has been rolled back per §Rollback (`ProgrammingReadbackMismatch` / `ProgrammingWriteFailed`) or is in an unknown state (`ProgrammingPartial`).
-- Bridges `K+1..N-1` are not attempted.
+- If rollback succeeds, every journaled bridge byte is restored to its pre-commit value and `commit` returns the original error.
+- If rollback fails, `commit` returns `ProgrammingPartial` and any bridge touched before the rollback failure may be in an unspecified state.
+- Writes from phases that had not started, or later entries in the failing phase, are not attempted.
 
 Rules:
 
-- `commit` does NOT attempt whole-input rollback of prior successful bridges.
-- The failure mode returned to the caller identifies which failure semantics apply to bridge K. Which bridge K is is not surfaced via a return value or diagnostic; a caller that needs to identify the failing bridge inspects live hardware state after `commit` returns.
+- `commit` does not expose which bridge or phase failed. A caller that needs to identify the failing bridge inspects live hardware state after `commit` returns.
 
 ## Post-commit invariants `[zpci]`
 
@@ -221,8 +226,7 @@ These match the four conditions `docs/specs/topology/enumerate.md` §Bridge recu
 
 Rules:
 
-- The invariants hold on bridges `0..K-1` even after a failed commit at bridge K (they were programmed successfully).
-- Bridge K's invariants depend on the rollback outcome: on `ProgrammingReadbackMismatch` / `ProgrammingWriteFailed` after successful rollback, bridge K has its pre-commit state; on `ProgrammingPartial`, bridge K's state is unspecified.
+- Failed commits do not establish post-commit invariants. After successful rollback, every journaled byte has its pre-commit value; after `ProgrammingPartial`, any touched bridge byte is unspecified.
 
 ## Handle invalidation `[zpci]`
 
@@ -372,21 +376,21 @@ Rules:
 
 - `unit:` single bridge, all writes succeed → save captures the three saved bytes; write order is subordinate, primary, secondary; each readback matches the written value.
 - `unit:` overwrite of already-programmed bridge → writes overwrite unconditionally; readback matches new values; saved values equal the pre-existing programmed bytes.
-- `unit:` multi-bridge tree → per-bridge writes happen in DFS preorder; each bridge's three writes complete before the next bridge starts.
+- `unit:` multi-bridge tree → save phase visits DFS preorder; subordinate and primary phases write DFS preorder; secondary phase writes reverse DFS preorder.
 - `unit:` `commit` never touches offset `0x04` (`Command`).
 
 **Failure and rollback:**
 
-- `unit:` save-phase read failure at bridge K → `ProgrammingWriteFailed`; no writes issued; prior bridges 0..K-1 remain committed.
-- `unit:` subordinate write failure at bridge K → rollback attempts to restore (nothing was written on K yet); returns `ProgrammingWriteFailed`.
-- `unit:` primary write failure at bridge K → rollback restores subordinate to its saved value; returns `ProgrammingWriteFailed`.
-- `unit:` secondary write failure at bridge K → rollback restores primary then subordinate; returns `ProgrammingWriteFailed`.
+- `unit:` save-phase read failure at any bridge → `ProgrammingWriteFailed`; no writes issued.
+- `unit:` subordinate write failure → rollback restores prior subordinate writes; returns `ProgrammingWriteFailed` if restore succeeds.
+- `unit:` primary write failure → rollback restores written primaries and subordinates; returns `ProgrammingWriteFailed` if restore succeeds.
+- `unit:` secondary write failure → rollback restores written secondaries, primaries, and subordinates; returns `ProgrammingWriteFailed` if restore succeeds.
 - `unit:` subordinate readback mismatch → rollback attempts subordinate restore; returns `ProgrammingReadbackMismatch`.
 - `unit:` primary readback mismatch → rollback restores subordinate; returns `ProgrammingReadbackMismatch`.
 - `unit:` secondary readback mismatch → rollback restores primary then subordinate; returns `ProgrammingReadbackMismatch`.
 - `unit:` rollback write failure during recovery → returns `ProgrammingPartial`; no further restores attempted.
 - `unit:` rollback readback mismatch during recovery → returns `ProgrammingPartial`.
-- `unit:` multi-bridge, bridge K fails after K-1 successful commits → bridges 0..K-1 remain programmed; K rolled back per §Rollback; K+1..N-1 not touched.
+- `unit:` multi-bridge failure after earlier phase writes → rollback restores every journaled write; later entries in the failing phase and later phases are not attempted.
 
 **Post-commit invariants (integration):**
 
