@@ -8,6 +8,7 @@ comptime {
     _ = @import("config/accessor_test.zig");
     _ = @import("config/ecam_test.zig");
     _ = @import("config/space_test.zig");
+    _ = @import("integration/workflows_test.zig");
     _ = @import("interrupts/msi_test.zig");
     _ = @import("interrupts/msix_test.zig");
     _ = @import("core/errors_test.zig");
