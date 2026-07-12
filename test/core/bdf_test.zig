@@ -144,20 +144,98 @@ test "unit: Sbdf.function0 preserves segment, bus, and device" {
     try std.testing.expectEqual(@as(u3, 0), f0.bdf.function);
 }
 
-test "unit: Sbdf.format writes lspci-style ssss:bb:dd.f" {
-    // Render zero-padding and lowercase hex for both minimal and mixed-case numeric inputs.
+test "unit: Sbdf.format writes fixed-width lspci-style ssss:bb:dd.f" {
+    // Render lower bound, upper bound, and mixed values to verify fixed width, zero-padding, and lowercase hex.
     var buf: [64]u8 = undefined;
-    const rendered = try std.fmt.bufPrint(&buf, "{f}", .{Sbdf.of(0, 0, 1, 0)});
-    try std.testing.expectEqualStrings("0000:00:01.0", rendered);
 
-    const rendered2 = try std.fmt.bufPrint(&buf, "{f}", .{Sbdf.of(0xABCD, 0x12, 3, 4)});
-    try std.testing.expectEqualStrings("abcd:12:03.4", rendered2);
+    const rendered_min = try std.fmt.bufPrint(&buf, "{f}", .{Sbdf.of(0, 0, 0, 0)});
+    try std.testing.expectEqual(@as(usize, 12), rendered_min.len);
+    try std.testing.expectEqualStrings("0000:00:00.0", rendered_min);
+
+    const rendered_max = try std.fmt.bufPrint(&buf, "{f}", .{Sbdf.of(0xFFFF, 0xFF, 0x1F, 7)});
+    try std.testing.expectEqual(@as(usize, 12), rendered_max.len);
+    try std.testing.expectEqualStrings("ffff:ff:1f.7", rendered_max);
+
+    const rendered_mixed = try std.fmt.bufPrint(&buf, "{f}", .{Sbdf.of(0xABCD, 0x12, 3, 4)});
+    try std.testing.expectEqual(@as(usize, 12), rendered_mixed.len);
+    try std.testing.expectEqualStrings("abcd:12:03.4", rendered_mixed);
 }
 
-test "unit: Bdf.format writes bb:dd.f without a segment" {
-    // Render the segment-less address form used when the caller already knows the segment context.
+test "unit: Bdf.format writes fixed-width bb:dd.f without a segment" {
+    // Render lower bound, upper bound, and mixed values to verify fixed width, zero-padding, and lowercase hex.
     var buf: [16]u8 = undefined;
-    const rendered = try std.fmt.bufPrint(&buf, "{f}", .{Bdf.of(0x10, 5, 6)});
 
-    try std.testing.expectEqualStrings("10:05.6", rendered);
+    const rendered_min = try std.fmt.bufPrint(&buf, "{f}", .{Bdf.of(0, 0, 0)});
+    try std.testing.expectEqual(@as(usize, 7), rendered_min.len);
+    try std.testing.expectEqualStrings("00:00.0", rendered_min);
+
+    const rendered_max = try std.fmt.bufPrint(&buf, "{f}", .{Bdf.of(0xFF, 0x1F, 7)});
+    try std.testing.expectEqual(@as(usize, 7), rendered_max.len);
+    try std.testing.expectEqualStrings("ff:1f.7", rendered_max);
+
+    const rendered_mixed = try std.fmt.bufPrint(&buf, "{f}", .{Bdf.of(0x10, 5, 6)});
+    try std.testing.expectEqual(@as(usize, 7), rendered_mixed.len);
+    try std.testing.expectEqualStrings("10:05.6", rendered_mixed);
+}
+
+test "unit: Bdf.parse accepts exact lspci-style segment-less addresses" {
+    // Decode lower and upper bounds plus uppercase hex to cover fixed-width fields and digit case.
+    try std.testing.expect((try Bdf.parse("00:00.0")).eql(Bdf.of(0, 0, 0)));
+    try std.testing.expect((try Bdf.parse("ff:1f.7")).eql(Bdf.of(0xFF, 0x1F, 7)));
+    try std.testing.expect((try Bdf.parse("AB:0C.6")).eql(Bdf.of(0xAB, 0x0C, 6)));
+}
+
+test "unit: Bdf.parse rejects malformed syntax and out-of-range fields" {
+    // Feed one representative per rejected contract: width, delimiter, digit class, range, padding, and prefix.
+    const invalid = [_][]const u8{
+        "0:00.0",
+        "00:00.00",
+        "00-00.0",
+        "00:00:0",
+        "gg:00.0",
+        "00:20.0",
+        "00:00.8",
+        " 00:00.0",
+        "0x00:00.0",
+    };
+
+    for (invalid) |text| {
+        try std.testing.expectError(error.InvalidIdentifier, Bdf.parse(text));
+    }
+}
+
+test "unit: Sbdf.parse accepts exact lspci-style domain addresses" {
+    // Decode segment and nested BDF bounds plus uppercase hex to cover every fixed-width field.
+    try std.testing.expect((try Sbdf.parse("0000:00:00.0")).eql(Sbdf.of(0, 0, 0, 0)));
+    try std.testing.expect((try Sbdf.parse("ffff:ff:1f.7")).eql(Sbdf.of(0xFFFF, 0xFF, 0x1F, 7)));
+    try std.testing.expect((try Sbdf.parse("ABCD:12:03.4")).eql(Sbdf.of(0xABCD, 0x12, 3, 4)));
+}
+
+test "unit: Sbdf.parse rejects malformed syntax and invalid nested BDF" {
+    // Feed one representative per rejected contract at the segment and BDF layers.
+    const invalid = [_][]const u8{
+        "000:00:00.0",
+        "0000-00:00.0",
+        "gggg:00:00.0",
+        "0000:00:20.0",
+        "0000:00:00.8",
+        "0000:00:00.0 ",
+    };
+
+    for (invalid) |text| {
+        try std.testing.expectError(error.InvalidIdentifier, Sbdf.parse(text));
+    }
+}
+
+test "unit: Bdf and Sbdf parse format output exactly" {
+    // Round-trip formatter output through the strict parsers to guard the inverse contract.
+    var bdf_buf: [16]u8 = undefined;
+    const bdf = Bdf.of(0x7A, 0x0B, 5);
+    const bdf_text = try std.fmt.bufPrint(&bdf_buf, "{f}", .{bdf});
+    try std.testing.expect((try Bdf.parse(bdf_text)).eql(bdf));
+
+    var sbdf_buf: [32]u8 = undefined;
+    const sbdf = Sbdf.of(0xFEDC, 0x7A, 0x0B, 5);
+    const sbdf_text = try std.fmt.bufPrint(&sbdf_buf, "{f}", .{sbdf});
+    try std.testing.expect((try Sbdf.parse(sbdf_text)).eql(sbdf));
 }

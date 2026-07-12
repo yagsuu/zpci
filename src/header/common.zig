@@ -4,8 +4,10 @@ const std = @import("std");
 
 const config = @import("../config.zig");
 const core = @import("../core.zig");
+const pin = @import("../interrupts/pin.zig");
 
 const ConfigSpace = config.ConfigSpace;
+const Pin = pin.Pin;
 
 const offset = struct {
     const vendor_id: usize = 0x00;
@@ -186,7 +188,7 @@ pub const View = struct {
         return self.function.write8(offset.interrupt_line, value);
     }
 
-    pub fn interruptPin(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.interrupt_pin);
+    pub fn interruptPin(self: View) (ConfigSpace.Error || Pin.Error)!Pin {
+        return Pin.from(try self.function.read8(offset.interrupt_pin));
     }
 };

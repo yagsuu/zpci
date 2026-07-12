@@ -14,6 +14,7 @@ Related specs:
 - `docs/specs/header/common.md`
 - `docs/specs/header/type0.md`
 - `docs/specs/header/type1.md`
+- `docs/specs/interrupts/pin.md`
 - `docs/specs/bar.md`
 - `docs/specs/memory/bar.md`
 - `docs/specs/capabilities/list.md`
@@ -73,7 +74,7 @@ core/          identifier newtypes, BDF/SBDF math, package error set.
                No PCI semantics beyond identifier shape.
 config/        ConfigSpace contract, Ecam, Pio, Function view.
                The only modules that perform config-space I/O.
-header/        Common, type-0, type-1 wire layouts + ABI assertions +
+header/        Common, type-0, and type-1 wire layouts + ABI assertions +
                typed accessors + programming helpers.
 bar            BAR decode and the sizing probe (the only writes a reader emits).
 memory/        BarMemory accessor for BAR-mapped memory reads and writes,
@@ -83,7 +84,7 @@ capabilities/  Standard list traversal, extended list traversal, PCIe capability
                decode required by enumeration/programming policy.
 resources/     Resource model, assignment planner, bridge-window encoding,
                programming committer.
-interrupts/    MSI and MSI-X capability/table programming.
+interrupts/    INTx pin decode plus MSI and MSI-X capability/table programming.
 topology/      Enumeration, borrowed device tree, bridge traversal.
                zpci has no architecture-specific source in the initial library;
                x86_64 port I/O is consumed from zstdx.
@@ -98,13 +99,13 @@ src/<dom>.zig  no behavior.
 1. **`config/` owns config-space I/O.** No header, BAR, capability, topology, resource, or interrupt module performs config MMIO or PIO directly. They take a `ConfigSpace` and an `Sbdf`.
 2. **`ConfigSpace` is the only public function-pointer / vtable / comptime-interface seam.** Views never hold function pointers; they hold a `ConfigSpace` value plus a borrowed slice or `Sbdf`.
 3. **`Ecam` does not discover its own base.** Callers supply `Segment{ .segment, .base, .bus_start, .bus_end }` descriptors. `Pio` does not own raw inline assembly; it consumes `stdx.arch.x86_64.Port` from zstdx.
-4. **Header modules own their wire layout.** A header's `extern struct`, packed flag words, ABI assertions, and register-level programming helpers all live in the same module. `core/` carries no header semantics.
+4. **Header modules own their wire layout.** A header's `extern struct`, packed flag words, ABI assertions, and register-level programming helpers all live in header modules. `core/` carries no header semantics.
 5. **No cross-table imports between header modules.** `header/common.zig` is shared. `header/type0.zig` and `header/type1.zig` never import each other; type dispatch lives at the `config/space.zig` boundary.
 6. **`core/` is PCI-semantic-free.** `core/bdf.zig` knows BDF math, not which header type carries which field. `core/ids.zig` knows integer newtypes, not which capability advertises which id. Generic range and byte-containment primitives live in zstdx, not zpci core.
 7. **`bar.zig` owns the only writes a reader emits.** BAR sizing saves, writes all-ones, reads back, and restores the original value. Decode-disable around the probe, if required by `docs/specs/bar.md`, is also bar-owned. No module outside `bar.zig` performs BAR-related writes during read scope.
 8. **Capability modules walk and decode; they do not dispatch.** No registry, vtable, or generic capability-handler map. Callers switch on capability id at the call site.
 9. **`resources/` is the only path for resource writes.** Assignment and programming are separate phases: assignment is pure (caller storage in, plan out, no I/O); programming is the explicit commit step with deterministic order and rollback per the programming spec.
-10. **`interrupts/` is the only path for MSI/MSI-X programming.** Routing inputs (message address/data, vector identity) cross the module boundary as zpci-owned plain values supplied by the caller. zpci does not allocate platform vectors and does not consult APIC/IOAPIC/IR/firmware/OS facilities.
+10. **`interrupts/` owns interrupt decoding/programming.** `interrupts/pin.zig` owns INTx pin byte decode and is pure. MSI/MSI-X routing inputs (message address/data, vector identity) cross the module boundary as zpci-owned plain values supplied by the caller. zpci does not allocate platform vectors and does not consult APIC/IOAPIC/IR/firmware/OS facilities.
 11. **MSI-X table access is not config-space access.** MSI-X table and PBA writes go through a caller-supplied `BarMemory` accessor owned by `docs/specs/memory/bar.md`. `BarMemory` is a distinct I/O seam from `ConfigSpace`.
 12. **`topology/` does not program.** Enumeration and traversal never write BAR bases, bridge windows, command-register enables, MSI, MSI-X, or bus-number registers in their read-only modes. Bridge bus-number programming, if owned by the assignment spec, belongs under `resources/programming.zig`.
 13. **No view holds a function pointer.** Borrowed-slice views (`header.*.View`, capability views, BAR refs) carry only the `ConfigSpace` value, an `Sbdf`, and zero or more byte slices.
@@ -136,12 +137,12 @@ Rules:
 - Any implementation module may import `zstdx` for domain-neutral primitives approved by the owning zpci spec; facades may re-export only zpci-owned names.
 - `core/` and `memory/` are the zpci leaves. Each imports only `std`, `builtin`, and approved `zstdx` namespaces; neither imports sibling zpci domains.
 - `config/` imports `core/` and `zstdx` (including `stdx.arch.x86_64.Port` from `config/pio.zig`). It is the only non-leaf with config-space I/O.
-- `header/`, `bar`, `capabilities/` import `core/` and `config/`. They never import each other across families (no `header/type0.zig` → `capabilities/list.zig`).
+- `header/`, `bar`, and `capabilities/` import `core/` and `config/`. Header modules may import only the pure leaf `interrupts/pin.zig` from `interrupts/`; they never import MSI/MSI-X programming modules.
 - `resources/` imports `core/`, `config/`, `header/`, and `bar`. It does not import `interrupts/`, `topology/`, or `memory/`.
-- `interrupts/` imports `core/`, `config/`, `header/`, `capabilities/`, and `memory/`. It does not import `resources/` or `topology/`.
+- `interrupts/pin.zig` imports only `std`. Other `interrupts/` modules import `core/`, `config/`, `header/`, `capabilities/`, and `memory/`. `interrupts/` does not import `resources/` or `topology/`.
 - `topology/` imports `core/`, `config/`, and `header/`. It does not import `bar`, `capabilities/`, `resources/`, `memory/`, or `interrupts/`; callers compose those modules with topology nodes themselves.
 - `testing/` imports production modules such as `core/`, `config/`, and `memory/` as needed. Production modules do not import `testing/`.
-- Lower layers never import higher layers. A leaf importing a sibling-leaf is a layering violation.
+- Unlisted lower-to-higher imports are forbidden. The only approved exception is header views importing the pure `interrupts/pin.zig` decoder.
 - Cycles are forbidden. A new import that would close a cycle requires moving the shared concept down into `core/` (semantic-free) or up into the caller.
 
 ## Two type worlds

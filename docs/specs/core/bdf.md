@@ -27,7 +27,7 @@ Owned:
 - Combine of the bus-relative offset with the 4 KiB function-window offset.
 - Function-0 derivation used by multifunction discovery.
 - Bdf and Sbdf ordering and iteration helpers required by enumeration.
-- Equality and formatting.
+- Equality, formatting, and strict parsing.
 
 Deferred:
 
@@ -68,6 +68,10 @@ pub const Bdf = packed struct(u16) {
             .bus = b,
         };
     }
+
+    /// Parses exactly "bb:dd.f". Malformed syntax or out-of-range
+    /// device/function fields return `error.InvalidIdentifier`.
+    pub fn parse(text: []const u8) error{InvalidIdentifier}!Bdf { ... }
 
     pub fn eql(a: Bdf, b: Bdf) bool {
         return @as(u16, @bitCast(a)) == @as(u16, @bitCast(b));
@@ -165,6 +169,10 @@ pub const Sbdf = packed struct(u32) {
         };
     }
 
+    /// Parses exactly "ssss:bb:dd.f". Malformed syntax or out-of-range
+    /// BDF fields return `error.InvalidIdentifier`.
+    pub fn parse(text: []const u8) error{InvalidIdentifier}!Sbdf { ... }
+
     pub fn eql(a: Sbdf, b: Sbdf) bool {
         return @as(u32, @bitCast(a)) == @as(u32, @bitCast(b));
     }
@@ -236,24 +244,45 @@ Rules:
 - `bus - bus_start` is performed on `u8`s the caller has already containment-checked. Producing it requires `inSegmentRange(bdf, bus_start, bus_end)` to have returned `true`; passing an out-of-range Bdf is a programmer error and is asserted by the helper's callers, not validated here.
 - The `register` argument to `ecamOffset` is typed `u12` so the compiler enforces the `0..=0xFFF` bound at every call site. `config/accessor` or `config/space` owns multi-byte containment checks and may use `zstdx.core.Range` or `zstdx.bytes` helpers where applicable (e.g. a `u32` read starting at `0xFFF` would overrun the window).
 
-## Formatting
+## Formatting and parsing
+
+`Bdf.format` writes the fixed-width segment-less address form:
+
+```zig
+/// Writes "bb:dd.f" using zero-padded lowercase hex.
+pub fn format(self: Bdf, writer: *std.Io.Writer) !void;
+```
+
+`Sbdf.format` writes the fixed-width domain address form:
 
 ```zig
 /// Writes "ssss:bb:dd.f" using zero-padded lowercase hex,
 /// matching the conventional `lspci -D` rendering.
-pub fn format(self: Sbdf, writer: *std.Io.Writer) !void {
-    try writer.print(
-        "{x:0>4}:{x:0>2}:{x:0>2}.{d}",
-        .{ self.segment.value, self.bdf.bus, @as(u8, self.bdf.device), @as(u8, self.bdf.function) },
-    );
-}
+pub fn format(self: Sbdf, writer: *std.Io.Writer) !void;
 ```
 
-`Bdf` also implements `format` for the segment-less rendering `bb:dd.f`. Richer rendering belongs to callers.
+Rules:
+
+- `Bdf.format` emits exactly 7 bytes: `bb:dd.f`.
+- `Sbdf.format` emits exactly 12 bytes: `ssss:bb:dd.f`.
+- Segment, bus, and device fields are lowercase hex and zero-padded to their fixed widths.
+- Function is one decimal digit, `0..7`.
+- No alternate rendering modes are owned by this spec. Richer rendering belongs to callers.
+
+Parsing is the strict inverse of these renderings:
+
+- `Bdf.parse` accepts only `bb:dd.f`.
+- `Sbdf.parse` accepts only `ssss:bb:dd.f`.
+- Hex fields accept uppercase or lowercase digits.
+- Field widths and delimiters are fixed; whitespace, signs, `0x` prefixes, missing padding, and trailing bytes are rejected.
+- Malformed syntax and out-of-range device/function fields return `error.InvalidIdentifier`.
 
 ## Errors
 
-`core/bdf` surfaces no named local `Error` type. Runtime constructors `Bdf.from` and `Sbdf.from` return the inline set `error{InvalidIdentifier}`, a subset of `pci.core.Error` per `docs/specs/core/errors.md`. ECAM offset helpers do not return errors: their inputs are pre-validated (`device` and `function` by the `Bdf` type system, `bus` by `inSegmentRange`, `register` by `u12`).
+`core/bdf` exposes `Bdf.Error = error{InvalidIdentifier}` and `Sbdf.Error = Bdf.Error`, both subsets of
+`pci.core.Error` per `docs/specs/core/errors.md`. Runtime constructors and parsers return this set for malformed
+text and out-of-range device/function fields. ECAM offset helpers do not return errors: their inputs are pre-validated
+(`device` and `function` by the `Bdf` type system, `bus` by `inSegmentRange`, `register` by `u12`).
 
 ## Facade re-export `[zpci]`
 
@@ -281,6 +310,13 @@ Runtime construction:
 
 ```zig
 const bdf = try pci.core.Bdf.from(bus_byte, device_byte, function_byte);
+```
+
+Runtime parsing:
+
+```zig
+const bdf = try pci.core.Bdf.parse("00:1f.0");
+const addr = try pci.core.Sbdf.parse("0000:00:1f.0");
 ```
 
 Multifunction discovery:
@@ -321,6 +357,7 @@ std.log.info("{f}", .{addr}); // "0000:00:01.0"
 
 - A non-packed `Bdf` or `Sbdf` shape. The packed forms are normative.
 - BDF↔name caches.
+- Lenient CLI input such as unpadded fields, whitespace, signs, or `0x` prefixes.
 - Owning the `Segment` aperture descriptor type. That lives in `docs/specs/config/ecam.md`.
 
 ## Open questions

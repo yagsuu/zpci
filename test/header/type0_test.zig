@@ -6,6 +6,7 @@ const pci = @import("pci");
 
 const ExpansionRom = pci.header.ExpansionRom;
 const Function = pci.config.Function;
+const Pin = pci.interrupts.Pin;
 const Sbdf = pci.core.Sbdf;
 const Subsystem = pci.header.Subsystem;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
@@ -98,7 +99,7 @@ test "unit: View reads every type-0 endpoint field from seeded config bytes" {
     try std.testing.expectEqual(@as(u32, 0xD5E6_5AAB), @as(u32, @bitCast(try view.expansionRomBase())));
     try std.testing.expectEqual(@as(u8, 0x90), try view.capabilitiesPointer());
     try std.testing.expectEqual(@as(u8, 0xFE), try view.interruptLine());
-    try std.testing.expectEqual(@as(u8, 0x03), try view.interruptPin());
+    try std.testing.expectEqual(Pin.intc, try view.interruptPin());
     try std.testing.expectEqual(@as(u8, 0x11), try view.minGrant());
     try std.testing.expectEqual(@as(u8, 0x22), try view.maxLatency());
 }

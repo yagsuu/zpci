@@ -27,6 +27,7 @@ Owned:
 - PCI common header decode and command/status programming.
 - Type-0 endpoint header decode and programming.
 - Type-1 PCI-to-PCI bridge header decode and programming.
+- PCI interrupt-pin byte decode.
 - BAR decode for I/O, 32-bit memory, and 64-bit memory BARs.
 - BAR sizing by the save → write all-ones → read back → restore probe.
 - PCI resource model for I/O, non-prefetchable MMIO32, prefetchable MMIO32, non-prefetchable MMIO64, and prefetchable MMIO64.
@@ -126,7 +127,7 @@ bar            BAR decode and sizing probe.
 capabilities/  standard and extended capability-list walking; selected capability decoders.
 memory/        BarMemory accessor for BAR-mapped memory reads/writes.
 resources/     resource model, assignment, bridge windows, BAR/window/command programming.
-interrupts/    MSI and MSI-X capability/table programming.
+interrupts/    INTx pin decode plus MSI and MSI-X capability/table programming.
 topology/      enumeration, tree construction, bridge traversal.
 pci.zig       public package facade.
 ```
@@ -266,10 +267,14 @@ pub const bus = @import("resources/bus.zig");
 ### `src/interrupts.zig`
 
 ```zig
-//! PCI interrupt-programming namespace. Spec: docs/specs/interrupts/*.md.
+//! PCI interrupt namespace. Spec: docs/specs/interrupts/*.md.
+
+const pin = @import("interrupts/pin.zig");
 
 pub const msi = @import("interrupts/msi.zig");
 pub const msix = @import("interrupts/msix.zig");
+
+pub const Pin = pin.Pin;
 ```
 
 ### `src/topology.zig`

@@ -17,6 +17,7 @@ Related specs:
 - `docs/specs/bar.md`
 - `docs/specs/capabilities/list.md`
 - `docs/specs/resources/programming.md`
+- `docs/specs/interrupts/pin.md`
 - `docs/specs/interrupts/msi.md`
 - `docs/specs/interrupts/msix.md`
 
@@ -50,7 +51,7 @@ Deferred:
 - Expansion-ROM enable-bit orchestration — caller policy. Base-register programming — `docs/specs/resources/programming.md`.
 - Capability-list traversal and cycle handling — `docs/specs/capabilities/list.md`.
 - Subsystem id semantic interpretation — caller policy, not pci.
-- Interrupt-pin decoding (INTA/INTB/INTC/INTD/none) — `docs/specs/interrupts/*.md`.
+- INTx routing and bridge swizzling — `docs/specs/interrupts/pin.md` owns only byte decode.
 - Type-1 (PCI-PCI bridge) fields — `docs/specs/header/type1.md`.
 - Multifunction enumeration policy — `docs/specs/topology/enumerate.md`.
 
@@ -157,7 +158,7 @@ pub const View = struct {
     pub fn capabilitiesPointer(self: View) ConfigSpace.Error!u8;
     pub fn subsystem(self: View) ConfigSpace.Error!Subsystem;
     pub fn interruptLine(self: View) ConfigSpace.Error!u8;
-    pub fn interruptPin(self: View) ConfigSpace.Error!u8;
+    pub fn interruptPin(self: View) (ConfigSpace.Error || interrupts.Pin.Error)!interrupts.Pin;
     pub fn minGrant(self: View) ConfigSpace.Error!u8;
     pub fn maxLatency(self: View) ConfigSpace.Error!u8;
 
@@ -183,7 +184,7 @@ Behavior rules:
 - `expansionRomBase` reads `0x30` and bit-casts to `ExpansionRom`.
 - `capabilitiesPointer` reads `0x34`. Walking the list is owned by `docs/specs/capabilities/list.md`.
 - `interruptLine` reads `0x3C`.
-- `interruptPin` reads `0x3D` and returns the raw `u8`. Decoding to `INTA`/`INTB`/`INTC`/`INTD`/none is owned by an interrupt-routing spec.
+- `interruptPin` reads `0x3D` and decodes the raw byte with `interrupts.Pin.from`; malformed values return `error.MalformedField`.
 - `minGrant` reads `0x3E`.
 - `maxLatency` reads `0x3F`.
 - `setInterruptLine(value)` writes `0x3C`. Caller policy decides what value is meaningful.

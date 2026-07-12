@@ -4,10 +4,12 @@ const std = @import("std");
 
 const common = @import("common.zig");
 const config = @import("../config.zig");
+const pin = @import("../interrupts/pin.zig");
 
 const CommonView = common.View;
 const ConfigSpace = config.ConfigSpace;
 const Function = config.Function;
+const Pin = pin.Pin;
 
 pub const bar_count: usize = 6;
 
@@ -110,8 +112,8 @@ pub const View = struct {
         return self.function.read8(offset.interrupt_line);
     }
 
-    pub fn interruptPin(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.interrupt_pin);
+    pub fn interruptPin(self: View) (ConfigSpace.Error || Pin.Error)!Pin {
+        return Pin.from(try self.function.read8(offset.interrupt_pin));
     }
 
     pub fn minGrant(self: View) ConfigSpace.Error!u8 {

@@ -34,6 +34,19 @@ pub const Bdf = packed struct(u16) {
         };
     }
 
+    /// Parses exactly "bb:dd.f". Non-allocating; malformed syntax or out-of-range
+    /// device/function fields return `error.InvalidIdentifier`.
+    pub fn parse(text: []const u8) Error!Bdf {
+        if (text.len != 7) return error.InvalidIdentifier;
+        if (text[2] != ':' or text[5] != '.') return error.InvalidIdentifier;
+
+        return Bdf.from(
+            try parseFixedHex(u8, text[0..2], 2),
+            try parseFixedHex(u8, text[3..5], 2),
+            try parseFixedHex(u8, text[6..7], 1),
+        );
+    }
+
     pub fn eql(a: Bdf, b: Bdf) bool {
         return @as(u16, @bitCast(a)) == @as(u16, @bitCast(b));
     }
@@ -110,6 +123,17 @@ pub const Sbdf = packed struct(u32) {
         };
     }
 
+    /// Parses exactly "ssss:bb:dd.f". Non-allocating; malformed syntax or out-of-range
+    /// BDF fields return `error.InvalidIdentifier`.
+    pub fn parse(text: []const u8) Error!Sbdf {
+        if (text.len != 12) return error.InvalidIdentifier;
+        if (text[4] != ':') return error.InvalidIdentifier;
+
+        const segment = SegmentId.from(try parseFixedHex(u16, text[0..4], 4));
+        const bdf = try Bdf.parse(text[5..12]);
+        return Sbdf.init(segment, bdf);
+    }
+
     pub fn eql(a: Sbdf, b: Sbdf) bool {
         return @as(u32, @bitCast(a)) == @as(u32, @bitCast(b));
     }
@@ -178,4 +202,25 @@ pub fn ecamOffset(bdf: Bdf, bus_start: u8, register: u12) u32 {
 /// True when `bdf.bus` lies inside `[bus_start, bus_end]` inclusive.
 pub fn inSegmentRange(bdf: Bdf, bus_start: u8, bus_end: u8) bool {
     return bdf.bus >= bus_start and bdf.bus <= bus_end;
+}
+
+fn parseFixedHex(comptime T: type, text: []const u8, comptime width: usize) Bdf.Error!T {
+    std.debug.assert(text.len == width);
+    std.debug.assert(width <= @divExact(@bitSizeOf(T), 4));
+
+    var value: T = 0;
+    for (text) |byte| {
+        const nibble = parseHexNibble(byte) orelse return error.InvalidIdentifier;
+        value = (value << 4) | @as(T, nibble);
+    }
+    return value;
+}
+
+fn parseHexNibble(byte: u8) ?u4 {
+    return switch (byte) {
+        '0'...'9' => @intCast(byte - '0'),
+        'a'...'f' => @intCast(byte - 'a' + 10),
+        'A'...'F' => @intCast(byte - 'A' + 10),
+        else => null,
+    };
 }

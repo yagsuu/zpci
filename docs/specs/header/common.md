@@ -18,6 +18,7 @@ Related specs:
 - `docs/specs/header/type0.md`
 - `docs/specs/header/type1.md`
 - `docs/specs/capabilities/list.md`
+- `docs/specs/interrupts/pin.md`
 - `docs/specs/interrupts/msi.md`
 - `docs/specs/interrupts/msix.md`
 
@@ -213,7 +214,7 @@ pub const View = struct {
     pub fn interruptLine(self: View) ConfigSpace.Error!u8;
     pub fn setInterruptLine(self: View, value: u8) ConfigSpace.Error!void;
 
-    pub fn interruptPin(self: View) ConfigSpace.Error!u8;
+    pub fn interruptPin(self: View) (ConfigSpace.Error || interrupts.Pin.Error)!interrupts.Pin;
 };
 ```
 
@@ -230,7 +231,7 @@ Behavior rules:
 - `bist` / `setBist` read/write `0x0F` and bit-cast to `Bist`.
 - `capabilitiesPointer` reads `0x34` and returns the raw `u8`. Validity and traversal are owned by `docs/specs/capabilities/list.md`.
 - `interruptLine` / `setInterruptLine` read/write `0x3C`.
-- `interruptPin` reads `0x3D` and returns the raw `u8`. Decoding to `INTA`/`INTB`/`INTC`/`INTD`/none is owned by an interrupt-routing spec.
+- `interruptPin` reads `0x3D` and decodes the raw byte with `interrupts.Pin.from`; malformed values return `error.MalformedField`.
 
 `View` does not validate function presence — `config.Function.validate` is responsible. `View` does not validate header kind — that decision drives the type-0/type-1 dispatch at the `config/space.md` boundary; both kinds reach a valid `header.common.View`.
 
@@ -312,7 +313,7 @@ _ = line;
 
 ## Non-goals
 
-- Decoding the interrupt pin into typed pin values.
+- Interrupt routing, swizzling, or platform interrupt-controller programming.
 - Capability-list traversal.
 - BAR decode or sizing.
 - Header-kind dispatch.

@@ -6,6 +6,7 @@ const pci = @import("pci");
 
 const BridgeControl = pci.header.BridgeControl;
 const Function = pci.config.Function;
+const Pin = pci.interrupts.Pin;
 const Sbdf = pci.core.Sbdf;
 const Status = pci.header.Status;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
@@ -153,7 +154,7 @@ test "unit: View reads every type-1 bridge field from seeded config bytes" {
     try std.testing.expectEqual(@as(u8, 0xA0), try view.capabilitiesPointer());
     try std.testing.expectEqual(@as(u32, 0xC000_0801), try view.expansionRomBase());
     try std.testing.expectEqual(@as(u8, 0xFE), try view.interruptLine());
-    try std.testing.expectEqual(@as(u8, 0x01), try view.interruptPin());
+    try std.testing.expectEqual(Pin.inta, try view.interruptPin());
     try std.testing.expectEqual(@as(u16, 0xAD53), @as(u16, @bitCast(try view.bridgeControl())));
 }
 

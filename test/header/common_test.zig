@@ -8,6 +8,7 @@ const Bist = pci.header.Bist;
 const Command = pci.header.Command;
 const CommonHeader = pci.header.CommonHeader;
 const Function = pci.config.Function;
+const Pin = pci.interrupts.Pin;
 const Sbdf = pci.core.Sbdf;
 const Status = pci.header.Status;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
@@ -165,7 +166,7 @@ test "unit: View reads every common-header field from seeded config bytes" {
     try std.testing.expectEqual(@as(u8, 0xD7), @as(u8, @bitCast(try view.bist())));
     try std.testing.expectEqual(@as(u8, 0xA0), try view.capabilitiesPointer());
     try std.testing.expectEqual(@as(u8, 0xFE), try view.interruptLine());
-    try std.testing.expectEqual(@as(u8, 0x02), try view.interruptPin());
+    try std.testing.expectEqual(Pin.intb, try view.interruptPin());
 }
 
 test "unit: View writes exact common-header bytes" {
@@ -210,6 +211,17 @@ test "malformed: missing function is rejected by validate and not translated by 
     try std.testing.expect((try view.vendorId()).isAbsent());
     try std.testing.expectEqual(@as(u16, 0xFFFF), (try view.deviceId()).value);
     try std.testing.expectEqual(@as(u8, 0xFF), try view.headerTypeByte());
+}
+
+test "malformed: View rejects reserved interrupt-pin bytes" {
+    // Seeds the first reserved INTx pin byte and verifies typed decode reports a malformed field.
+    var bytes: [function_window_size]u8 = @splat(0);
+    seedCommonHeader(&bytes, .{ .interrupt_pin = 5 });
+    const sbdf = Sbdf.of(0, 0, 5, 0);
+    var backend = TestConfigSpace.initSingle(sbdf, &bytes);
+    const view = View.init(Function.unchecked(backend.configSpace(), sbdf));
+
+    try std.testing.expectError(error.MalformedField, view.interruptPin());
 }
 
 fn seedCommonHeader(bytes: *[function_window_size]u8, fields: struct {

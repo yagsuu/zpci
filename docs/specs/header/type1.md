@@ -20,6 +20,7 @@ Related specs:
 - `docs/specs/resources/bridge.md`
 - `docs/specs/topology/enumerate.md`
 - `docs/specs/topology/bridge.md`
+- `docs/specs/interrupts/pin.md`
 - `docs/specs/interrupts/msi.md`
 - `docs/specs/interrupts/msix.md`
 
@@ -44,7 +45,7 @@ Deferred:
 - Bridge-control bit semantics (secondary bus reset, ISA enable, VGA enable, master-abort mode, discard timers, parity/SERR, fast back-to-back) — caller policy.
 - Capability-list traversal — `docs/specs/capabilities/list.md`.
 - Expansion-ROM enable-bit orchestration — caller policy. Base-register programming — `docs/specs/resources/programming.md`.
-- Interrupt-pin decoding — `docs/specs/interrupts/*.md`.
+- INTx routing and bridge swizzling — `docs/specs/interrupts/pin.md` owns only byte decode.
 
 ## Host-endianness assumption
 
@@ -200,7 +201,7 @@ pub const View = struct {
     pub fn capabilitiesPointer(self: View) ConfigSpace.Error!u8;
     pub fn expansionRomBase(self: View) ConfigSpace.Error!u32;
     pub fn interruptLine(self: View) ConfigSpace.Error!u8;
-    pub fn interruptPin(self: View) ConfigSpace.Error!u8;
+    pub fn interruptPin(self: View) (ConfigSpace.Error || interrupts.Pin.Error)!interrupts.Pin;
     pub fn bridgeControl(self: View) ConfigSpace.Error!BridgeControl;
 
     // Writes
@@ -243,7 +244,7 @@ Behavior rules:
 - `expansionRomBase` reads `0x38`. Decoding the enable bit (bit 0) versus the base address belongs to `docs/specs/resources/programming.md`.
 - `setExpansionRomBase(value)` writes the full 32-bit register at `0x38`. The caller is responsible for the base|enable composition and the programming order.
 - `interruptLine` / `setInterruptLine` read/write `0x3C`.
-- `interruptPin` reads `0x3D`. Decoding to `INTA`/`INTB`/`INTC`/`INTD`/none is owned by an interrupt-routing spec.
+- `interruptPin` reads `0x3D` and decodes the raw byte with `interrupts.Pin.from`; malformed values return `error.MalformedField`.
 - `bridgeControl` / `setBridgeControl` read/write `0x3E` and bit-cast to `BridgeControl`.
 
 `View` does not expose typed BAR writes, capability-pointer writes, or interrupt-pin writes; those fields are either RO, BAR-managed, or programmed exclusively through `bar.md` / `resources/programming.md`.

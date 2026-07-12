@@ -11,6 +11,7 @@ comptime {
     _ = @import("integration/workflows_test.zig");
     _ = @import("interrupts/msi_test.zig");
     _ = @import("interrupts/msix_test.zig");
+    _ = @import("interrupts/pin_test.zig");
     _ = @import("core/errors_test.zig");
     _ = @import("core/ids_test.zig");
     _ = @import("core/bdf_test.zig");
