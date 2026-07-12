@@ -2,13 +2,13 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const bus = zpci.resources.bus;
+const bus = pci.resources.bus;
 const Bridge = bus.Bridge;
-const ConfigSpace = zpci.config.ConfigSpace;
-const Function = zpci.config.Function;
-const Sbdf = zpci.core.Sbdf;
+const ConfigSpace = pci.config.ConfigSpace;
+const Function = pci.config.Function;
+const Sbdf = pci.core.Sbdf;
 
 const commit = bus.commit;
 const function_window_size: usize = 0x1000;

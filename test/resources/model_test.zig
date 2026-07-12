@@ -2,19 +2,19 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const Aperture = zpci.resources.model.Aperture;
-const Assignment = zpci.resources.model.Assignment;
-const Entry = zpci.bar.Entry;
-const Function = zpci.config.Function;
-const Kind = zpci.resources.model.Kind;
-const Requirement = zpci.resources.model.Requirement;
-const RootWindows = zpci.resources.model.RootWindows;
-const Sbdf = zpci.core.Sbdf;
-const TestConfigSpace = zpci.testing.config.TestConfigSpace;
+const Aperture = pci.resources.model.Aperture;
+const Assignment = pci.resources.model.Assignment;
+const Entry = pci.bar.Entry;
+const Function = pci.config.Function;
+const Kind = pci.resources.model.Kind;
+const Requirement = pci.resources.model.Requirement;
+const RootWindows = pci.resources.model.RootWindows;
+const Sbdf = pci.core.Sbdf;
+const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
-const eligiblePools = zpci.resources.model.eligiblePools;
+const eligiblePools = pci.resources.model.eligiblePools;
 const function_window_size: usize = 0x1000;
 
 test "unit: eligiblePools implements the resource-kind truth table" {
@@ -274,7 +274,7 @@ const ExpectedBarRequirement = struct {
     index: usize,
 };
 
-fn expectEligible(actual: zpci.resources.model.EligibleSet, expected: ExpectedEligible) !void {
+fn expectEligible(actual: pci.resources.model.EligibleSet, expected: ExpectedEligible) !void {
     try std.testing.expectEqual(expected.io, actual.has(.io));
     try std.testing.expectEqual(expected.mmio32, actual.has(.mmio32));
     try std.testing.expectEqual(expected.mmio32_pref, actual.has(.mmio32_pref));
@@ -312,7 +312,7 @@ fn ioEntry(index: usize, size: u32) Entry {
     };
 }
 
-fn memoryEntry(index: usize, size: u64, width: zpci.bar.Kind.Width, prefetchable: bool) Entry {
+fn memoryEntry(index: usize, size: u64, width: pci.bar.Kind.Width, prefetchable: bool) Entry {
     return .{
         .index = index,
         .slot_count = switch (width) {

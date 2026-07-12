@@ -2,12 +2,12 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const assignment = zpci.resources.assignment;
-const bar = zpci.bar;
-const config = zpci.config;
-const core = zpci.core;
+const assignment = pci.resources.assignment;
+const bar = pci.bar;
+const config = pci.config;
+const core = pci.core;
 
 const Assignment = assignment.Assignment;
 const Function = config.Function;
@@ -16,7 +16,7 @@ const Node = assignment.Node;
 const Requirement = assignment.Requirement;
 const RootWindows = assignment.RootWindows;
 const Source = assignment.Source;
-const TestConfigSpace = zpci.testing.config.TestConfigSpace;
+const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
 const function_window_size: usize = 0x1000;
 

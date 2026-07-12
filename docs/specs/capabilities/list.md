@@ -220,15 +220,15 @@ Not used:
 pub const list = @import("capabilities/list.zig");
 ```
 
-Callers reach the public surface as `zpci.capabilities.list.Iterator`, `zpci.capabilities.list.Cursor`, `zpci.capabilities.list.Capability`, and `zpci.capabilities.list.Id`.
+Callers reach the public surface as `pci.capabilities.list.Iterator`, `pci.capabilities.list.Cursor`, `pci.capabilities.list.Capability`, and `pci.capabilities.list.Id`.
 
 ## Usage
 
 Walk capabilities and dispatch by id:
 
 ```zig
-const function = try zpci.config.Function.validate(config, sbdf);
-var it = try zpci.capabilities.list.Iterator.validate(function);
+const function = try pci.config.Function.validate(config, sbdf);
+var it = try pci.capabilities.list.Iterator.validate(function);
 
 while (try it.next()) |cap| {
     switch (cap.idTag()) {
@@ -243,7 +243,7 @@ while (try it.next()) |cap| {
 Read MSI-X Message Control through a cursor:
 
 ```zig
-const cur = try zpci.capabilities.list.Cursor.from(function, msix_cap.offset);
+const cur = try pci.capabilities.list.Cursor.from(function, msix_cap.offset);
 const message_control = try cur.read16(0x02);
 _ = message_control;
 ```
@@ -251,7 +251,7 @@ _ = message_control;
 Handle malformed list:
 
 ```zig
-var it = try zpci.capabilities.list.Iterator.validate(function);
+var it = try pci.capabilities.list.Iterator.validate(function);
 while (true) {
     const maybe = it.next() catch |err| switch (err) {
         error.MalformedCapability => break,

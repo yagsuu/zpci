@@ -2,19 +2,19 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const ConfigSpace = zpci.config.ConfigSpace;
-const Function = zpci.config.Function;
-const HeaderKind = zpci.config.HeaderKind;
-const Node = zpci.topology.tree.Node;
-const NodeIndex = zpci.topology.tree.NodeIndex;
-const PreorderIterator = zpci.topology.tree.PreorderIterator;
-const Sbdf = zpci.core.Sbdf;
-const SegmentId = zpci.core.SegmentId;
-const Tree = zpci.topology.tree.Tree;
+const ConfigSpace = pci.config.ConfigSpace;
+const Function = pci.config.Function;
+const HeaderKind = pci.config.HeaderKind;
+const Node = pci.topology.tree.Node;
+const NodeIndex = pci.topology.tree.NodeIndex;
+const PreorderIterator = pci.topology.tree.PreorderIterator;
+const Sbdf = pci.core.Sbdf;
+const SegmentId = pci.core.SegmentId;
+const Tree = pci.topology.tree.Tree;
 
-const tree = zpci.topology.tree;
+const tree = pci.topology.tree;
 
 test "layout: public bounds match fixed-index and fixed-stack contracts" {
     // Pin the caller-visible index width and iterator stack bound used for scratch sizing.

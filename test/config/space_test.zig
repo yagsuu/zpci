@@ -3,13 +3,13 @@
 const std = @import("std");
 
 const stdx = @import("stdx");
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const ConfigSpace = zpci.config.ConfigSpace;
-const TestConfigSpace = zpci.testing.config.TestConfigSpace;
-const Function = zpci.config.Function;
-const HeaderKind = zpci.config.HeaderKind;
-const Sbdf = zpci.core.Sbdf;
+const ConfigSpace = pci.config.ConfigSpace;
+const TestConfigSpace = pci.testing.config.TestConfigSpace;
+const Function = pci.config.Function;
+const HeaderKind = pci.config.HeaderKind;
+const Sbdf = pci.core.Sbdf;
 
 const function_window_size: usize = 0x1000;
 const offset = struct {
@@ -164,7 +164,7 @@ test "unit: validate accepts present type0 and reads identifiers" {
     try std.testing.expectEqual(@as(u16, 0x1234), (try function.vendorId()).value);
     try std.testing.expectEqual(@as(u16, 0x5678), (try function.deviceId()).value);
     try std.testing.expectEqual(@as(u8, 0x9A), (try function.revisionId()).value);
-    try std.testing.expect((try function.classCode()).eql(zpci.core.ClassCode.from(0x01, 0x08, 0x02)));
+    try std.testing.expect((try function.classCode()).eql(pci.core.ClassCode.from(0x01, 0x08, 0x02)));
 }
 
 test "unit: validate accepts type1 while masking multifunction bit" {

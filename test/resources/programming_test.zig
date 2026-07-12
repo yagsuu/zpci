@@ -4,18 +4,18 @@ const std = @import("std");
 
 const stdx = @import("stdx");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const Assignment = zpci.resources.programming.Assignment;
-const ConfigSpace = zpci.config.ConfigSpace;
-const Function = zpci.config.Function;
-const Kind = zpci.resources.model.Kind;
-const Plan = zpci.resources.programming.Plan;
-const Requirement = zpci.resources.model.Requirement;
-const Sbdf = zpci.core.Sbdf;
-const Source = zpci.resources.model.Source;
+const Assignment = pci.resources.programming.Assignment;
+const ConfigSpace = pci.config.ConfigSpace;
+const Function = pci.config.Function;
+const Kind = pci.resources.model.Kind;
+const Plan = pci.resources.programming.Plan;
+const Requirement = pci.resources.model.Requirement;
+const Sbdf = pci.core.Sbdf;
+const Source = pci.resources.model.Source;
 
-const bar = zpci.bar;
+const bar = pci.bar;
 const command_all: u16 = 0xFFFF;
 const function_window_size: usize = 0x1000;
 const offset = struct {
@@ -37,7 +37,7 @@ const offset = struct {
     const type1_rom: usize = 0x38;
 };
 
-const commit = zpci.resources.programming.commit;
+const commit = pci.resources.programming.commit;
 
 test "unit: empty plan performs no config-space access" {
     // Commit an empty assignment slice to cover the no-access fast path.

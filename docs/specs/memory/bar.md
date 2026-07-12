@@ -176,7 +176,7 @@ Rules:
 
 ## Testing `TestBarMemory` `[zpci]`
 
-`zpci.testing.memory.TestBarMemory` is the canonical host-test backend for `BarMemory`. It implements the same accessor contract as hardware-backed accessors while staying out of the production `zpci.memory` namespace.
+`pci.testing.memory.TestBarMemory` is the canonical host-test backend for `BarMemory`. It implements the same accessor contract as hardware-backed accessors while staying out of the production `pci.memory` namespace.
 
 ```zig
 pub const TestBarMemory = struct {
@@ -186,7 +186,7 @@ pub const TestBarMemory = struct {
 };
 ```
 
-Callers reach this type as `zpci.testing.memory.TestBarMemory`.
+Callers reach this type as `pci.testing.memory.TestBarMemory`.
 
 Rules:
 
@@ -202,7 +202,7 @@ The vtable seam supports dispatching, sparse, and responder-side backends withou
 
 - A VMM emulating MSI-X tables for many devices implements one `BarMemory` per device model. The vtable dispatches directly to the device's table storage.
 - A UEFI firmware backend wraps a mapped virtual address and issues volatile 32-bit accesses.
-- A host test uses `zpci.testing.memory.TestBarMemory`.
+- A host test uses `pci.testing.memory.TestBarMemory`.
 
 None of these need distinct types at the zpci boundary. Callers consume `BarMemory`.
 
@@ -216,7 +216,7 @@ const bar = @import("memory/bar.zig");
 pub const BarMemory = bar.BarMemory;
 ```
 
-`src/zpci.zig` re-exports the `memory` namespace facade. Callers reach the accessor as `zpci.memory.BarMemory`; tests reach the test backend as `zpci.testing.memory.TestBarMemory`.
+`src/pci.zig` re-exports the `memory` namespace facade. Callers reach the accessor as `pci.memory.BarMemory`; tests reach the test backend as `pci.testing.memory.TestBarMemory`.
 
 ## Usage
 
@@ -226,7 +226,7 @@ Firmware producer (mapped MMIO region):
 const region = try firmware_map_bar_memory(bar4_base, table_bytes, .uncacheable);
 defer firmware_unmap(region);
 
-const table = zpci.memory.BarMemory.init(
+const table = pci.memory.BarMemory.init(
     @ptrCast(region.context),
     &firmware_bar_memory_vtable,
     region.len,
@@ -237,7 +237,7 @@ Host test using the byte-backed test backend:
 
 ```zig
 var backing: [16]u8 = std.mem.zeroes([16]u8);
-var backend = zpci.testing.memory.TestBarMemory{ .bytes = &backing };
+var backend = pci.testing.memory.TestBarMemory{ .bytes = &backing };
 const table = backend.accessor();
 
 try table.write32(0x0, 0xFEE0_0000);

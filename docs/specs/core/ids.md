@@ -33,7 +33,7 @@ Deferred:
 - Every identifier is a single-field newtype: a `struct` wrapping the smallest integer or byte array required by the PCI spec. Distinct types prevent mixing at the type level — a `VendorId` cannot be passed where a `DeviceId` is expected, even though both are `u16`.
 - Integer newtypes carry the field name `value`.
 - `extern struct` aggregates carry colocated `comptime` layout assertions per `docs/guidelines/conventions.md` §Compile-time assertions.
-- Constructors named `of` are `comptime`-only and reject out-of-range inputs at compile time. Constructors named `from` are runtime; they return `error.InvalidIdentifier` from `zpci.Error` on out-of-range input.
+- Constructors named `of` are `comptime`-only and reject out-of-range inputs at compile time. Constructors named `from` are runtime; they return `error.InvalidIdentifier` from `pci.core.Error` on out-of-range input.
 - `eql` compares value-by-value.
 - Named values exist only for closed, spec-defined vocabularies. They live as `pub const` declarations on the owning newtype.
 
@@ -80,7 +80,7 @@ pub const VendorId = struct {
 
 Rules:
 
-- Vendor id `0xFFFF` is the PCI-mandated "no device" marker. Callers route absence through `VendorId.isAbsent`. Header decode and topology enumeration translate this into `zpci.Error.AbsentFunction` only when an operation requires a present function.
+- Vendor id `0xFFFF` is the PCI-mandated "no device" marker. Callers route absence through `VendorId.isAbsent`. Header decode and topology enumeration translate this into `pci.Error.AbsentFunction` only when an operation requires a present function.
 - `VendorId.of(0)` is accepted; PCI assigns no semantics to `0x0000`.
 
 ### `DeviceId`
@@ -246,24 +246,24 @@ pub const Subclass = ids.Subclass;
 pub const ProgIf = ids.ProgIf;
 ```
 
-Through the root facade callers reach them as `zpci.core.VendorId`, `zpci.core.ClassCode`, etc.
+Through the root facade callers reach them as `pci.core.VendorId`, `pci.core.ClassCode`, etc.
 
 ## Usage
 
 Comptime literals:
 
 ```zig
-const intel: zpci.core.VendorId = .of(0x8086);
-const segment0: zpci.core.SegmentId = .of(0);
+const intel: pci.core.VendorId = .of(0x8086);
+const segment0: pci.core.SegmentId = .of(0);
 ```
 
 Switching on the class triple:
 
 ```zig
 const class = function.classCode();
-if (class.eql(zpci.core.ClassCode.bridge)) {
+if (class.eql(pci.core.ClassCode.bridge)) {
     // PCI-to-PCI bridge
-} else if (class.eql(zpci.core.ClassCode.nvme)) {
+} else if (class.eql(pci.core.ClassCode.nvme)) {
     // NVMe controller
 }
 ```
@@ -271,7 +271,7 @@ if (class.eql(zpci.core.ClassCode.bridge)) {
 Branching by base class only:
 
 ```zig
-if (class.base_class.eql(zpci.core.BaseClass.network_controller)) {
+if (class.base_class.eql(pci.core.BaseClass.network_controller)) {
     // Any network controller, regardless of subclass/prog_if.
 }
 ```
@@ -279,14 +279,14 @@ if (class.base_class.eql(zpci.core.BaseClass.network_controller)) {
 Runtime input:
 
 ```zig
-const vid = zpci.core.VendorId.from(raw_u16);
+const vid = pci.core.VendorId.from(raw_u16);
 if (vid.isAbsent()) return; // function not present
 ```
 
 Class-code decode at the wire boundary (header decode owns the byte slice; the snippet illustrates the layout contract):
 
 ```zig
-const class_ptr: *const zpci.core.ClassCode = @ptrCast(&header_bytes[0x09]);
+const class_ptr: *const pci.core.ClassCode = @ptrCast(&header_bytes[0x09]);
 const class = class_ptr.*;
 ```
 

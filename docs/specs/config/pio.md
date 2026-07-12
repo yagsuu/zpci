@@ -322,26 +322,26 @@ const pio = @import("config/pio.zig");
 pub const Pio = pio.Pio;
 ```
 
-Callers reach it as `zpci.config.Pio`.
+Callers reach it as `pci.config.Pio`.
 
 ## Usage
 
 Create PIO-backed config access on x86_64:
 
 ```zig
-var pio = zpci.config.Pio.init();
+var pio = pci.config.Pio.init();
 const config = pio.configSpace();
 ```
 
 Validate a function on segment 0:
 
 ```zig
-const sbdf = zpci.core.Sbdf.from(
-    zpci.core.SegmentId.from(0),
-    zpci.core.Bdf.from(0, 1, 0),
+const sbdf = pci.core.Sbdf.from(
+    pci.core.SegmentId.from(0),
+    pci.core.Bdf.from(0, 1, 0),
 );
 
-const function = try zpci.config.Function.validate(config, sbdf);
+const function = try pci.config.Function.validate(config, sbdf);
 const vendor = try function.vendorId();
 _ = vendor;
 ```

@@ -2,16 +2,16 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const bridge = zpci.resources.bridge;
+const bridge = pci.resources.bridge;
 const Assignment = bridge.Assignment;
 const EncodedWindow = bridge.EncodedWindow;
-const Function = zpci.config.Function;
-const ConfigSpace = zpci.config.ConfigSpace;
+const Function = pci.config.Function;
+const ConfigSpace = pci.config.ConfigSpace;
 const Kind = bridge.Kind;
 const Requirement = bridge.Requirement;
-const Sbdf = zpci.core.Sbdf;
+const Sbdf = pci.core.Sbdf;
 const Source = bridge.Source;
 
 const bridge_io_alignment: u64 = 0x1000;

@@ -373,7 +373,7 @@ pub const ProgramError = error{
 
 Variant sourcing:
 
-- `MalformedCapability` — `find` propagates it from `capabilities.list.Iterator` when the capability list is malformed. `validate` propagates it in no case owned here; the assertion on `capability.id == cap_id` catches misuse before any read. The `zpci.Error` variant is defined by `docs/specs/core/errors.md`.
+- `MalformedCapability` — `find` propagates it from `capabilities.list.Iterator` when the capability list is malformed. `validate` propagates it in no case owned here; the assertion on `capability.id == cap_id` catches misuse before any read. The `pci.core.Error` variant is defined by `docs/specs/core/errors.md`.
 - `MalformedField` — Message Control's `multiple_message_capable` decoded to a reserved encoding (6 or 7). Reachable through `multipleMessageCapable` and through `validate`.
 - `InvalidRouting` — routing-input validation failed per §`Routing` rules. Returned before any config access.
 - `ProgrammingReadbackMismatch` — a readback comparison in `program`, `setMask`, or `disable` observed a value that does not match what was written. Rollback ran successfully.
@@ -422,14 +422,14 @@ None. `u32` masks and `u16` control values fit natively; the save frame is a fix
 pub const msi = @import("interrupts/msi.zig");
 ```
 
-Callers reach the public surface as `zpci.interrupts.msi.View`, `zpci.interrupts.msi.View.Routing`, `zpci.interrupts.msi.VectorCount`, `zpci.interrupts.msi.MessageControl`, `zpci.interrupts.msi.cap_id`, and `zpci.interrupts.msi.register`.
+Callers reach the public surface as `pci.interrupts.msi.View`, `pci.interrupts.msi.View.Routing`, `pci.interrupts.msi.VectorCount`, `pci.interrupts.msi.MessageControl`, `pci.interrupts.msi.cap_id`, and `pci.interrupts.msi.register`.
 
 ## Usage
 
 **Discover and program a single-vector MSI:**
 
 ```zig
-const view = try zpci.interrupts.msi.View.find(function) orelse return error.NoMsi;
+const view = try pci.interrupts.msi.View.find(function) orelse return error.NoMsi;
 try view.program(.{
     .address = 0xFEE0_0000,
     .data = 0x30,
@@ -440,7 +440,7 @@ try view.program(.{
 **Program a multi-vector MSI with per-vector masking:**
 
 ```zig
-const view = try zpci.interrupts.msi.View.find(function) orelse return error.NoMsi;
+const view = try pci.interrupts.msi.View.find(function) orelse return error.NoMsi;
 try view.program(.{
     .address = 0xFEE0_0000,
     .data = 0x50,
@@ -471,12 +471,12 @@ if (control.msi_enable) {
 **Coordinate with `Command.interrupt_disable` (caller-owned, per `docs/specs/header/common.md`):**
 
 ```zig
-const header = try zpci.header.common.View.validate(function);
+const header = try pci.header.common.View.validate(function);
 var cmd = try header.command();
 cmd.interrupt_disable = true;
 try header.setCommand(cmd);
 
-const view = try zpci.interrupts.msi.View.find(function) orelse return error.NoMsi;
+const view = try pci.interrupts.msi.View.find(function) orelse return error.NoMsi;
 try view.program(.{
     .address = 0xFEE0_0000,
     .data = 0x30,

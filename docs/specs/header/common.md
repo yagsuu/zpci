@@ -268,15 +268,15 @@ pub const Status = common.Status;
 pub const Bist = common.Bist;
 ```
 
-Callers reach the view as `zpci.header.common.View` and the structs as `zpci.header.CommonHeader`, `zpci.header.Command`, `zpci.header.Status`, `zpci.header.Bist`.
+Callers reach the view as `pci.header.common.View` and the structs as `pci.header.CommonHeader`, `pci.header.Command`, `pci.header.Status`, `pci.header.Bist`.
 
 ## Usage
 
 Enable bus mastering and memory decode:
 
 ```zig
-const function = try zpci.config.Function.validate(config, sbdf);
-const view = zpci.header.common.View.init(function);
+const function = try pci.config.Function.validate(config, sbdf);
+const view = pci.header.common.View.init(function);
 
 var cmd = try view.command();
 cmd.io_space = false;
@@ -288,7 +288,7 @@ try view.setCommand(cmd);
 Clear sticky error bits:
 
 ```zig
-try view.clearStatusBits(zpci.header.Status.all_sticky_errors);
+try view.clearStatusBits(pci.header.Status.all_sticky_errors);
 ```
 
 Probe the capabilities pointer when the bit is set:

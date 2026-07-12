@@ -2,9 +2,9 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const Entry = zpci.bar.Entry;
+const Entry = pci.bar.Entry;
 
 const ExpectedIo = struct {
     index: usize,
@@ -17,17 +17,17 @@ const ExpectedMemory = struct {
     slot_count: usize,
     base: u64,
     size: u64,
-    width: zpci.bar.Kind.Width,
+    width: pci.bar.Kind.Width,
     prefetchable: bool,
 };
 
-const Function = zpci.config.Function;
-const Kind = zpci.bar.Kind;
-const Layout = zpci.bar.Layout;
-const Sbdf = zpci.core.Sbdf;
-const View = zpci.bar.View;
+const Function = pci.config.Function;
+const Kind = pci.bar.Kind;
+const Layout = pci.bar.Layout;
+const Sbdf = pci.core.Sbdf;
+const View = pci.bar.View;
 
-const bar_count: usize = zpci.header.type0.bar_count;
+const bar_count: usize = pci.header.type0.bar_count;
 const function_window_size: usize = 0x1000;
 const offset = struct {
     const command: usize = 0x04;
@@ -35,9 +35,9 @@ const offset = struct {
     const bars: usize = 0x10;
 };
 
-test "layout: zpci.bar facade exposes BAR counts and header layouts" {
+test "layout: pci.bar facade exposes BAR counts and header layouts" {
     // Compare public constants and explicit layouts against header-owned counts.
-    try std.testing.expectEqual(@as(usize, 6), zpci.bar.max_entries);
+    try std.testing.expectEqual(@as(usize, 6), pci.bar.max_entries);
 
     var backend = ProbeConfig.init(.type0);
     const function = Function.unchecked(backend.configSpace(), backend.sbdf);
@@ -222,7 +222,7 @@ test "unit: sizeAll probes every BAR under one decode-disable window and returns
     backend.setProbe(5, 0xFFFF_FC01);
     const view = View.init(Function.unchecked(backend.configSpace(), backend.sbdf), .type0);
 
-    var scratch: [zpci.bar.max_entries]Entry = undefined;
+    var scratch: [pci.bar.max_entries]Entry = undefined;
     const entries = try view.sizeAll(&scratch);
 
     try std.testing.expectEqual(@as(usize, 5), entries.len);
@@ -263,7 +263,7 @@ test "malformed: sizeAll rejects short scratch before touching config space" {
     backend.setProbe(0, 0xFFFF_FF01);
     const view = View.init(Function.unchecked(backend.configSpace(), backend.sbdf), .type0);
 
-    var scratch: [zpci.bar.max_entries - 1]Entry = undefined;
+    var scratch: [pci.bar.max_entries - 1]Entry = undefined;
     try std.testing.expectError(error.StorageExhausted, view.sizeAll(&scratch));
 
     try std.testing.expectEqual(@as(usize, 0), backend.read_count);
@@ -348,8 +348,8 @@ const ProbeConfig = struct {
         return self;
     }
 
-    fn configSpace(self: *ProbeConfig) zpci.config.ConfigSpace {
-        return zpci.config.ConfigSpace.init(@ptrCast(self), &vtable);
+    fn configSpace(self: *ProbeConfig) pci.config.ConfigSpace {
+        return pci.config.ConfigSpace.init(@ptrCast(self), &vtable);
     }
 
     fn setCommand(self: *ProbeConfig, raw: u16) void {
@@ -372,7 +372,7 @@ const ProbeConfig = struct {
         self.probe_values[index] = raw;
     }
 
-    const vtable: zpci.config.ConfigSpace.VTable = .{
+    const vtable: pci.config.ConfigSpace.VTable = .{
         .read8 = read8,
         .read16 = read16,
         .read32 = read32,
@@ -381,19 +381,19 @@ const ProbeConfig = struct {
         .write32 = write32,
     };
 
-    fn read8(context: *anyopaque, _: Sbdf, byte_offset: usize) zpci.config.ConfigSpace.Error!u8 {
+    fn read8(context: *anyopaque, _: Sbdf, byte_offset: usize) pci.config.ConfigSpace.Error!u8 {
         const self: *ProbeConfig = @ptrCast(@alignCast(context));
         self.read_count += 1;
         return self.bytes[byte_offset];
     }
 
-    fn read16(context: *anyopaque, _: Sbdf, byte_offset: usize) zpci.config.ConfigSpace.Error!u16 {
+    fn read16(context: *anyopaque, _: Sbdf, byte_offset: usize) pci.config.ConfigSpace.Error!u16 {
         const self: *ProbeConfig = @ptrCast(@alignCast(context));
         self.read_count += 1;
         return load16(&self.bytes, byte_offset);
     }
 
-    fn read32(context: *anyopaque, _: Sbdf, byte_offset: usize) zpci.config.ConfigSpace.Error!u32 {
+    fn read32(context: *anyopaque, _: Sbdf, byte_offset: usize) pci.config.ConfigSpace.Error!u32 {
         const self: *ProbeConfig = @ptrCast(@alignCast(context));
         self.read_count += 1;
         if (barIndex(byte_offset)) |index| {
@@ -403,13 +403,13 @@ const ProbeConfig = struct {
         return load32(&self.bytes, byte_offset);
     }
 
-    fn write8(context: *anyopaque, _: Sbdf, byte_offset: usize, value: u8) zpci.config.ConfigSpace.Error!void {
+    fn write8(context: *anyopaque, _: Sbdf, byte_offset: usize, value: u8) pci.config.ConfigSpace.Error!void {
         const self: *ProbeConfig = @ptrCast(@alignCast(context));
         self.write_count += 1;
         self.bytes[byte_offset] = value;
     }
 
-    fn write16(context: *anyopaque, _: Sbdf, byte_offset: usize, value: u16) zpci.config.ConfigSpace.Error!void {
+    fn write16(context: *anyopaque, _: Sbdf, byte_offset: usize, value: u16) pci.config.ConfigSpace.Error!void {
         const self: *ProbeConfig = @ptrCast(@alignCast(context));
         self.write_count += 1;
         if (byte_offset == offset.command) {
@@ -420,7 +420,7 @@ const ProbeConfig = struct {
         store16(&self.bytes, byte_offset, value);
     }
 
-    fn write32(context: *anyopaque, _: Sbdf, byte_offset: usize, value: u32) zpci.config.ConfigSpace.Error!void {
+    fn write32(context: *anyopaque, _: Sbdf, byte_offset: usize, value: u32) pci.config.ConfigSpace.Error!void {
         const self: *ProbeConfig = @ptrCast(@alignCast(context));
         self.write_count += 1;
         if (barIndex(byte_offset)) |index| {

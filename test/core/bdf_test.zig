@@ -2,11 +2,11 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const Bdf = zpci.core.Bdf;
-const Sbdf = zpci.core.Sbdf;
-const SegmentId = zpci.core.SegmentId;
+const Bdf = pci.core.Bdf;
+const Sbdf = pci.core.Sbdf;
+const SegmentId = pci.core.SegmentId;
 
 test "layout: Bdf is packed struct(u16) with LSB-first PCIe Requester ID layout" {
     // Guard the wire-compatible requester-id layout consumed by packing, sorting, and ECAM math.

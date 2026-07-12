@@ -10,8 +10,8 @@ pub fn build(b: *std.Build) void {
     });
     const stdx = stdx_dep.module("stdx");
 
-    const zpci = b.addModule("zpci", .{
-        .root_source_file = b.path("src/zpci.zig"),
+    const pci = b.addModule("pci", .{
+        .root_source_file = b.path("src/pci.zig"),
         .target = host_target,
         .optimize = optimize,
         .imports = &.{.{ .name = "stdx", .module = stdx }},
@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "stdx", .module = stdx },
-            .{ .name = "zpci", .module = zpci },
+            .{ .name = "pci", .module = pci },
         },
     });
     const tests = b.addTest(.{ .root_module = tests_root });

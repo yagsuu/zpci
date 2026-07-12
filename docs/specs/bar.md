@@ -316,23 +316,23 @@ Direct: none.
 
 ## Facade re-export `[zpci]`
 
-`src/bar.zig` is the bar module itself; `src/zpci.zig` re-exports it:
+`src/bar.zig` is the bar module itself; `src/pci.zig` re-exports it:
 
 ```zig
 pub const bar = @import("bar.zig");
 ```
 
-Callers reach the public surface as `zpci.bar.View`, `zpci.bar.Iterator`, `zpci.bar.Entry`, `zpci.bar.Kind`, `zpci.bar.BarRef`, and `zpci.bar.Error`.
+Callers reach the public surface as `pci.bar.View`, `pci.bar.Iterator`, `pci.bar.Entry`, `pci.bar.Kind`, `pci.bar.BarRef`, and `pci.bar.Error`.
 
 ## Usage
 
 Decode all BARs on a type-0 function:
 
 ```zig
-const function = try zpci.config.Function.validate(config, sbdf);
+const function = try pci.config.Function.validate(config, sbdf);
 if ((try function.headerKind()) != .type0) return;
 
-const view = zpci.bar.View.init(function, .type0);
+const view = pci.bar.View.init(function, .type0);
 var it = view.iterator();
 while (try it.next()) |entry| {
     switch (entry.kind) {
@@ -365,7 +365,7 @@ switch (sized.kind) {
 Size every BAR under one decode-disable window:
 
 ```zig
-var scratch: [zpci.header.type0.bar_count]zpci.bar.Entry = undefined;
+var scratch: [pci.header.type0.bar_count]pci.bar.Entry = undefined;
 const entries = try view.sizeAll(&scratch);
 for (entries) |entry| switch (entry.kind) {
     .none => {},

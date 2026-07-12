@@ -295,13 +295,13 @@ pub const Error = error{
 
 Variant sourcing:
 
-- `ProgrammingReadbackMismatch` — a readback comparison during the disable phase, write phase, or restore-decode phase observed a value that does not match what was written (per §Readback discipline). Rollback ran successfully. The `zpci.Error` variant is defined by `docs/specs/core/errors.md`.
+- `ProgrammingReadbackMismatch` — a readback comparison during the disable phase, write phase, or restore-decode phase observed a value that does not match what was written (per §Readback discipline). Rollback ran successfully. The `pci.core.Error` variant is defined by `docs/specs/core/errors.md`.
 - `ProgrammingWriteFailed` — a `ConfigSpace` write or readback returned an accessor error during the save phase, disable phase, write phase, or restore-decode phase, before rollback started. Rollback ran successfully. Save-phase reads that fail also map to this variant because no state has changed and the semantics ("commit could not proceed") match.
 - `ProgrammingPartial` — a rollback write or rollback readback itself failed, or the restore-decode step at the end of the write phase failed such that base registers are programmed but decode state is not restored. Hardware is neither in the pre-commit state nor the planned post-commit state.
 
 Rules:
 
-- Programming MUST NOT synthesize other `zpci.Error` variants. `ConfigSpace.Error` values are mapped to `ProgrammingWriteFailed` at the point of the failing access.
+- Programming MUST NOT synthesize other `pci.core.Error` variants. `ConfigSpace.Error` values are mapped to `ProgrammingWriteFailed` at the point of the failing access.
 - `bridge.encodeWindow`'s `error.BridgeWindowUnencodable` returned during the write phase MUST be mapped to `ProgrammingWriteFailed` — the plan produced an unencodable placement and programming cannot proceed. Rollback runs before the error propagates.
 - Programmer errors (mismatched `Source` variant vs header kind, duplicate BAR-index assignments, duplicate window assignments) MUST be enforced by assertion per `docs/specs/config/space.md` §Validation vs assertion. They are not typed errors.
 
@@ -328,15 +328,15 @@ None. Alignment masks and register widths are `u32`-bounded; the save frame is a
 pub const programming = @import("resources/programming.zig");
 ```
 
-Callers reach the public surface as `zpci.resources.programming.commit` and `zpci.resources.programming.Error`.
+Callers reach the public surface as `pci.resources.programming.commit` and `pci.resources.programming.Error`.
 
 ## Usage
 
 **Commit a plan produced by assignment:**
 
 ```zig
-const plan = try zpci.resources.assignment.intoScratch(input, &plan_scratch);
-try zpci.resources.programming.commit(plan);
+const plan = try pci.resources.assignment.intoScratch(input, &plan_scratch);
+try pci.resources.programming.commit(plan);
 // Every function in the plan is now programmed with its planned bases and windows.
 // Command register is restored to its pre-commit value on every function; caller
 // enables IO / memory / bus-master separately via header.common helpers.
@@ -345,7 +345,7 @@ try zpci.resources.programming.commit(plan);
 **Handle programming failures:**
 
 ```zig
-zpci.resources.programming.commit(plan) catch |err| switch (err) {
+pci.resources.programming.commit(plan) catch |err| switch (err) {
     error.ProgrammingReadbackMismatch => {
         // A device did not accept a value programming wrote. Rollback restored
         // the affected function to its pre-commit state; prior functions in the
@@ -370,7 +370,7 @@ zpci.resources.programming.commit(plan) catch |err| switch (err) {
 
 ```zig
 // Caller-owned per docs/specs/header/common.md.
-try zpci.header.common.setCommand(function, .{
+try pci.header.common.setCommand(function, .{
     .io_space = true,
     .memory_space = true,
     .bus_master = true,

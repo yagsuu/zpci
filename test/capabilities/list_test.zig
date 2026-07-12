@@ -3,18 +3,18 @@
 const std = @import("std");
 
 const stdx = @import("stdx");
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const Capability = zpci.capabilities.list.Capability;
-const ConfigSpace = zpci.config.ConfigSpace;
-const Cursor = zpci.capabilities.list.Cursor;
-const Function = zpci.config.Function;
-const Id = zpci.capabilities.list.Id;
-const Iterator = zpci.capabilities.list.Iterator;
-const Sbdf = zpci.core.Sbdf;
-const TestConfigSpace = zpci.testing.config.TestConfigSpace;
+const Capability = pci.capabilities.list.Capability;
+const ConfigSpace = pci.config.ConfigSpace;
+const Cursor = pci.capabilities.list.Cursor;
+const Function = pci.config.Function;
+const Id = pci.capabilities.list.Id;
+const Iterator = pci.capabilities.list.Iterator;
+const Sbdf = pci.core.Sbdf;
+const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
-const list = zpci.capabilities.list;
+const list = pci.capabilities.list;
 const standard = list.standard;
 const function_window_size: usize = 0x1000;
 const test_sbdf = Sbdf.of(0, 0, 0, 0);

@@ -3,13 +3,13 @@
 const std = @import("std");
 
 const stdx = @import("stdx");
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const ConfigSpace = zpci.config.ConfigSpace;
-const Ecam = zpci.config.Ecam;
-const Sbdf = zpci.core.Sbdf;
-const Segment = zpci.config.Segment;
-const SegmentId = zpci.core.SegmentId;
+const ConfigSpace = pci.config.ConfigSpace;
+const Ecam = pci.config.Ecam;
+const Sbdf = pci.core.Sbdf;
+const Segment = pci.config.Segment;
+const SegmentId = pci.core.SegmentId;
 const VirtAddr = stdx.addr.VirtAddr;
 
 fn backingBase(bytes: []u8) VirtAddr {

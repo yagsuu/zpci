@@ -44,7 +44,7 @@ Source directory ownership is defined by `docs/specs/architecture.md`.
 - `src/interrupts/` — MSI and MSI-X capability programming. Caller owns vector allocation and platform routing unless an interrupt spec says otherwise.
 - `src/topology/` — enumeration, the borrowed device tree, and bridge bus traversal.
 - zpci has no `src/arch/`. The x86_64 port-I/O primitive consumed by `config.Pio` is `stdx.arch.x86_64.Port`, owned by zstdx.
-- `src/zpci.zig` — the public package facade (`const zpci = @import("zpci");`). Thin: namespace re-exports only.
+- `src/pci.zig` — the public package facade (`const pci = @import("pci");`). Thin: namespace re-exports only.
 - `src/<domain>.zig` — public namespace facades following the package-root pattern: import implementation modules from `src/<domain>/` and re-export selected public names.
 
 ## File responsibility
@@ -64,7 +64,7 @@ Disallowed zpci split shapes:
 
 ## Namespace facades
 
-`src/zpci.zig` is the public package facade. Domain facade files such as `src/config.zig`, `src/header.zig`, or `src/capabilities.zig` may re-export the stable public surface for one domain.
+`src/pci.zig` is the public package facade. Domain facade files such as `src/config.zig`, `src/header.zig`, or `src/capabilities.zig` may re-export the stable public surface for one domain.
 
 Domain facades follow the baseline thin-facade rule in `docs/guidelines/zig.md`. They may:
 
@@ -174,7 +174,7 @@ zpci constructor vocabulary is closed. Pick the verb by argument shape, I/O, and
 
 - `Type.of(comptime …)` — comptime-only literal constructor. Rejects out-of-range inputs with a compile error via argument typing (`u5`, `u3`, `u12`) or explicit `@compileError`. Used by identifier newtypes and `Bdf`/`Sbdf`.
 - `Type.init(...)` — pure assembly from already-validated inputs. Returns `Type` directly, never `Error!Type`. Performs no I/O and no fallible input validation. Used by borrowed handles that only assemble a struct literal (`bar.View.init`, `header.common.View.init`, `ConfigSpace.init`).
-- `Type.from(…)` — runtime constructor that may fail on input shape only. May be infallible (`VendorId.from`) or fallible (`Bdf.from` → `error.InvalidIdentifier`, `ClassCode.from`, `Ecam.from`, `capabilities.list.Cursor.from`). A fallible `from` performs no I/O; failures are decided by inspecting the argument bytes. Returns a subset of `zpci.Error` or a type-local error set.
+- `Type.from(…)` — runtime constructor that may fail on input shape only. May be infallible (`VendorId.from`) or fallible (`Bdf.from` → `error.InvalidIdentifier`, `ClassCode.from`, `Ecam.from`, `capabilities.list.Cursor.from`). A fallible `from` performs no I/O; failures are decided by inspecting the argument bytes. Returns a subset of `pci.core.Error` or a type-local error set.
 - `Type.validate(inputs)` — fallible constructor that performs I/O against hardware (or reads wire bytes from a caller-supplied buffer) to decide whether the value is well-formed. Returns `Error!Type`. Used by `Function.validate`, `capabilities.list.Iterator.validate`, `capabilities.extended.Iterator.validate`, `capabilities.pcie.View.validate`, and every read path that decodes wire bytes before construction.
 - `Type.unchecked(...)` — bypasses `validate` for responder-side / test / caller-known-good paths. Returns `Type` directly. Every type that owns a `validate` may also own an `unchecked` when the bypass has a legitimate consumer (`Function.unchecked`).
 - `Builder.init` / `wrap` / `seal` — reserved for the deferred config-writer phase. Not used in read scope.
@@ -188,12 +188,12 @@ Rules:
 
 ## Error vocabulary
 
-zpci uses one canonical name per error condition. The union of top-level public error categories is defined by `docs/specs/core/errors.md` as `zpci.Error`. Reuse those names across specs; do not invent near-duplicates.
+zpci uses one canonical name per error condition. The union of top-level public error categories is defined by `docs/specs/core/errors.md` as `pci.core.Error`. Reuse those names across specs; do not invent near-duplicates.
 
 Rules:
 
 - Error variant names describe the violated invariant, not the failing operation.
-- Type-local error sets stay narrow and are subsets of `zpci.Error` plus, where allowed, `std.mem.Allocator.Error`.
+- Type-local error sets stay narrow and are subsets of `pci.core.Error` plus, where allowed, `std.mem.Allocator.Error`.
 - Primitive errors from zstdx byte/range helpers and zpci identifier parsing are mapped into the owning module's domain error before crossing a public boundary; raw primitive errors are not part of any public domain surface.
 - Public APIs do not expose `anyerror`. Orchestration that fans across domains unions the type-local sets explicitly.
 
@@ -201,8 +201,8 @@ Rules:
 
 - Free functions in a module → module-level `pub const Error = error{...}`.
 - Types with state or methods → nested `pub const Error = error{...}` inside the type.
-- The package error set `zpci.Error` lives at `src/core/errors.zig` and is re-exported through `src/core.zig` and `src/zpci.zig`.
-- Facades do not synthesize error unions. A caller writes `zpci.config.ConfigSpace.Error` or `zpci.core.Error`, never `zpci.Error` for a per-operation type-local set.
+- The package error set `pci.core.Error` lives at `src/core/errors.zig` and is re-exported through `src/core.zig` and `src/pci.zig`.
+- Facades do not synthesize error unions. A caller writes `pci.config.ConfigSpace.Error` or `pci.core.Error`, never `pci.core.Error` for a per-operation type-local set.
 
 Per-operation error sets may narrow the type-level union when a method can only produce a subset of variants. The type-level `Error` remains a documentary union over every variant the type can return.
 
@@ -214,7 +214,7 @@ Per-operation error sets may narrow the type-level union when a method can only 
 
 ## Config-space access and programming discipline
 
-- All config-space reads and writes go through a `ConfigSpace` accessor (`docs/specs/config/accessor.md`). ECAM- and PIO-backed implementations own the only config-space I/O in zpci.
+- All config-space reads and writes go through a `ConfigSpace` accessor (`docs/specs/config/accessor.md`). ECAM- and PIO-backed implementations own the only config-space I/O in pci.
 - Every decode, sizing, capability-walk, traversal, resource-assignment, and interrupt-programming routine is pure over explicit accessors and caller-provided resource/vector inputs. This keeps logic host-testable against real byte-backed fakes (see `docs/guidelines/testing.md`).
 - Offsets are validated against the 4 KiB function window before every read or write.
 - An absent function (vendor id `0xFFFF`) is "not present", never an error.

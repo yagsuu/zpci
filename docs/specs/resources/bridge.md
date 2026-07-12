@@ -341,7 +341,7 @@ pub const AllErrors = Error || AggregateError;
 
 Variant sourcing:
 
-- `BridgeWindowUnencodable` — `encodeWindow` observed a base+size combination that overflows the target window's addressable range, an alignment mismatch after the assertion, or an integer overflow. The `zpci.Error` variant is defined by `docs/specs/core/errors.md`.
+- `BridgeWindowUnencodable` — `encodeWindow` observed a base+size combination that overflows the target window's addressable range, an alignment mismatch after the assertion, or an integer overflow. The `pci.core.Error` variant is defined by `docs/specs/core/errors.md`.
 - `StorageExhausted` — `aggregateWindows` observed more non-empty buckets than `out.len` slots.
 
 Rules:
@@ -383,7 +383,7 @@ Direct usage: none. Alignment math (`align_up`, mask-and-shift) is `u64`-bounded
 pub const bridge = @import("resources/bridge.zig");
 ```
 
-Callers reach the public surface as `zpci.resources.bridge.aggregateWindows`, `zpci.resources.bridge.encodeWindow`, `zpci.resources.bridge.EncodedWindow`, `zpci.resources.bridge.Error`, `zpci.resources.bridge.AggregateError`, and the encoding structs.
+Callers reach the public surface as `pci.resources.bridge.aggregateWindows`, `pci.resources.bridge.encodeWindow`, `pci.resources.bridge.EncodedWindow`, `pci.resources.bridge.Error`, `pci.resources.bridge.AggregateError`, and the encoding structs.
 
 ## Usage
 
@@ -392,8 +392,8 @@ Callers reach the public surface as `zpci.resources.bridge.aggregateWindows`, `z
 ```zig
 // A future resources/assignment.md orchestrator walks the tree bottom-up.
 // For each bridge node, it collects the descendant requirements and calls:
-var out: [3]zpci.resources.model.Requirement = undefined;
-const window_reqs = try zpci.resources.bridge.aggregateWindows(
+var out: [3]pci.resources.model.Requirement = undefined;
+const window_reqs = try pci.resources.bridge.aggregateWindows(
     bridge_node.function,
     descendant_reqs,
     &out,
@@ -405,7 +405,7 @@ const window_reqs = try zpci.resources.bridge.aggregateWindows(
 
 ```zig
 // After assignment picks a base for a bridge-window requirement:
-const encoded = try zpci.resources.bridge.encodeWindow(asgmt);
+const encoded = try pci.resources.bridge.encodeWindow(asgmt);
 switch (encoded) {
     .io => |io| {
         // programming writes:
@@ -431,7 +431,7 @@ switch (encoded) {
 **Detect unencodable placement early:**
 
 ```zig
-const encoded = zpci.resources.bridge.encodeWindow(asgmt) catch |err| switch (err) {
+const encoded = pci.resources.bridge.encodeWindow(asgmt) catch |err| switch (err) {
     error.BridgeWindowUnencodable => {
         // Assignment placed the base in a range the target window can't encode
         // (e.g., memory-window base ≥ 4 GiB). Reject the placement.

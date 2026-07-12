@@ -3,11 +3,11 @@
 const std = @import("std");
 
 const stdx = @import("stdx");
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const ConfigSpace = zpci.config.ConfigSpace;
-const TestConfigSpace = zpci.testing.config.TestConfigSpace;
-const Sbdf = zpci.core.Sbdf;
+const ConfigSpace = pci.config.ConfigSpace;
+const TestConfigSpace = pci.testing.config.TestConfigSpace;
+const Sbdf = pci.core.Sbdf;
 
 const function_window_size: usize = 0x1000;
 

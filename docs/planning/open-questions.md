@@ -9,7 +9,7 @@ Unresolved questions pulled out of specs so specs stay normative. Resolved items
 - BAR sizing uses the write-probe-restore sequence.
 - MSI and MSI-X programming are in scope.
 - PIO config-space reads are in scope.
-- Import name: `zpci` (`const zpci = @import("zpci");`).
+- Import name: `pci` (`const pci = @import("pci");`).
 - Zig version: 0.16.
 
 ## docs/specs/bar.md

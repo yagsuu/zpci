@@ -2,17 +2,17 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const ExpansionRom = zpci.header.ExpansionRom;
-const Function = zpci.config.Function;
-const Sbdf = zpci.core.Sbdf;
-const Subsystem = zpci.header.Subsystem;
-const TestConfigSpace = zpci.testing.config.TestConfigSpace;
-const Type0Header = zpci.header.Type0Header;
-const View = zpci.header.type0.View;
+const ExpansionRom = pci.header.ExpansionRom;
+const Function = pci.config.Function;
+const Sbdf = pci.core.Sbdf;
+const Subsystem = pci.header.Subsystem;
+const TestConfigSpace = pci.testing.config.TestConfigSpace;
+const Type0Header = pci.header.Type0Header;
+const View = pci.header.type0.View;
 
-const bar_count = zpci.header.type0.bar_count;
+const bar_count = pci.header.type0.bar_count;
 const function_window_size: usize = 0x1000;
 const offset = struct {
     const vendor_id: usize = 0x00;

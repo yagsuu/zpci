@@ -2,13 +2,13 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const bridge = zpci.topology.bridge;
-const config = zpci.config;
-const core = zpci.core;
-const testing_config = zpci.testing.config;
-const tree = zpci.topology.tree;
+const bridge = pci.topology.bridge;
+const config = pci.config;
+const core = pci.core;
+const testing_config = pci.testing.config;
+const tree = pci.topology.tree;
 
 const BusRange = bridge.BusRange;
 const Function = config.Function;

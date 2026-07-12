@@ -49,7 +49,7 @@ Deferred:
 - BAR programming writes — `docs/specs/bar.md` and `docs/specs/resources/programming.md`.
 - Expansion-ROM enable-bit orchestration — caller policy. Base-register programming — `docs/specs/resources/programming.md`.
 - Capability-list traversal and cycle handling — `docs/specs/capabilities/list.md`.
-- Subsystem id semantic interpretation — caller policy, not zpci.
+- Subsystem id semantic interpretation — caller policy, not pci.
 - Interrupt-pin decoding (INTA/INTB/INTC/INTD/none) — `docs/specs/interrupts/*.md`.
 - Type-1 (PCI-PCI bridge) fields — `docs/specs/header/type1.md`.
 - Multifunction enumeration policy — `docs/specs/topology/enumerate.md`.
@@ -225,17 +225,17 @@ pub const ExpansionRom = type0.ExpansionRom;
 pub const Subsystem = type0.Subsystem;
 ```
 
-Callers reach the view as `zpci.header.type0.View` and the structs as `zpci.header.Type0Header`, `zpci.header.ExpansionRom`, `zpci.header.Subsystem`.
+Callers reach the view as `pci.header.type0.View` and the structs as `pci.header.Type0Header`, `pci.header.ExpansionRom`, `pci.header.Subsystem`.
 
 ## Usage
 
 Endpoint dispatch and field reads:
 
 ```zig
-const function = try zpci.config.Function.validate(config, sbdf);
+const function = try pci.config.Function.validate(config, sbdf);
 switch (try function.headerKind()) {
     .type0 => {
-        const view = zpci.header.type0.View.init(function);
+        const view = pci.header.type0.View.init(function);
 
         const bar0 = try view.rawBar(0);
         const bar1 = try view.rawBar(1);

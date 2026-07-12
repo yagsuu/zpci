@@ -327,31 +327,31 @@ The five-pool taxonomy, alignment discipline, and eligibility table are PCI-doma
 pub const model = @import("resources/model.zig");
 ```
 
-Callers reach the public surface as `zpci.resources.model.Kind`, `zpci.resources.model.Requirement`, `zpci.resources.model.RootWindows`, `zpci.resources.model.Assignment`, `zpci.resources.model.eligiblePools`, etc.
+Callers reach the public surface as `pci.resources.model.Kind`, `pci.resources.model.Requirement`, `pci.resources.model.RootWindows`, `pci.resources.model.Assignment`, `pci.resources.model.eligiblePools`, etc.
 
 ## Usage
 
 Build requirements from a sized-BAR walk:
 
 ```zig
-const function = try zpci.config.Function.validate(config, sbdf);
-const view = zpci.bar.View.init(function, .type0);
+const function = try pci.config.Function.validate(config, sbdf);
+const view = pci.bar.View.init(function, .type0);
 
-var entries: [zpci.header.type0.bar_count]zpci.bar.Entry = undefined;
+var entries: [pci.header.type0.bar_count]pci.bar.Entry = undefined;
 const sized = try view.sizeAll(entries[0..view.count()]);
 
-var reqs: [zpci.header.type0.bar_count + 1]zpci.resources.model.Requirement = undefined;
+var reqs: [pci.header.type0.bar_count + 1]pci.resources.model.Requirement = undefined;
 var req_count: usize = 0;
 
 for (sized) |entry| {
-    if (zpci.resources.model.Requirement.fromBar(function, entry)) |req| {
+    if (pci.resources.model.Requirement.fromBar(function, entry)) |req| {
         reqs[req_count] = req;
         req_count += 1;
     }
 }
 
 // Expansion ROM: size the ROM (per docs/specs/resources/programming.md), then:
-if (zpci.resources.model.Requirement.fromExpansionRom(function, rom_size)) |req| {
+if (pci.resources.model.Requirement.fromExpansionRom(function, rom_size)) |req| {
     reqs[req_count] = req;
     req_count += 1;
 }
@@ -360,7 +360,7 @@ if (zpci.resources.model.Requirement.fromExpansionRom(function, rom_size)) |req|
 Inspect eligibility for a 64-bit prefetchable BAR:
 
 ```zig
-const elig = zpci.resources.model.eligiblePools(.mmio64_pref);
+const elig = pci.resources.model.eligiblePools(.mmio64_pref);
 // elig.mmio64_pref == true
 // elig.mmio32_pref == true
 // elig.mmio64 == true
@@ -371,7 +371,7 @@ const elig = zpci.resources.model.eligiblePools(.mmio64_pref);
 Describe caller-supplied root apertures:
 
 ```zig
-const windows = zpci.resources.model.RootWindows{
+const windows = pci.resources.model.RootWindows{
     .io          = .{ .kind = .io,          .base = 0x0000_1000,       .size = 0x0000_F000 },
     .mmio32      = .{ .kind = .mmio32,      .base = 0xC000_0000,       .size = 0x1000_0000 },
     .mmio32_pref = .{ .kind = .mmio32_pref, .base = 0xD000_0000,       .size = 0x1000_0000 },
@@ -383,7 +383,7 @@ const windows = zpci.resources.model.RootWindows{
 Read back a placement:
 
 ```zig
-const a: zpci.resources.model.Assignment = plan.assignments[0];
+const a: pci.resources.model.Assignment = plan.assignments[0];
 switch (a.requirement.source) {
     .endpoint_bar => |ref| {
         _ = ref.function;
@@ -399,7 +399,7 @@ switch (a.requirement.source) {
 }
 
 // Assert a specific fallback happened (test discipline):
-// try std.testing.expectEqual(zpci.resources.model.Kind.mmio32_pref, a.pool);
+// try std.testing.expectEqual(pci.resources.model.Kind.mmio32_pref, a.pool);
 ```
 
 ## Behavior contract

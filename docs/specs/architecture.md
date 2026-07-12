@@ -89,7 +89,7 @@ topology/      Enumeration, borrowed device tree, bridge traversal.
                x86_64 port I/O is consumed from zstdx.
 testing/      Reusable host-test fixtures and byte-backed accessors.
                Imports production domains; production domains never import it.
-zpci.zig +     Public package facade plus namespace facades. Re-exports only;
+pci.zig +     Public package facade plus namespace facades. Re-exports only;
 src/<dom>.zig  no behavior.
 ```
 
@@ -108,13 +108,13 @@ src/<dom>.zig  no behavior.
 11. **MSI-X table access is not config-space access.** MSI-X table and PBA writes go through a caller-supplied `BarMemory` accessor owned by `docs/specs/memory/bar.md`. `BarMemory` is a distinct I/O seam from `ConfigSpace`.
 12. **`topology/` does not program.** Enumeration and traversal never write BAR bases, bridge windows, command-register enables, MSI, MSI-X, or bus-number registers in their read-only modes. Bridge bus-number programming, if owned by the assignment spec, belongs under `resources/programming.zig`.
 13. **No view holds a function pointer.** Borrowed-slice views (`header.*.View`, capability views, BAR refs) carry only the `ConfigSpace` value, an `Sbdf`, and zero or more byte slices.
-14. **No zpci architecture module.** zpci has no `src/arch/`. The x86_64 port-I/O primitives consumed by `config.Pio` are owned by `zstdx`, not zpci.
-15. **Facades have no behavior.** `src/zpci.zig` and the `src/<domain>.zig` namespace facades only re-export. Adding validation, allocation, dispatch, or I/O to a facade is a layering violation.
+14. **No zpci architecture module.** zpci has no `src/arch/`. The x86_64 port-I/O primitives consumed by `config.Pio` are owned by `zstdx`, not pci.
+15. **Facades have no behavior.** `src/pci.zig` and the `src/<domain>.zig` namespace facades only re-export. Adding validation, allocation, dispatch, or I/O to a facade is a layering violation.
 
 ## Dependency direction
 
 ```text
-zpci.zig
+pci.zig
    |
    v
 namespace facades (config.zig, header.zig, bar.zig, capabilities.zig,
@@ -221,7 +221,7 @@ Shared mechanics live in `core/` (semantic-free), in the per-domain facade for r
 
 Every module in zpci builds and tests under `zig build test` on the host.
 
-- Decode, sizing, traversal, capability walking, assignment, programming, and interrupt programming are all pure over `ConfigSpace` and (for MSI-X) `BarMemory`. The byte-backed test accessors under `zpci.testing` implement the same contract as `Ecam`, `Pio`, and the BAR-memory accessor.
+- Decode, sizing, traversal, capability walking, assignment, programming, and interrupt programming are all pure over `ConfigSpace` and (for MSI-X) `BarMemory`. The byte-backed test accessors under `pci.testing` implement the same contract as `Ecam`, `Pio`, and the BAR-memory accessor.
 - `Ecam`, `Pio`, and the `stdx.arch.x86_64` primitives consumed by `Pio` keep their hardware-touching surface trivial. They are the only lines not exercised by host tests; their hardware paths are gated and stubbed off-target so the surrounding modules compile and run host-side.
 - No mocks. Host tests use real byte buffers.
 

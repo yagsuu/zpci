@@ -337,26 +337,26 @@ pub const Segment = ecam.Segment;
 pub const Ecam = ecam.Ecam;
 ```
 
-Callers reach them as `zpci.config.Segment` and `zpci.config.Ecam`.
+Callers reach them as `pci.config.Segment` and `pci.config.Ecam`.
 
 ## Usage
 
 Single-segment aperture (slice of one):
 
 ```zig
-const segments = [_]zpci.config.Segment{
+const segments = [_]pci.config.Segment{
     .{
-        .segment = zpci.core.SegmentId.of(0),
+        .segment = pci.core.SegmentId.of(0),
         .base = zstdx.addr.VirtAddr.fromInt(mapped_ecam_base),
         .bus_start = 0,
         .bus_end = 255,
     },
 };
 
-var ecam = try zpci.config.Ecam.from(&segments);
+var ecam = try pci.config.Ecam.from(&segments);
 const config = ecam.configSpace();
 
-const function = try zpci.config.Function.validate(config, sbdf);
+const function = try pci.config.Function.validate(config, sbdf);
 const vendor = try function.vendorId();
 _ = vendor;
 ```
@@ -364,31 +364,31 @@ _ = vendor;
 Multi-segment aperture:
 
 ```zig
-const segments = [_]zpci.config.Segment{
+const segments = [_]pci.config.Segment{
     .{
-        .segment = zpci.core.SegmentId.of(0),
+        .segment = pci.core.SegmentId.of(0),
         .base = zstdx.addr.VirtAddr.fromInt(seg0_base),
         .bus_start = 0,
         .bus_end = 0xFF,
     },
     .{
-        .segment = zpci.core.SegmentId.of(1),
+        .segment = pci.core.SegmentId.of(1),
         .base = zstdx.addr.VirtAddr.fromInt(seg1_base),
         .bus_start = 0,
         .bus_end = 0xFF,
     },
 };
 
-var ecam = try zpci.config.Ecam.from(&segments);
+var ecam = try pci.config.Ecam.from(&segments);
 const config = ecam.configSpace();
 ```
 
 Segment-limited aperture (bus contribution starts at zero for `bus_start`):
 
 ```zig
-const segments = [_]zpci.config.Segment{
+const segments = [_]pci.config.Segment{
     .{
-        .segment = zpci.core.SegmentId.of(0),
+        .segment = pci.core.SegmentId.of(0),
         .base = zstdx.addr.VirtAddr.fromInt(mapped_ecam_base),
         .bus_start = 0x40,
         .bus_end = 0x7F,
@@ -414,11 +414,11 @@ _ = config.read16(unknown_segment_sbdf, 0x00) catch |err| switch (err) {
 Duplicate `SegmentId` values are rejected at construction:
 
 ```zig
-const bad = [_]zpci.config.Segment{
+const bad = [_]pci.config.Segment{
     .{ .segment = .of(0), .base = a, .bus_start = 0x00, .bus_end = 0x7F },
     .{ .segment = .of(0), .base = b, .bus_start = 0x80, .bus_end = 0xFF },
 };
-_ = zpci.config.Ecam.from(&bad) catch |err| switch (err) {
+_ = pci.config.Ecam.from(&bad) catch |err| switch (err) {
     error.DuplicateSegment => {},
     else => unreachable,
 };

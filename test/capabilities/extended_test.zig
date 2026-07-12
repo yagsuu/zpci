@@ -3,21 +3,21 @@
 const std = @import("std");
 
 const stdx = @import("stdx");
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const ConfigSpace = zpci.config.ConfigSpace;
-const Cursor = zpci.capabilities.extended.Cursor;
-const ExtCapability = zpci.capabilities.extended.ExtCapability;
-const Function = zpci.config.Function;
-const Id = zpci.capabilities.extended.Id;
-const Iterator = zpci.capabilities.extended.Iterator;
-const Sbdf = zpci.core.Sbdf;
-const TestConfigSpace = zpci.testing.config.TestConfigSpace;
+const ConfigSpace = pci.config.ConfigSpace;
+const Cursor = pci.capabilities.extended.Cursor;
+const ExtCapability = pci.capabilities.extended.ExtCapability;
+const Function = pci.config.Function;
+const Id = pci.capabilities.extended.Id;
+const Iterator = pci.capabilities.extended.Iterator;
+const Sbdf = pci.core.Sbdf;
+const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
-const ext = zpci.capabilities.extended.ext;
+const ext = pci.capabilities.extended.ext;
 const function_window_size: usize = 0x1000;
 
-const find = zpci.capabilities.extended.find;
+const find = pci.capabilities.extended.find;
 
 const NoDwordConfig = struct {
     bytes: [function_window_size]u8 = @splat(0),

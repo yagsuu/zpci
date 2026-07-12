@@ -246,7 +246,7 @@ Rules:
 - Passing an endpoint to `children` is a programmer error and MUST be enforced by assertion.
 - Hardware read errors surface from `Node.function.*` calls the caller makes. Iterator methods MUST NOT read hardware and MUST NOT return `ConfigSpace.Error` variants.
 
-`Tree` and iterator methods MUST NOT synthesize `zpci.Error` variants. The type-local `Error` set is `tree.Error = error{ StorageExhausted, InvalidTopology }`.
+`Tree` and iterator methods MUST NOT synthesize `pci.core.Error` variants. The type-local `Error` set is `tree.Error = error{ StorageExhausted, InvalidTopology }`.
 
 ## Wire / layout invariants
 
@@ -284,19 +284,19 @@ The tree owns bounded stack-sized iterator state (`[max_depth]NodeIndex` = 64 by
 pub const tree = @import("topology/tree.zig");
 ```
 
-Callers reach the public surface as `zpci.topology.tree.Tree`, `zpci.topology.tree.Node`, `zpci.topology.tree.NodeIndex`, `zpci.topology.tree.PreorderIterator`, `zpci.topology.tree.ChildrenIterator`, `zpci.topology.tree.intoScratch`.
+Callers reach the public surface as `pci.topology.tree.Tree`, `pci.topology.tree.Node`, `pci.topology.tree.NodeIndex`, `pci.topology.tree.PreorderIterator`, `pci.topology.tree.ChildrenIterator`, `pci.topology.tree.intoScratch`.
 
 ## Usage
 
 **Discovery — zfw / firmware / kernel probing real hardware.** `topology.enumerate.intoScratch` fills a scratch `[]Node` from live config space, slices it to the actual function count, and calls the tree builder:
 
 ```zig
-var ecam = try zpci.config.Ecam.from(&segments);
+var ecam = try pci.config.Ecam.from(&segments);
 
-var nodes: [256]zpci.topology.tree.Node = undefined;
-var roots: [8]zpci.topology.tree.NodeIndex = undefined;
+var nodes: [256]pci.topology.tree.Node = undefined;
+var roots: [8]pci.topology.tree.NodeIndex = undefined;
 
-const tree = try zpci.topology.enumerate.intoScratch(.{
+const tree = try pci.topology.enumerate.intoScratch(.{
     .config = ecam.configSpace(),
     .segments = &segments,
     .nodes = &nodes,
@@ -308,7 +308,7 @@ while (it.next()) |item| {
     switch (item.node.header_kind) {
         .type0 => {
             // endpoint: size BARs, decode capabilities
-            const view = zpci.bar.View.init(item.node.function, .type0);
+            const view = pci.bar.View.init(item.node.function, .type0);
             _ = view;
         },
         .type1 => {
@@ -323,35 +323,35 @@ while (it.next()) |item| {
 **Authoring — zvm / VM emulating a PCIe topology.** The caller implements `config.ConfigSpace`, initializes `Node`s directly (leaving `first_child`/`next_sibling` at their `null` defaults), and calls the tree builder:
 
 ```zig
-// vm_config implements zpci.config.ConfigSpace via producer (6) in config/space.md.
-const cs: zpci.config.ConfigSpace = vm_config.configSpace();
+// vm_config implements pci.config.ConfigSpace via producer (6) in config/space.md.
+const cs: pci.config.ConfigSpace = vm_config.configSpace();
 
-var nodes = [_]zpci.topology.tree.Node{
+var nodes = [_]pci.topology.tree.Node{
     // Root bridge: virtual host-to-PCI bridge at 0000:00:00.0
     .{
-        .sbdf = zpci.core.Sbdf.of(0, 0, 0, 0),
-        .function = zpci.config.Function.unchecked(cs, zpci.core.Sbdf.of(0, 0, 0, 0)),
+        .sbdf = pci.core.Sbdf.of(0, 0, 0, 0),
+        .function = pci.config.Function.unchecked(cs, pci.core.Sbdf.of(0, 0, 0, 0)),
         .header_kind = .type1,
         .parent = null,
     },
     // Virtio-net endpoint under the root bridge
     .{
-        .sbdf = zpci.core.Sbdf.of(0, 0, 1, 0),
-        .function = zpci.config.Function.unchecked(cs, zpci.core.Sbdf.of(0, 0, 1, 0)),
+        .sbdf = pci.core.Sbdf.of(0, 0, 1, 0),
+        .function = pci.config.Function.unchecked(cs, pci.core.Sbdf.of(0, 0, 1, 0)),
         .header_kind = .type0,
         .parent = 0,
     },
     // Virtio-blk endpoint under the root bridge
     .{
-        .sbdf = zpci.core.Sbdf.of(0, 0, 2, 0),
-        .function = zpci.config.Function.unchecked(cs, zpci.core.Sbdf.of(0, 0, 2, 0)),
+        .sbdf = pci.core.Sbdf.of(0, 0, 2, 0),
+        .function = pci.config.Function.unchecked(cs, pci.core.Sbdf.of(0, 0, 2, 0)),
         .header_kind = .type0,
         .parent = 0,
     },
 };
 
-var roots: [1]zpci.topology.tree.NodeIndex = undefined;
-const tree = try zpci.topology.tree.intoScratch(&nodes, &roots);
+var roots: [1]pci.topology.tree.NodeIndex = undefined;
+const tree = try pci.topology.tree.intoScratch(&nodes, &roots);
 
 // VM stop-all: iterate every emulated device.
 var it = tree.preorder();
@@ -362,7 +362,7 @@ while (it.next()) |item| { _ = item; }
 
 ```zig
 // Add a device. Old tree is invalidated once new_nodes overwrites the scratch.
-const new_tree = try zpci.topology.tree.intoScratch(&new_nodes, &roots);
+const new_tree = try pci.topology.tree.intoScratch(&new_nodes, &roots);
 _ = new_tree;
 ```
 

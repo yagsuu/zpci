@@ -457,7 +457,7 @@ pub const ProgramError = error{
 
 Variant sourcing:
 
-- `MalformedCapability` — `find` propagates it from `capabilities.list.Iterator` when the capability list is malformed. The `zpci.Error` variant is defined by `docs/specs/core/errors.md`.
+- `MalformedCapability` — `find` propagates it from `capabilities.list.Iterator` when the capability list is malformed. The `pci.core.Error` variant is defined by `docs/specs/core/errors.md`.
 - `MalformedField` — `Table Offset / BIR` or `PBA Offset / BIR` decoded to a reserved BIR (`6` or `7`) during `validate`.
 - `InvalidRouting` — `vector_index >= tableSize()` or `first_index + entries.len > tableSize()` in any write or read that accepts a vector index. Returned before any I/O.
 - `BarMemoryOutOfBounds` — the requested region overruns `table_memory.len()` or `pba_memory.len()`; propagates from `memory.BarMemory` for I/O-level bounds failures.
@@ -514,19 +514,19 @@ None. `u32` dword values, `u16` control values, and the fixed-size save frame fi
 pub const msix = @import("interrupts/msix.zig");
 ```
 
-Callers reach the public surface as `zpci.interrupts.msix.View`, `zpci.interrupts.msix.VectorEntry`, `zpci.interrupts.msix.VectorControl`, `zpci.interrupts.msix.MessageControl`, `zpci.interrupts.msix.TableLocation`, `zpci.interrupts.msix.PbaLocation`, `zpci.interrupts.msix.cap_id`, `zpci.interrupts.msix.register`, `zpci.interrupts.msix.entry`, and `zpci.interrupts.msix.table_entry_size`.
+Callers reach the public surface as `pci.interrupts.msix.View`, `pci.interrupts.msix.VectorEntry`, `pci.interrupts.msix.VectorControl`, `pci.interrupts.msix.MessageControl`, `pci.interrupts.msix.TableLocation`, `pci.interrupts.msix.PbaLocation`, `pci.interrupts.msix.cap_id`, `pci.interrupts.msix.register`, `pci.interrupts.msix.entry`, and `pci.interrupts.msix.table_entry_size`.
 
 ## Usage
 
 **Discover MSI-X and program a fresh multi-vector bring-up:**
 
 ```zig
-const view = try zpci.interrupts.msix.View.find(function) orelse return error.NoMsix;
+const view = try pci.interrupts.msix.View.find(function) orelse return error.NoMsix;
 
 const table_loc = view.tableLocation();
 const table_memory = try caller_map_bar(table_loc.bir, table_loc.offset, view.tableSpanBytes());
 
-const entries = [_]zpci.interrupts.msix.VectorEntry{
+const entries = [_]pci.interrupts.msix.VectorEntry{
     .{ .address = 0xFEE0_0000, .data = 0x30, .masked = false },
     .{ .address = 0xFEE0_1000, .data = 0x31, .masked = false },
     // ... more vectors ...
@@ -578,7 +578,7 @@ for (0..dword_count) |i| {
     var bits = dword;
     while (bits != 0) {
         const bit = @ctz(bits);
-        const vector = i * zpci.interrupts.msix.pba_bits_per_dword + bit;
+        const vector = i * pci.interrupts.msix.pba_bits_per_dword + bit;
         // service vector
         bits &= bits - 1;
     }

@@ -280,18 +280,18 @@ pub const Type1Header = type1.Type1Header;
 pub const BridgeControl = type1.BridgeControl;
 ```
 
-Callers reach the view as `zpci.header.type1.View` and the structs as `zpci.header.Type1Header`, `zpci.header.BridgeControl`.
+Callers reach the view as `pci.header.type1.View` and the structs as `pci.header.Type1Header`, `pci.header.BridgeControl`.
 
 ## Usage
 
 Bridge dispatch and bus-number programming:
 
 ```zig
-const function = try zpci.config.Function.validate(config, sbdf);
+const function = try pci.config.Function.validate(config, sbdf);
 switch (try function.headerKind()) {
     .type0 => {},
     .type1 => {
-        const view = zpci.header.type1.View.init(function);
+        const view = pci.header.type1.View.init(function);
 
         try view.setPrimaryBus(0x00);
         try view.setSecondaryBus(0x01);

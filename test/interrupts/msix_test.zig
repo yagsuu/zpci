@@ -3,22 +3,22 @@
 const std = @import("std");
 
 const stdx = @import("stdx");
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const BarMemory = zpci.memory.BarMemory;
-const Capability = zpci.capabilities.list.Capability;
-const ConfigSpace = zpci.config.ConfigSpace;
-const Function = zpci.config.Function;
-const MessageControl = zpci.interrupts.msix.MessageControl;
-const PbaLocation = zpci.interrupts.msix.PbaLocation;
-const Sbdf = zpci.core.Sbdf;
-const TableLocation = zpci.interrupts.msix.TableLocation;
-const VectorControl = zpci.interrupts.msix.VectorControl;
-const VectorEntry = zpci.interrupts.msix.VectorEntry;
-const View = zpci.interrupts.msix.View;
+const BarMemory = pci.memory.BarMemory;
+const Capability = pci.capabilities.list.Capability;
+const ConfigSpace = pci.config.ConfigSpace;
+const Function = pci.config.Function;
+const MessageControl = pci.interrupts.msix.MessageControl;
+const PbaLocation = pci.interrupts.msix.PbaLocation;
+const Sbdf = pci.core.Sbdf;
+const TableLocation = pci.interrupts.msix.TableLocation;
+const VectorControl = pci.interrupts.msix.VectorControl;
+const VectorEntry = pci.interrupts.msix.VectorEntry;
+const View = pci.interrupts.msix.View;
 
-const msix = zpci.interrupts.msix;
-const standard = zpci.capabilities.list.standard;
+const msix = pci.interrupts.msix;
+const standard = pci.capabilities.list.standard;
 const function_window_size: usize = 0x1000;
 const test_sbdf = Sbdf.of(0, 0, 0, 0);
 const cap_base: u8 = 0x40;
@@ -146,15 +146,15 @@ test "unit: find reports present, absent, and malformed traversal results" {
 
     var absent_bytes: [function_window_size]u8 = @splat(0);
     seedHead(&absent_bytes, 0x40);
-    seedCapability(&absent_bytes, 0x40, @intFromEnum(zpci.capabilities.list.Id.msi), 0x44);
-    seedCapability(&absent_bytes, 0x44, @intFromEnum(zpci.capabilities.list.Id.pci_express), 0);
+    seedCapability(&absent_bytes, 0x40, @intFromEnum(pci.capabilities.list.Id.msi), 0x44);
+    seedCapability(&absent_bytes, 0x44, @intFromEnum(pci.capabilities.list.Id.pci_express), 0);
     var absent_backend = ConfigBackend.init(&absent_bytes);
     try std.testing.expectEqual(@as(?View, null), try View.find(functionFor(&absent_backend)));
 
     var cycle_bytes: [function_window_size]u8 = @splat(0);
     seedHead(&cycle_bytes, 0x40);
     seedCapability(&cycle_bytes, 0x40, 0x09, 0x44);
-    seedCapability(&cycle_bytes, 0x44, @intFromEnum(zpci.capabilities.list.Id.msi), 0x40);
+    seedCapability(&cycle_bytes, 0x44, @intFromEnum(pci.capabilities.list.Id.msi), 0x40);
     var cycle_backend = ConfigBackend.init(&cycle_bytes);
     try std.testing.expectError(error.MalformedCapability, View.find(functionFor(&cycle_backend)));
 }

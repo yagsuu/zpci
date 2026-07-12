@@ -1,19 +1,19 @@
 //! Tests for docs/specs/interrupts/msi.md.
 
 const std = @import("std");
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const Capability = zpci.capabilities.list.Capability;
-const ConfigSpace = zpci.config.ConfigSpace;
-const Function = zpci.config.Function;
-const MessageControl = zpci.interrupts.msi.MessageControl;
-const Sbdf = zpci.core.Sbdf;
-const VectorCount = zpci.interrupts.msi.VectorCount;
-const View = zpci.interrupts.msi.View;
+const Capability = pci.capabilities.list.Capability;
+const ConfigSpace = pci.config.ConfigSpace;
+const Function = pci.config.Function;
+const MessageControl = pci.interrupts.msi.MessageControl;
+const Sbdf = pci.core.Sbdf;
+const VectorCount = pci.interrupts.msi.VectorCount;
+const View = pci.interrupts.msi.View;
 
-const msi = zpci.interrupts.msi;
+const msi = pci.interrupts.msi;
 const register = msi.register;
-const standard = zpci.capabilities.list.standard;
+const standard = pci.capabilities.list.standard;
 const function_window_size: usize = 0x1000;
 const test_base: u8 = 0x80;
 const test_sbdf = Sbdf.of(0, 0, 0, 0);
@@ -72,7 +72,7 @@ test "unit: find returns present MSI view, null for absence, and errors on malfo
     // Walk real capability-list bytes through present, steady-state absent, and corrupt-list cases.
     var present = MsiConfig.init();
     seedHead(&present.bytes, 0x40);
-    seedCapabilityNode(&present.bytes, 0x40, @intFromEnum(zpci.capabilities.list.Id.pci_express), test_base);
+    seedCapabilityNode(&present.bytes, 0x40, @intFromEnum(pci.capabilities.list.Id.pci_express), test_base);
     seedCapabilityNode(&present.bytes, test_base, msi.cap_id, 0);
     store16(&present.bytes, @as(usize, test_base) + register.message_control, controlRaw(.{
         .multiple_message_capable = @intFromEnum(VectorCount.four),
@@ -91,13 +91,13 @@ test "unit: find returns present MSI view, null for absence, and errors on malfo
 
     var no_msi = MsiConfig.init();
     seedHead(&no_msi.bytes, 0x40);
-    seedCapabilityNode(&no_msi.bytes, 0x40, @intFromEnum(zpci.capabilities.list.Id.pci_express), 0);
+    seedCapabilityNode(&no_msi.bytes, 0x40, @intFromEnum(pci.capabilities.list.Id.pci_express), 0);
     try std.testing.expect((try View.find(function(&no_msi))) == null);
 
     var cycle = MsiConfig.init();
     seedHead(&cycle.bytes, 0x40);
-    seedCapabilityNode(&cycle.bytes, 0x40, @intFromEnum(zpci.capabilities.list.Id.pci_express), 0x44);
-    seedCapabilityNode(&cycle.bytes, 0x44, @intFromEnum(zpci.capabilities.list.Id.msi_x), 0x40);
+    seedCapabilityNode(&cycle.bytes, 0x40, @intFromEnum(pci.capabilities.list.Id.pci_express), 0x44);
+    seedCapabilityNode(&cycle.bytes, 0x44, @intFromEnum(pci.capabilities.list.Id.msi_x), 0x40);
     try std.testing.expectError(error.MalformedCapability, View.find(function(&cycle)));
 }
 

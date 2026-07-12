@@ -298,14 +298,14 @@ const space = @import("config/space.zig");
 pub const Function = space.Function;
 ```
 
-Callers reach it as `zpci.config.Function`.
+Callers reach it as `pci.config.Function`.
 
 ## Usage
 
 Validate a function and read identifiers:
 
 ```zig
-const function = try zpci.config.Function.validate(config, sbdf);
+const function = try pci.config.Function.validate(config, sbdf);
 
 const vendor = try function.vendorId();
 const device = try function.deviceId();
@@ -332,7 +332,7 @@ switch (try function.headerKind()) {
 Treat absence as a non-error result at enumeration call sites:
 
 ```zig
-const function = zpci.config.Function.validate(config, sbdf) catch |err| switch (err) {
+const function = pci.config.Function.validate(config, sbdf) catch |err| switch (err) {
     error.AbsentFunction => return null,
     else => return err,
 };
@@ -341,7 +341,7 @@ const function = zpci.config.Function.validate(config, sbdf) catch |err| switch 
 Dispatch on a caller-known identity without probing (responder-side / test):
 
 ```zig
-const function = zpci.config.Function.unchecked(config, sbdf);
+const function = pci.config.Function.unchecked(config, sbdf);
 // no presence or header-type invariant; live reads observe whatever the
 // backend returns for this Sbdf, including 0xFFFF for absent functions.
 const raw_vendor = try function.read16(0x00);

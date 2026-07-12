@@ -4,16 +4,16 @@ const std = @import("std");
 
 const stdx = @import("stdx");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const enumerate = zpci.topology.enumerate;
+const enumerate = pci.topology.enumerate;
 const Node = enumerate.Node;
 const NodeIndex = enumerate.NodeIndex;
-const ConfigSpace = zpci.config.ConfigSpace;
-const Segment = zpci.config.Segment;
-const Sbdf = zpci.core.Sbdf;
-const HeaderKind = zpci.config.HeaderKind;
-const SegmentId = zpci.core.SegmentId;
+const ConfigSpace = pci.config.ConfigSpace;
+const Segment = pci.config.Segment;
+const Sbdf = pci.core.Sbdf;
+const HeaderKind = pci.config.HeaderKind;
+const SegmentId = pci.core.SegmentId;
 const VirtAddr = stdx.addr.VirtAddr;
 
 const function_window_size: usize = 0x1000;

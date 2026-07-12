@@ -4,27 +4,27 @@ const std = @import("std");
 
 const stdx = @import("stdx");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const Aperture = zpci.resources.model.Aperture;
-const Assignment = zpci.resources.model.Assignment;
-const AssignmentNode = zpci.resources.assignment.Node;
-const BarEntry = zpci.bar.Entry;
-const BusBridge = zpci.resources.bus.Bridge;
-const Capability = zpci.capabilities.list.Capability;
-const CapabilityId = zpci.capabilities.list.Id;
-const ExtCapability = zpci.capabilities.extended.ExtCapability;
-const Function = zpci.config.Function;
-const Kind = zpci.resources.model.Kind;
-const MsiVectorCount = zpci.interrupts.msi.VectorCount;
-const Node = zpci.topology.enumerate.Node;
-const NodeIndex = zpci.topology.tree.NodeIndex;
-const Requirement = zpci.resources.model.Requirement;
-const Sbdf = zpci.core.Sbdf;
-const Segment = zpci.config.Segment;
-const SegmentId = zpci.core.SegmentId;
-const TestBarMemory = zpci.testing.memory.TestBarMemory;
-const TestConfigSpace = zpci.testing.config.TestConfigSpace;
+const Aperture = pci.resources.model.Aperture;
+const Assignment = pci.resources.model.Assignment;
+const AssignmentNode = pci.resources.assignment.Node;
+const BarEntry = pci.bar.Entry;
+const BusBridge = pci.resources.bus.Bridge;
+const Capability = pci.capabilities.list.Capability;
+const CapabilityId = pci.capabilities.list.Id;
+const ExtCapability = pci.capabilities.extended.ExtCapability;
+const Function = pci.config.Function;
+const Kind = pci.resources.model.Kind;
+const MsiVectorCount = pci.interrupts.msi.VectorCount;
+const Node = pci.topology.enumerate.Node;
+const NodeIndex = pci.topology.tree.NodeIndex;
+const Requirement = pci.resources.model.Requirement;
+const Sbdf = pci.core.Sbdf;
+const Segment = pci.config.Segment;
+const SegmentId = pci.core.SegmentId;
+const TestBarMemory = pci.testing.memory.TestBarMemory;
+const TestConfigSpace = pci.testing.config.TestConfigSpace;
 const VirtAddr = stdx.addr.VirtAddr;
 
 const function_window_size: usize = 0x1000;
@@ -52,20 +52,20 @@ const status = struct {
 
 test "integration: public facade exposes workflow namespaces" {
     // Compile representative namespace references so facade drift fails at the package boundary.
-    _ = zpci.core.Bdf;
-    _ = zpci.config.Function;
-    _ = zpci.header.common;
-    _ = zpci.bar.View;
-    _ = zpci.capabilities.list.Iterator;
-    _ = zpci.capabilities.extended.Iterator;
-    _ = zpci.resources.assignment;
-    _ = zpci.resources.programming;
-    _ = zpci.resources.bus;
-    _ = zpci.interrupts.msi;
-    _ = zpci.interrupts.msix;
-    _ = zpci.topology.enumerate;
-    _ = zpci.testing.config.TestConfigSpace;
-    _ = zpci.testing.memory.TestBarMemory;
+    _ = pci.core.Bdf;
+    _ = pci.config.Function;
+    _ = pci.header.common;
+    _ = pci.bar.View;
+    _ = pci.capabilities.list.Iterator;
+    _ = pci.capabilities.extended.Iterator;
+    _ = pci.resources.assignment;
+    _ = pci.resources.programming;
+    _ = pci.resources.bus;
+    _ = pci.interrupts.msi;
+    _ = pci.interrupts.msix;
+    _ = pci.topology.enumerate;
+    _ = pci.testing.config.TestConfigSpace;
+    _ = pci.testing.memory.TestBarMemory;
 }
 
 test "integration: capability traversal walks seeded config bytes" {
@@ -89,7 +89,7 @@ test "integration: capability traversal walks seeded config bytes" {
     var backend = TestConfigSpace.initSingle(address, &bytes);
     const function = try Function.validate(backend.configSpace(), address);
 
-    var standard = try zpci.capabilities.list.Iterator.validate(function);
+    var standard = try pci.capabilities.list.Iterator.validate(function);
     const first = (try standard.next()).?;
     const second = (try standard.next()).?;
     try std.testing.expectEqual(@intFromEnum(CapabilityId.pci_express), first.id);
@@ -98,7 +98,7 @@ test "integration: capability traversal walks seeded config bytes" {
     try std.testing.expectEqual(offset.msi_chain_capability, second.offset);
     try std.testing.expectEqual(@as(?Capability, null), try standard.next());
 
-    var extended = try zpci.capabilities.extended.Iterator.validate(function);
+    var extended = try pci.capabilities.extended.Iterator.validate(function);
     const ext_first = (try extended.next()).?;
     const ext_second = (try extended.next()).?;
     try std.testing.expectEqual(@as(u16, 0x0001), ext_first.id);
@@ -123,7 +123,7 @@ test "integration: enumerate assign program memory BAR" {
     var topology_nodes: [4]Node = undefined;
     var roots: [4]NodeIndex = undefined;
 
-    const tree = try zpci.topology.enumerate.intoScratch(.{
+    const tree = try pci.topology.enumerate.intoScratch(.{
         .config = backend.configSpace(),
         .segments = &segments,
         .nodes = &topology_nodes,
@@ -143,7 +143,7 @@ test "integration: enumerate assign program memory BAR" {
             .prefetchable = false,
         } },
     };
-    var requirements_buf: [zpci.bar.max_entries]Requirement = undefined;
+    var requirements_buf: [pci.bar.max_entries]Requirement = undefined;
     const requirements = try Requirement.fromBarSlice(function, &.{bar_entry}, &requirements_buf);
     var assignment_nodes = [_]AssignmentNode{.{
         .parent = null,
@@ -151,7 +151,7 @@ test "integration: enumerate assign program memory BAR" {
         .requirements = requirements,
     }};
     var assignment_scratch: [4]Assignment = undefined;
-    const plan = try zpci.resources.assignment.intoScratch(.{
+    const plan = try pci.resources.assignment.intoScratch(.{
         .nodes = &assignment_nodes,
         .roots = &.{0},
         .root_windows = .{
@@ -163,7 +163,7 @@ test "integration: enumerate assign program memory BAR" {
     try std.testing.expectEqual(Kind.mmio32, plan.assignments[0].pool);
     try std.testing.expectEqual(@as(u64, 0x8000_0000), plan.assignments[0].base);
 
-    try zpci.resources.programming.commit(plan);
+    try pci.resources.programming.commit(plan);
 
     try std.testing.expectEqual(@as(u32, 0x8000_0000), load32(&endpoint, offset.bar0));
     try std.testing.expectEqual(@as(u16, 0x0003), load16(&endpoint, offset.command));
@@ -187,7 +187,7 @@ test "integration: bus commit enables bridge subtree enumeration" {
     var before_nodes: [4]Node = undefined;
     var before_roots: [4]NodeIndex = undefined;
 
-    const before = try zpci.topology.enumerate.intoScratch(.{
+    const before = try pci.topology.enumerate.intoScratch(.{
         .config = backend.configSpace(),
         .segments = &segments,
         .nodes = &before_nodes,
@@ -200,7 +200,7 @@ test "integration: bus commit enables bridge subtree enumeration" {
         .parent = null,
         .function = before.node(0).function,
     }};
-    try zpci.resources.bus.commit(.{
+    try pci.resources.bus.commit(.{
         .bridges = &bridges,
         .roots = &.{0},
         .root_primary_bus = 0,
@@ -213,7 +213,7 @@ test "integration: bus commit enables bridge subtree enumeration" {
 
     var after_nodes: [4]Node = undefined;
     var after_roots: [4]NodeIndex = undefined;
-    const after = try zpci.topology.enumerate.intoScratch(.{
+    const after = try pci.topology.enumerate.intoScratch(.{
         .config = backend.configSpace(),
         .segments = &segments,
         .nodes = &after_nodes,
@@ -230,15 +230,15 @@ test "integration: MSI routing programs discovered capability" {
     // Discover an MSI capability and verify caller routing is reflected in config-space state.
     var bytes: [function_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.msi_capability });
-    seedCapability(&bytes, .{ .base = offset.msi_capability, .id = zpci.interrupts.msi.cap_id, .next = 0 });
-    store16(&bytes, offset.msi_capability + zpci.interrupts.msi.register.message_control, msiControlRaw(.{
+    seedCapability(&bytes, .{ .base = offset.msi_capability, .id = pci.interrupts.msi.cap_id, .next = 0 });
+    store16(&bytes, offset.msi_capability + pci.interrupts.msi.register.message_control, msiControlRaw(.{
         .multiple_message_capable = @intFromEnum(MsiVectorCount.two),
     }));
 
     const address = sbdf(.{ .bus = 0 });
     var backend = TestConfigSpace.initSingle(address, &bytes);
     const function = try Function.validate(backend.configSpace(), address);
-    const view = (try zpci.interrupts.msi.View.find(function)).?;
+    const view = (try pci.interrupts.msi.View.find(function)).?;
 
     try view.program(.{
         .address = 0xFEE0_0000,
@@ -256,7 +256,7 @@ test "integration: MSI-X routing programs caller BAR memory" {
     // Discover MSI-X metadata, program caller-owned table memory, and read pending state from PBA memory.
     var bytes: [function_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.msix_capability });
-    seedCapability(&bytes, .{ .base = offset.msix_capability, .id = zpci.interrupts.msix.cap_id, .next = 0 });
+    seedCapability(&bytes, .{ .base = offset.msix_capability, .id = pci.interrupts.msix.cap_id, .next = 0 });
     seedMsixPayload(&bytes, offset.msix_capability, .{
         .table_size_minus_one = 1,
         .table_bir = 0,
@@ -268,12 +268,12 @@ test "integration: MSI-X routing programs caller BAR memory" {
     const address = sbdf(.{ .bus = 0 });
     var config_backend = TestConfigSpace.initSingle(address, &bytes);
     const function = try Function.validate(config_backend.configSpace(), address);
-    const view = (try zpci.interrupts.msix.View.find(function)).?;
+    const view = (try pci.interrupts.msix.View.find(function)).?;
     try std.testing.expectEqual(@as(u16, 2), view.tableSize());
     try std.testing.expectEqual(@as(u3, 0), view.tableLocation().bir);
     try std.testing.expectEqual(@as(u3, 1), view.pbaLocation().bir);
 
-    var table_bytes: [2 * zpci.interrupts.msix.table_entry_size]u8 = @splat(0);
+    var table_bytes: [2 * pci.interrupts.msix.table_entry_size]u8 = @splat(0);
     var table_backend: TestBarMemory = .{ .bytes = &table_bytes };
     var pba_bytes: [4]u8 = @splat(0);
     store32(&pba_bytes, 0, @as(u32, 1) << 1);
@@ -361,14 +361,14 @@ fn seedMsixPayload(bytes: []u8, base: u8, fields: struct {
     pba_bir: u3 = 0,
     pba_offset: u32 = 0,
 }) void {
-    store16(bytes, @as(usize, base) + zpci.interrupts.msix.register.message_control, msixControlRaw(.{
+    store16(bytes, @as(usize, base) + pci.interrupts.msix.register.message_control, msixControlRaw(.{
         .table_size_minus_one = fields.table_size_minus_one,
     }));
-    store32(bytes, @as(usize, base) + zpci.interrupts.msix.register.table_offset_bir, locationRaw(
+    store32(bytes, @as(usize, base) + pci.interrupts.msix.register.table_offset_bir, locationRaw(
         fields.table_bir,
         fields.table_offset,
     ));
-    store32(bytes, @as(usize, base) + zpci.interrupts.msix.register.pba_offset_bir, locationRaw(
+    store32(bytes, @as(usize, base) + pci.interrupts.msix.register.pba_offset_bir, locationRaw(
         fields.pba_bir,
         fields.pba_offset,
     ));
@@ -384,7 +384,7 @@ fn msiControlRaw(fields: struct {
     ext_msg_data_enable: bool = false,
     reserved11: u5 = 0,
 }) u16 {
-    const control = zpci.interrupts.msi.MessageControl{
+    const control = pci.interrupts.msi.MessageControl{
         .msi_enable = fields.msi_enable,
         .multiple_message_capable = fields.multiple_message_capable,
         .multiple_message_enable = fields.multiple_message_enable,
@@ -403,7 +403,7 @@ fn msixControlRaw(fields: struct {
     function_mask: bool = false,
     msix_enable: bool = false,
 }) u16 {
-    const control = zpci.interrupts.msix.MessageControl{
+    const control = pci.interrupts.msix.MessageControl{
         .table_size_minus_one = fields.table_size_minus_one,
         ._reserved11 = fields.reserved11,
         .function_mask = fields.function_mask,

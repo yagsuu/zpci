@@ -2,11 +2,11 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const Error = zpci.core.Error;
+const Error = pci.core.Error;
 
-test "contract: zpci.core.Error is the exact public category set" {
+test "contract: pci.core.Error is the exact public category set" {
     // Compare the public error-set names and count so missing variants or accidental extras fail.
     const expected = comptime .{
         "OutOfBounds",

@@ -243,7 +243,7 @@ The accessor contract itself introduces no hidden allocation, global state, sync
 
 ## Testing `TestConfigSpace` `[zpci]`
 
-`zpci.testing.config.TestConfigSpace` is the canonical host-test backend for `ConfigSpace`. It implements the same accessor contract as hardware-backed accessors while staying out of the production `zpci.config` namespace.
+`pci.testing.config.TestConfigSpace` is the canonical host-test backend for `ConfigSpace`. It implements the same accessor contract as hardware-backed accessors while staying out of the production `pci.config` namespace.
 
 ```zig
 pub const TestConfigSpace = struct {
@@ -265,7 +265,7 @@ pub const TestConfigSpace = struct {
 
 The code block specifies the test backend's API shape, not its internal storage representation.
 
-Callers reach this type as `zpci.testing.config.TestConfigSpace`.
+Callers reach this type as `pci.testing.config.TestConfigSpace`.
 
 Rules:
 
@@ -281,7 +281,7 @@ Rules:
 The vtable seam supports dispatching and sparse backends without change. Real consumers include:
 
 - ECAM- and PIO-backed producers used by firmware and drivers;
-- `zpci.testing.config.TestConfigSpace` byte-backed test backends used by host tests;
+- `pci.testing.config.TestConfigSpace` byte-backed test backends used by host tests;
 - **responder-side dispatchers**: VMMs emulating PCI devices, or model-based test scaffolds that answer config transactions per emulated device.
 
 None of these need distinct types at the zpci boundary. Callers consume `ConfigSpace`.
@@ -305,16 +305,16 @@ const accessor = @import("config/accessor.zig");
 pub const ConfigSpace = accessor.ConfigSpace;
 ```
 
-Callers reach it as `zpci.config.ConfigSpace`.
+Callers reach it as `pci.config.ConfigSpace`.
 
-`TestConfigSpace` is intentionally not re-exported from `src/config.zig`; callers use `zpci.testing.config.TestConfigSpace`.
+`TestConfigSpace` is intentionally not re-exported from `src/config.zig`; callers use `pci.testing.config.TestConfigSpace`.
 
 ## Usage
 
 Create an accessor from a backend:
 
 ```zig
-var ecam = try zpci.config.Ecam.from(segment);
+var ecam = try pci.config.Ecam.from(segment);
 const config = ecam.configSpace();
 ```
 
@@ -322,7 +322,7 @@ Read vendor id:
 
 ```zig
 const raw_vendor = try config.read16(sbdf, 0x00);
-const vendor = zpci.core.VendorId.from(raw_vendor);
+const vendor = pci.core.VendorId.from(raw_vendor);
 ```
 
 Presence is not decided by the accessor:
@@ -343,7 +343,7 @@ try config.write16(sbdf, 0x04, command | 0x0004); // Bus Master Enable
 Byte-backed test read implementation:
 
 ```zig
-fn read16(context: *anyopaque, sbdf: zpci.core.Sbdf, offset: usize) ConfigSpace.Error!u16 {
+fn read16(context: *anyopaque, sbdf: pci.core.Sbdf, offset: usize) ConfigSpace.Error!u16 {
     const backend: *TestConfigSpace = @ptrCast(@alignCast(context));
     const bytes = try backend.functionBytes(sbdf);
     return (zstdx.bytes.load(zstdx.layout.Le(u16), bytes, offset) catch return error.OutOfBounds).native();

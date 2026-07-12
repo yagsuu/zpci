@@ -2,17 +2,17 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const BridgeControl = zpci.header.BridgeControl;
-const Function = zpci.config.Function;
-const Sbdf = zpci.core.Sbdf;
-const Status = zpci.header.Status;
-const TestConfigSpace = zpci.testing.config.TestConfigSpace;
-const Type1Header = zpci.header.Type1Header;
-const View = zpci.header.type1.View;
+const BridgeControl = pci.header.BridgeControl;
+const Function = pci.config.Function;
+const Sbdf = pci.core.Sbdf;
+const Status = pci.header.Status;
+const TestConfigSpace = pci.testing.config.TestConfigSpace;
+const Type1Header = pci.header.Type1Header;
+const View = pci.header.type1.View;
 
-const bridge_bar_count = zpci.header.type1.bridge_bar_count;
+const bridge_bar_count = pci.header.type1.bridge_bar_count;
 const function_window_size: usize = 0x1000;
 const offset = struct {
     const bars: usize = 0x10;

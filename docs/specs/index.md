@@ -1,6 +1,6 @@
 # zpci specs
 
-zpci is a Zig 0.16 PCI/PCIe configuration-space and resource-programming library. It owns config-space access through explicit accessors, ECAM-backed and PIO-backed configuration access, device/function enumeration, BAR decoding and sizing, capability traversal, PCI resource assignment/programming, MSI/MSI-X programming, and bridge/bus traversal. It is consumed as a package module named `zpci`.
+zpci is a Zig 0.16 PCI/PCIe configuration-space and resource-programming library. It owns config-space access through explicit accessors, ECAM-backed and PIO-backed configuration access, device/function enumeration, BAR decoding and sizing, capability traversal, PCI resource assignment/programming, MSI/MSI-X programming, and bridge/bus traversal. It is consumed as a package module named `pci`.
 
 Markers: `[std]` = PCI / PCI Express mandated; `[zpci]` = zpci design choice.
 
@@ -45,7 +45,7 @@ Owned:
 
 Not owned:
 
-- ACPI MCFG parsing. Callers that get ECAM topology from ACPI parse MCFG outside zpci and pass segment descriptors to zpci.
+- ACPI MCFG parsing. Callers that get ECAM topology from ACPI parse MCFG outside zpci and pass segment descriptors to pci.
 - Platform-description parsing. Callers lower platform facts into zpci segment/resource/interrupt inputs.
 - Firmware phase orchestration, protocol installation, device-path construction, handle/protocol databases, or OS handoff policy.
 - Platform resource discovery. Callers supply root I/O/MMIO windows that zpci may allocate from.
@@ -70,10 +70,10 @@ zpci is a library package, not firmware.
 
 Required build behavior:
 
-- `build.zig` exposes a module named `zpci`.
+- `build.zig` exposes a module named `pci`.
 - `zig build test` runs the host-side test suite.
 - zpci does not produce its own firmware artifact.
-- Downstream packages consume the same `zpci` module under their own target configuration.
+- Downstream packages consume the same `pci` module under their own target configuration.
 - Target-specific code is isolated under config-access adapters that consume `stdx.arch.x86_64` (zstdx-owned) and must not prevent host tests from compiling.
 - The default test command requires no hardware, no VM, and no external tools.
 
@@ -128,7 +128,7 @@ memory/        BarMemory accessor for BAR-mapped memory reads/writes.
 resources/     resource model, assignment, bridge windows, BAR/window/command programming.
 interrupts/    MSI and MSI-X capability/table programming.
 topology/      enumeration, tree construction, bridge traversal.
-zpci.zig       public package facade.
+pci.zig       public package facade.
 ```
 
 zpci has no `src/arch/`. The x86_64 port-I/O primitive used by `config.Pio`
@@ -153,7 +153,7 @@ Ownership rules:
 
 zpci follows the package-root plus namespace-facade pattern.
 
-`src/zpci.zig` is the package root. It re-exports namespace facades only.
+`src/pci.zig` is the package root. It re-exports namespace facades only.
 
 ```zig
 //! zpci package facade. Spec: docs/specs/index.md.
@@ -172,7 +172,7 @@ pub const testing = @import("testing.zig");
 
 Rules:
 
-- `src/zpci.zig` performs no validation, allocation, config-space reads/writes, BAR probes, resource assignment, programming, or enumeration.
+- `src/pci.zig` performs no validation, allocation, config-space reads/writes, BAR probes, resource assignment, programming, or enumeration.
 - Public names are exported from namespace facades such as `src/config.zig` or `src/resources.zig`.
 - Implementation files live under the matching directory, e.g. `src/config/ecam.zig`, `src/resources/assignment.zig`; reusable test-support helpers live under `src/testing/`.
 - Namespace facades re-export selected public names from implementation modules.
@@ -291,7 +291,7 @@ pub const config = @import("testing/config.zig");
 pub const memory = @import("testing/memory.zig");
 ```
 
-`src/testing/config.zig` is owned by `docs/specs/config/accessor.md` and exposes `TestConfigSpace` as `zpci.testing.config.TestConfigSpace`. `src/testing/memory.zig` is owned by `docs/specs/memory/bar.md` and exposes `TestBarMemory` as `zpci.testing.memory.TestBarMemory`.
+`src/testing/config.zig` is owned by `docs/specs/config/accessor.md` and exposes `TestConfigSpace` as `pci.testing.config.TestConfigSpace`. `src/testing/memory.zig` is owned by `docs/specs/memory/bar.md` and exposes `TestBarMemory` as `pci.testing.memory.TestBarMemory`.
 
 
 ## Core public concepts
@@ -311,7 +311,7 @@ pub const Segment = struct {
 
 Rules:
 
-- `base` is the mapped virtual address zpci reads/writes through, not a physical address requiring translation by zpci.
+- `base` is the mapped virtual address zpci reads/writes through, not a physical address requiring translation by pci.
 - `bus_start <= bus_end`.
 - ECAM address calculation uses `(bus - bus_start) << 20`, not `bus << 20`.
 - A segment descriptor does not imply ownership of the underlying MMIO mapping.
@@ -676,22 +676,22 @@ Public validation returns typed errors. It does not assert on malformed hardware
 
 ```zig
 const std = @import("std");
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const segments = [_]zpci.config.Segment{
+const segments = [_]pci.config.Segment{
     .{
-        .segment = zpci.core.SegmentId.of(0),
+        .segment = pci.core.SegmentId.of(0),
         .base = 0xE000_0000,
         .bus_start = 0,
         .bus_end = 255,
     },
 };
 
-var ecam = try zpci.config.Ecam.from(&segments);
+var ecam = try pci.config.Ecam.from(&segments);
 
-var nodes: [256]zpci.topology.tree.Node = undefined;
-var roots: [8]zpci.topology.tree.NodeIndex = undefined;
-const tree = try zpci.topology.enumerate.intoScratch(.{
+var nodes: [256]pci.topology.tree.Node = undefined;
+var roots: [8]pci.topology.tree.NodeIndex = undefined;
+const tree = try pci.topology.enumerate.intoScratch(.{
     .config = ecam.configSpace(),
     .segments = &segments,
     .nodes = &nodes,
@@ -714,19 +714,19 @@ while (it.next()) |node| {
 ### BAR sizing
 
 ```zig
-const fn0 = try zpci.config.Function.validate(
+const fn0 = try pci.config.Function.validate(
     ecam.configSpace(),
-    zpci.core.Sbdf.of(0, 0, 1, 0),
+    pci.core.Sbdf.of(0, 0, 1, 0),
 );
 
-const view = zpci.bar.View.init(fn0, .type0);
+const view = pci.bar.View.init(fn0, .type0);
 var bars = view.iterator();
 while (try bars.next()) |entry| {
     _ = entry; // decoded via entry.kind; per-slot sizing via view.size(entry.index)
 }
 
 // One decode-disable window for all BARs:
-var scratch: [zpci.header.type0.bar_count]zpci.bar.Entry = undefined;
+var scratch: [pci.header.type0.bar_count]pci.bar.Entry = undefined;
 const entries = try view.sizeAll(&scratch);
 _ = entries;
 ```
@@ -734,20 +734,20 @@ _ = entries;
 ### Resource assignment and programming
 
 ```zig
-const windows = zpci.resources.model.RootWindows{
+const windows = pci.resources.model.RootWindows{
     .io = .{ .base = 0xC000, .size = 0x4000 },
     .mmio32 = .{ .base = 0x8000_0000, .size = 0x1000_0000 },
     .mmio64 = .{ .base = 0x1_0000_0000, .size = 0x1_0000_0000 },
 };
 
-var assignments: [256]zpci.resources.model.Assignment = undefined;
-const plan = try zpci.resources.assignment.intoScratch(.{
+var assignments: [256]pci.resources.model.Assignment = undefined;
+const plan = try pci.resources.assignment.intoScratch(.{
     .tree = tree,
     .windows = windows,
     .scratch = &assignments,
 });
 
-try zpci.resources.programming.commit(.{
+try pci.resources.programming.commit(.{
     .config = ecam.configSpace(),
     .tree = tree,
     .plan = plan,
@@ -759,12 +759,12 @@ Assignment produces a plan without changing hardware. `commit` is the explicit p
 ### MSI programming
 
 ```zig
-const routing = zpci.interrupts.msi.Message{
+const routing = pci.interrupts.msi.Message{
     .address = 0xFEE0_0000,
     .data = vector_data,
 };
 
-try zpci.interrupts.msi.enable(.{
+try pci.interrupts.msi.enable(.{
     .function = fn0,
     .message = routing,
     .vectors = .one,
@@ -776,12 +776,12 @@ The caller supplies message address/data. zpci programs the device capability.
 ### MSI-X programming
 
 ```zig
-// Caller owns the mapping. The returned value is a zpci.memory.BarMemory
+// Caller owns the mapping. The returned value is a pci.memory.BarMemory
 // accessor over the MSI-X table region. Spec: docs/specs/memory/bar.md.
-const table: zpci.memory.BarMemory = try caller.mapMsixTable(function_bar, table_offset, table_size);
+const table: pci.memory.BarMemory = try caller.mapMsixTable(function_bar, table_offset, table_size);
 defer caller.unmapMsixTable(table);
 
-try zpci.interrupts.msix.programEntry(.{
+try pci.interrupts.msix.programEntry(.{
     .function = fn0,
     .table = table,
     .entry = 0,
@@ -791,7 +791,7 @@ try zpci.interrupts.msix.programEntry(.{
     },
 });
 
-try zpci.interrupts.msix.enable(.{
+try pci.interrupts.msix.enable(.{
     .function = fn0,
     .table = table,
 });
@@ -802,7 +802,7 @@ The MSI-X table accessor is explicit BAR memory access supplied by the caller.
 ### Capability walk
 
 ```zig
-var caps = try zpci.capabilities.list.Iterator.validate(fn0);
+var caps = try pci.capabilities.list.Iterator.validate(fn0);
 while (try caps.next()) |cap| {
     switch (cap.idTag()) {
         .pci_express => {
@@ -824,7 +824,7 @@ build.zig
 build.zig.zon
 
 src/
-  zpci.zig
+  pci.zig
 
   core.zig
   core/

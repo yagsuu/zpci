@@ -90,7 +90,7 @@ meaning. Definitions are normative when later API sections rely on them.
 This section states:
 
 - public import paths;
-- root promotions, when the spec adds declarations to `src/zpci.zig`;
+- root promotions, when the spec adds declarations to `src/pci.zig`;
 - facade exports;
 - implementation source files;
 - required test files.

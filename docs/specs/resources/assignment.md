@@ -355,7 +355,7 @@ pub const Error = error{
 
 Variant sourcing:
 
-- `ResourceExhausted` — placement observed a requirement whose entire pool-preference chain returned no aperture with room. The `zpci.Error` variant is defined by `docs/specs/core/errors.md`.
+- `ResourceExhausted` — placement observed a requirement whose entire pool-preference chain returned no aperture with room. The `pci.core.Error` variant is defined by `docs/specs/core/errors.md`.
 - `StorageExhausted` — the upfront `required > scratch.len` check failed. `scratch` is unmodified.
 
 Rules:
@@ -401,7 +401,7 @@ Direct usage: none. Alignment math and cursor bookkeeping are `u64`-bounded and 
 pub const assignment = @import("resources/assignment.zig");
 ```
 
-Callers reach the public surface as `zpci.resources.assignment.intoScratch`, `zpci.resources.assignment.sizeBound`, `zpci.resources.assignment.Input`, `zpci.resources.assignment.Plan`, `zpci.resources.assignment.Node`, `zpci.resources.assignment.NodeKind`, `zpci.resources.assignment.NodeIndex`, and `zpci.resources.assignment.Error`.
+Callers reach the public surface as `pci.resources.assignment.intoScratch`, `pci.resources.assignment.sizeBound`, `pci.resources.assignment.Input`, `pci.resources.assignment.Plan`, `pci.resources.assignment.Node`, `pci.resources.assignment.NodeKind`, `pci.resources.assignment.NodeIndex`, and `pci.resources.assignment.Error`.
 
 ## Usage
 
@@ -411,15 +411,15 @@ Callers reach the public surface as `zpci.resources.assignment.intoScratch`, `zp
 // Bottom-up: size every endpoint's BARs and every bridge's aggregated windows.
 // The caller writes into a scratch []Requirement per node.
 
-var per_node_reqs: [zpci.topology.tree.max_nodes][8]zpci.resources.model.Requirement = undefined;
-var per_node_reqs_len: [zpci.topology.tree.max_nodes]usize = undefined;
+var per_node_reqs: [pci.topology.tree.max_nodes][8]pci.resources.model.Requirement = undefined;
+var per_node_reqs_len: [pci.topology.tree.max_nodes]usize = undefined;
 
 // ... walk tree bottom-up:
 //   endpoint node -> Requirement.fromBar / fromExpansionRom over bar.View.sizeAll output.
 //   bridge node   -> resources.bridge.aggregateWindows(bridge.function, collected_descendant_reqs, &per_node_reqs[bridge_idx]).
 // Then project:
 
-var nodes: [zpci.topology.tree.max_nodes]zpci.resources.assignment.Node = undefined;
+var nodes: [pci.topology.tree.max_nodes]pci.resources.assignment.Node = undefined;
 for (tree.nodes, 0..) |tnode, i| {
     nodes[i] = .{
         .parent = tnode.parent,
@@ -428,7 +428,7 @@ for (tree.nodes, 0..) |tnode, i| {
     };
 }
 
-const input = zpci.resources.assignment.Input{
+const input = pci.resources.assignment.Input{
     .nodes = nodes[0..tree.nodes.len],
     .roots = tree.roots,
     .root_windows = platform_windows,
@@ -438,15 +438,15 @@ const input = zpci.resources.assignment.Input{
 **Size the plan scratch and run assignment:**
 
 ```zig
-var plan_scratch: [zpci.resources.assignment.sizeBound(&nodes)]zpci.resources.model.Assignment = undefined;
-const plan = try zpci.resources.assignment.intoScratch(input, &plan_scratch);
+var plan_scratch: [pci.resources.assignment.sizeBound(&nodes)]pci.resources.model.Assignment = undefined;
+const plan = try pci.resources.assignment.intoScratch(input, &plan_scratch);
 // plan.assignments.len <= plan_scratch.len.
 ```
 
 **Handle exhaustion:**
 
 ```zig
-const plan = zpci.resources.assignment.intoScratch(input, &plan_scratch) catch |err| switch (err) {
+const plan = pci.resources.assignment.intoScratch(input, &plan_scratch) catch |err| switch (err) {
     error.ResourceExhausted => {
         // A requirement's entire pool-preference chain was empty or too small.
         // Caller widens root windows or rejects the topology.
@@ -468,7 +468,7 @@ for (plan.assignments) |a| {
             // resources.programming writes the base into the BAR / ROM register.
         },
         .bridge_window => {
-            const encoded = try zpci.resources.bridge.encodeWindow(a);
+            const encoded = try pci.resources.bridge.encodeWindow(a);
             // resources.programming writes the encoded wire values into the type-1 window registers.
             _ = encoded;
         },

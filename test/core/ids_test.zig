@@ -2,16 +2,16 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const BaseClass = zpci.core.BaseClass;
-const ClassCode = zpci.core.ClassCode;
-const DeviceId = zpci.core.DeviceId;
-const ProgIf = zpci.core.ProgIf;
-const RevisionId = zpci.core.RevisionId;
-const SegmentId = zpci.core.SegmentId;
-const Subclass = zpci.core.Subclass;
-const VendorId = zpci.core.VendorId;
+const BaseClass = pci.core.BaseClass;
+const ClassCode = pci.core.ClassCode;
+const DeviceId = pci.core.DeviceId;
+const ProgIf = pci.core.ProgIf;
+const RevisionId = pci.core.RevisionId;
+const SegmentId = pci.core.SegmentId;
+const Subclass = pci.core.Subclass;
+const VendorId = pci.core.VendorId;
 
 test "unit: SegmentId accepts the full u16 range and compares by value" {
     // Exercise the segment-id endpoints so opaque segment keys do not collapse or reject legal values.

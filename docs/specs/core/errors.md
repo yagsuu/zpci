@@ -1,6 +1,6 @@
 # Errors
 
-Defines the package-level `zpci.Error` set, the type-local error-set policy, and the primitive-to-domain mapping rule used at every module boundary.
+Defines the package-level `pci.core.Error` set, the type-local error-set policy, and the primitive-to-domain mapping rule used at every module boundary.
 
 Markers: `[zpci]` = zpci design choice.
 
@@ -15,7 +15,7 @@ Related specs:
 
 Owned:
 
-- the union of top-level public error categories that surface across multiple domains (`zpci.Error`),
+- the union of top-level public error categories that surface across multiple domains (`pci.core.Error`),
 - the type-local error-set policy every module follows,
 - the allocator-error union rule,
 - the primitive-to-domain error mapping rule applied at module boundaries.
@@ -33,11 +33,11 @@ Deferred:
 - Primitive errors from zstdx byte/range helpers and zpci identifier parsing are mapped into the owning module's domain error before crossing a public boundary. Raw primitive errors are not part of any public domain surface.
 - Allocator failures remain `std.mem.Allocator.Error` and are unioned only by APIs that actually allocate.
 - Error variant names describe the violated invariant, not the failing operation.
-- Per-domain variants reuse common names already in `zpci.Error` when their semantics match.
+- Per-domain variants reuse common names already in `pci.core.Error` when their semantics match.
 
 ## Package error set `[zpci]`
 
-`zpci.Error` is the stable union of top-level public error categories used by more than one domain. It is not a replacement for type-local error sets.
+`pci.core.Error` is the stable union of top-level public error categories used by more than one domain. It is not a replacement for type-local error sets.
 
 ```zig
 //! Package error categories. Spec: docs/specs/core/errors.md.
@@ -91,11 +91,11 @@ Variant semantics:
 - `ProgrammingWriteFailed` — **[safe: rolled back]** a deterministic programming step's config write returned an accessor error mid-commit before any rollback logic ran.
 - `ProgrammingPartial` — **[inconsistent]** rollback after a `ProgrammingReadbackMismatch` or `ProgrammingWriteFailed` itself observed a failed write; hardware is neither in the pre-commit state nor the requested post-commit state.
 
-`zpci.Error` does not include `std.mem.Allocator.Error`. Allocating APIs expose allocator errors explicitly in their return type.
+`pci.core.Error` does not include `std.mem.Allocator.Error`. Allocating APIs expose allocator errors explicitly in their return type.
 
 ## Type-local error sets `[zpci]`
 
-Type-local sets stay narrow and name only the variants the operation can actually produce. They are subsets of `zpci.Error` plus, where allowed, allocator errors.
+Type-local sets stay narrow and name only the variants the operation can actually produce. They are subsets of `pci.core.Error` plus, where allowed, allocator errors.
 
 Examples:
 
@@ -124,8 +124,8 @@ Type-local sets:
 
 - live next to the type or module that exposes them,
 - name only variants the owning operation can produce,
-- reuse the variant names from `zpci.Error` when the semantics match,
-- never introduce a new variant whose semantics are already covered by a `zpci.Error` member.
+- reuse the variant names from `pci.core.Error` when the semantics match,
+- never introduce a new variant whose semantics are already covered by a `pci.core.Error` member.
 
 ## Allocating APIs `[zpci]`
 
@@ -142,7 +142,7 @@ pub fn intoAlloc(
 
 Rules:
 
-- `std.mem.Allocator.Error` is not folded into `zpci.Error`.
+- `std.mem.Allocator.Error` is not folded into `pci.core.Error`.
 - A type that exposes both scratch and allocator constructors uses distinct functions (`intoScratch`, `intoAlloc`) rather than a boolean mode parameter.
 - Error paths do not allocate.
 
@@ -168,7 +168,7 @@ Mapping rules:
 
 - The owning module performs the mapping; primitive errors do not escape unmapped.
 - The choice of domain variant is decided by which validation phase observed the failure, not by the primitive that produced it.
-- A mapping that would collapse two distinguishable failures into one variant is rejected; promote one of them to its own `zpci.Error` member through a spec amendment.
+- A mapping that would collapse two distinguishable failures into one variant is rejected; promote one of them to its own `pci.core.Error` member through a spec amendment.
 
 ## Facade re-export `[zpci]`
 
@@ -180,7 +180,7 @@ const errors = @import("core/errors.zig");
 pub const Error = errors.Error;
 ```
 
-`src/zpci.zig` re-exports it through the `core` namespace facade (`zpci.core.Error`). Public APIs continue to expose their type-local error sets in their return types; `zpci.Error` is a convenience for callers that need a uniform top-level union.
+`src/pci.zig` re-exports it through the `core` namespace facade (`pci.core.Error`). Public APIs continue to expose their type-local error sets in their return types; `pci.core.Error` is a convenience for callers that need a uniform top-level union.
 
 ## Source
 
@@ -217,7 +217,7 @@ Lives in `src/core/errors.zig`.
 ## Non-goals
 
 - A `Diagnostic` out-parameter API. zpci reports failures through typed errors only in the initial library.
-- A `zpci.AnyError` superset of allocator + package errors. Callers union explicitly at the call site.
+- A `pci.AnyError` superset of allocator + package errors. Callers union explicitly at the call site.
 - An error variant per failing operation. Variants name violated invariants; operations are identified by the function that returned the error.
 
 ## Open questions

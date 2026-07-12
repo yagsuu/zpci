@@ -44,7 +44,7 @@ Deferred:
 
 Layering constraints from `docs/specs/architecture.md`:
 
-- `resources/` imports `core/`, `config/`, `header/`, and `bar`. This spec imports `config/space.zig` for `config.Function` and `core/errors.zig` for the reused `zpci.Error` variants.
+- `resources/` imports `core/`, `config/`, `header/`, and `bar`. This spec imports `config/space.zig` for `config.Function` and `core/errors.zig` for the reused `pci.core.Error` variants.
 - `resources/` MUST NOT import `topology/`. Callers holding a `topology.tree.Tree` project it into `Input` at the callsite by filtering `.type1` header kinds and remapping parent indices into `BridgeIndex` positions.
 - `resources/` MUST NOT import `interrupts/` or `memory/`.
 - `commit` MUST NOT allocate. Save state lives in a fixed-size per-bridge frame on the internal recursion stack.
@@ -245,14 +245,14 @@ pub const Error = error{
 
 Variant sourcing:
 
-- `BusRangeExhausted` — Phase 1 computed a `secondary_bus_number` that would exceed `input.bus_end`. No hardware state changed. The `zpci.Error` variant is defined by `docs/specs/core/errors.md`.
+- `BusRangeExhausted` — Phase 1 computed a `secondary_bus_number` that would exceed `input.bus_end`. No hardware state changed. The `pci.core.Error` variant is defined by `docs/specs/core/errors.md`.
 - `ProgrammingReadbackMismatch` — a readback comparison in Phase 2 observed a value that does not match what was written. Rollback ran successfully.
 - `ProgrammingWriteFailed` — a `ConfigSpace` read or write returned an accessor error during the save phase or a Phase 2 write, before rollback started. Rollback ran successfully. Save-phase read failures also map here.
 - `ProgrammingPartial` — a rollback write or rollback readback itself failed. Hardware is neither in the pre-commit state nor the planned post-commit state.
 
 Rules:
 
-- Bus-number programming MUST NOT synthesize other `zpci.Error` variants. `ConfigSpace.Error` values are mapped to `ProgrammingWriteFailed` at the point of the failing access.
+- Bus-number programming MUST NOT synthesize other `pci.core.Error` variants. `ConfigSpace.Error` values are mapped to `ProgrammingWriteFailed` at the point of the failing access.
 - Programmer errors (misordered `Input.bridges`, root's `parent != null`, `bus_end < root_primary_bus`, `max_depth` exceeded) MUST be enforced by assertion per `docs/specs/config/space.md` §Validation vs assertion. They are not typed errors.
 
 ## Wire / layout invariants
@@ -279,7 +279,7 @@ None. `u8` counters and per-bridge save state fit on the internal stack.
 pub const bus = @import("resources/bus.zig");
 ```
 
-Callers reach the public surface as `zpci.resources.bus.commit`, `zpci.resources.bus.Bridge`, `zpci.resources.bus.Input`, `zpci.resources.bus.BridgeIndex`, `zpci.resources.bus.max_bridges`, `zpci.resources.bus.max_depth`, and `zpci.resources.bus.Error`.
+Callers reach the public surface as `pci.resources.bus.commit`, `pci.resources.bus.Bridge`, `pci.resources.bus.Input`, `pci.resources.bus.BridgeIndex`, `pci.resources.bus.max_bridges`, `pci.resources.bus.max_depth`, and `pci.resources.bus.Error`.
 
 ## Usage
 
@@ -288,19 +288,19 @@ Callers reach the public surface as `zpci.resources.bus.commit`, `zpci.resources
 ```zig
 // Filter the tree to type-1 bridges only and remap parent indices to BridgeIndex positions.
 
-var bridges: [zpci.topology.tree.max_nodes]zpci.resources.bus.Bridge = undefined;
-var tree_to_bridge: [zpci.topology.tree.max_nodes]?zpci.resources.bus.BridgeIndex = .{null} ** zpci.topology.tree.max_nodes;
+var bridges: [pci.topology.tree.max_nodes]pci.resources.bus.Bridge = undefined;
+var tree_to_bridge: [pci.topology.tree.max_nodes]?pci.resources.bus.BridgeIndex = .{null} ** pci.topology.tree.max_nodes;
 
 var bridge_count: usize = 0;
 for (tree.nodes, 0..) |tnode, i| {
     if (tnode.header_kind != .type1) continue;
-    const bridge_parent: ?zpci.resources.bus.BridgeIndex = if (tnode.parent) |p| tree_to_bridge[p] else null;
+    const bridge_parent: ?pci.resources.bus.BridgeIndex = if (tnode.parent) |p| tree_to_bridge[p] else null;
     bridges[bridge_count] = .{ .parent = bridge_parent, .function = tnode.function };
     tree_to_bridge[i] = @intCast(bridge_count);
     bridge_count += 1;
 }
 
-var roots: [zpci.topology.tree.max_nodes]zpci.resources.bus.BridgeIndex = undefined;
+var roots: [pci.topology.tree.max_nodes]pci.resources.bus.BridgeIndex = undefined;
 var root_count: usize = 0;
 for (bridges[0..bridge_count], 0..) |b, i| {
     if (b.parent == null) {
@@ -313,7 +313,7 @@ for (bridges[0..bridge_count], 0..) |b, i| {
 **Commit bus numbers for one segment:**
 
 ```zig
-try zpci.resources.bus.commit(.{
+try pci.resources.bus.commit(.{
     .bridges = bridges[0..bridge_count],
     .roots = roots[0..root_count],
     .root_primary_bus = segment.bus_start,
@@ -324,7 +324,7 @@ try zpci.resources.bus.commit(.{
 **Handle failures:**
 
 ```zig
-zpci.resources.bus.commit(input) catch |err| switch (err) {
+pci.resources.bus.commit(input) catch |err| switch (err) {
     error.BusRangeExhausted => {
         // Segment's bus range is too small for the observed bridge tree.
         return err;

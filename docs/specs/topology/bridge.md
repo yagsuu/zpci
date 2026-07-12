@@ -284,7 +284,7 @@ Bit-level offset math is `u8`/`u16`-bounded and needs no `zstdx.core.Range` wrap
 pub const bridge = @import("topology/bridge.zig");
 ```
 
-Callers reach the public surface as `zpci.topology.bridge.busRangeOf`, `zpci.topology.bridge.windowStateOf`, `zpci.topology.bridge.pathTo`, `zpci.topology.bridge.BusRange`, `zpci.topology.bridge.Window`, `zpci.topology.bridge.PrefetchableWindow`, `zpci.topology.bridge.WindowState`, and `zpci.topology.bridge.Error`.
+Callers reach the public surface as `pci.topology.bridge.busRangeOf`, `pci.topology.bridge.windowStateOf`, `pci.topology.bridge.pathTo`, `pci.topology.bridge.BusRange`, `pci.topology.bridge.Window`, `pci.topology.bridge.PrefetchableWindow`, `pci.topology.bridge.WindowState`, and `pci.topology.bridge.Error`.
 
 ## Usage
 
@@ -294,8 +294,8 @@ Callers reach the public surface as `zpci.topology.bridge.busRangeOf`, `zpci.top
 var it = tree.preorder();
 while (it.next()) |n| {
     if (n.header_kind != .type1) continue;
-    const range = try zpci.topology.bridge.busRangeOf(n);
-    const state = try zpci.topology.bridge.windowStateOf(n);
+    const range = try pci.topology.bridge.busRangeOf(n);
+    const state = try pci.topology.bridge.windowStateOf(n);
     _ = range;
     _ = state;
 }
@@ -304,8 +304,8 @@ while (it.next()) |n| {
 **Walk ancestors of an endpoint (root first, endpoint last):**
 
 ```zig
-var scratch: [zpci.topology.tree.max_depth]zpci.topology.tree.NodeIndex = undefined;
-const chain = try zpci.topology.bridge.pathTo(&tree, endpoint_idx, &scratch);
+var scratch: [pci.topology.tree.max_depth]pci.topology.tree.NodeIndex = undefined;
+const chain = try pci.topology.bridge.pathTo(&tree, endpoint_idx, &scratch);
 for (chain) |idx| {
     const ancestor = tree.node(idx);
     _ = ancestor;
@@ -317,12 +317,12 @@ for (chain) |idx| {
 ```zig
 // Walk endpoint's ancestor chain. For each bridge ancestor, inspect the
 // current programmed memory window and decide whether a proposed base fits.
-var scratch: [zpci.topology.tree.max_depth]zpci.topology.tree.NodeIndex = undefined;
-const chain = try zpci.topology.bridge.pathTo(&tree, endpoint_idx, &scratch);
+var scratch: [pci.topology.tree.max_depth]pci.topology.tree.NodeIndex = undefined;
+const chain = try pci.topology.bridge.pathTo(&tree, endpoint_idx, &scratch);
 for (chain) |idx| {
     const anc = tree.node(idx);
     if (anc.header_kind != .type1) continue;
-    const state = try zpci.topology.bridge.windowStateOf(anc);
+    const state = try pci.topology.bridge.windowStateOf(anc);
     if (state.memory.enabled and
         proposed_base >= state.memory.base and
         proposed_base + size - 1 <= state.memory.limit)
@@ -336,7 +336,7 @@ for (chain) |idx| {
 **Detect an unprogrammed bridge (secondary bus zero):**
 
 ```zig
-const range = try zpci.topology.bridge.busRangeOf(bridge_node);
+const range = try pci.topology.bridge.busRangeOf(bridge_node);
 if (range.secondary == 0) {
     // Bridge has never been programmed; downstream absent from tree.
     // Assignment/programming: docs/specs/resources/programming.md.

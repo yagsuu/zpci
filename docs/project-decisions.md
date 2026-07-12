@@ -17,11 +17,11 @@ Use these labels in specs and planning documents:
 
 ### Project
 
-- The package name is `zpci`. The public import name is `zpci` (`const zpci = @import("zpci");`).
+- The package name is `zpci`. The public import name is `pci` (`const pci = @import("pci");`).
 - `zpci` is a Zig 0.16 PCI/PCIe configuration-space and resource-programming library.
 - `zpci` owns config-space access through explicit accessors, ECAM- and PIO-backed configuration access, device/function enumeration, BAR decoding and sizing, capability traversal, PCI resource assignment/programming, MSI/MSI-X programming, and bridge/bus traversal.
 - `zpci` does not own ACPI MCFG parsing, platform-description parsing, firmware phase orchestration, driver binding, interrupt-vector allocation, interrupt-controller routing, interrupt remapping policy, PCI device reset policy, SR-IOV virtual-function lifecycle, or VFIO passthrough policy.
-- `zpci` depends on Zig `std` and `zstdx`. Downstream domain consumers such as `zfw` and `zacpi` consume the same `zpci` module under their own target configuration.
+- `zpci` depends on Zig `std` and `zstdx`. Downstream domain consumers such as `zfw` and `zacpi` consume the same `pci` module under their own target configuration.
 
 ### Design constraints
 
@@ -45,7 +45,7 @@ Use these labels in specs and planning documents:
   - `Type.from(…)` is runtime, infallible when the input domain is total and fallible when validation is required;
   - `Type.validate(inputs)` decodes wire bytes and returns a fully-typed value or a typed error;
   - `Builder.init` / `wrap` / `seal` are reserved for the deferred config-writer phase and are not used in read scope.
-- The package error set `zpci.Error` is a stable union of top-level public error categories used by more than one domain, defined by `docs/specs/core/errors.md`. Type-local error sets stay narrow and are subsets of `zpci.Error` plus, where allowed, `std.mem.Allocator.Error`. `zpci.Error` does not fold in `std.mem.Allocator.Error`.
+- The package error set `pci.core.Error` is a stable union of top-level public error categories used by more than one domain, defined by `docs/specs/core/errors.md`. Type-local error sets stay narrow and are subsets of `pci.core.Error` plus, where allowed, `std.mem.Allocator.Error`. `pci.core.Error` does not fold in `std.mem.Allocator.Error`.
 - `zpci` has no `src/arch/`. The x86_64 port-I/O primitive consumed by `config.Pio` is `stdx.arch.x86_64.Port`, owned by zstdx.
 - The initial library targets little-endian hosts. Config-space `extern struct`s use native integer fields under the LE-host assumption; a big-endian host would require revisiting wire-struct fields and endian conversion at the accessor boundary and is deferred until a concrete BE-host consumer exists.
 

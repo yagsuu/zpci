@@ -786,19 +786,19 @@ This spec does not need `zstdx.bytes`, `zstdx.layout.Le`, `zstdx.bits.BitSet`, o
 pub const pcie = @import("capabilities/pcie.zig");
 ```
 
-Callers reach the public surface as `zpci.capabilities.pcie.View`, `zpci.capabilities.pcie.Capabilities`, `zpci.capabilities.pcie.DeviceControl`, `zpci.capabilities.pcie.MaxPayloadSize`, etc.
+Callers reach the public surface as `pci.capabilities.pcie.View`, `pci.capabilities.pcie.Capabilities`, `pci.capabilities.pcie.DeviceControl`, `pci.capabilities.pcie.MaxPayloadSize`, etc.
 
 ## Usage
 
 Walk the standard capability list and construct a PCIe view when the id matches:
 
 ```zig
-const function = try zpci.config.Function.validate(config, sbdf);
-var it = try zpci.capabilities.list.Iterator.validate(function);
+const function = try pci.config.Function.validate(config, sbdf);
+var it = try pci.capabilities.list.Iterator.validate(function);
 
 while (try it.next()) |cap| {
     if (cap.idTag() != .pci_express) continue;
-    const view = try zpci.capabilities.pcie.View.validate(function, cap);
+    const view = try pci.capabilities.pcie.View.validate(function, cap);
     _ = view;
 }
 ```
@@ -840,7 +840,7 @@ _ = mps_bytes;
 Clear the sticky RW1C bits on Device Status:
 
 ```zig
-const sticky = zpci.capabilities.pcie.DeviceStatus{
+const sticky = pci.capabilities.pcie.DeviceStatus{
     .correctable_error_detected = true,
     .non_fatal_error_detected = true,
     .fatal_error_detected = true,

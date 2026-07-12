@@ -297,19 +297,19 @@ Enumeration uses fixed-size internal recursion (`tree.max_depth` deep, `tree.max
 pub const enumerate = @import("topology/enumerate.zig");
 ```
 
-Callers reach the public surface as `zpci.topology.enumerate.intoScratch`, `zpci.topology.enumerate.sizeBound`, `zpci.topology.enumerate.Input`, and `zpci.topology.enumerate.Error`.
+Callers reach the public surface as `pci.topology.enumerate.intoScratch`, `pci.topology.enumerate.sizeBound`, `pci.topology.enumerate.Input`, and `pci.topology.enumerate.Error`.
 
 ## Usage
 
 **Single segment, single-pass discovery** — the common firmware/kernel case:
 
 ```zig
-var ecam = try zpci.config.Ecam.from(&segments);
+var ecam = try pci.config.Ecam.from(&segments);
 
-var nodes: [zpci.topology.enumerate.sizeBound(&segments)]zpci.topology.tree.Node = undefined;
-var roots: [zpci.topology.enumerate.sizeBound(&segments)]zpci.topology.tree.NodeIndex = undefined;
+var nodes: [pci.topology.enumerate.sizeBound(&segments)]pci.topology.tree.Node = undefined;
+var roots: [pci.topology.enumerate.sizeBound(&segments)]pci.topology.tree.NodeIndex = undefined;
 
-const tree = try zpci.topology.enumerate.intoScratch(.{
+const tree = try pci.topology.enumerate.intoScratch(.{
     .config = ecam.configSpace(),
     .segments = &segments,
     .nodes = &nodes,
@@ -325,20 +325,20 @@ while (it.next()) |n| {
 **Multi-segment discovery:**
 
 ```zig
-const segments = [_]zpci.config.Segment{
-    .{ .segment = zpci.core.SegmentId.of(0), .base = seg0_base, .bus_start = 0x00, .bus_end = 0xFF },
-    .{ .segment = zpci.core.SegmentId.of(1), .base = seg1_base, .bus_start = 0x00, .bus_end = 0x3F },
+const segments = [_]pci.config.Segment{
+    .{ .segment = pci.core.SegmentId.of(0), .base = seg0_base, .bus_start = 0x00, .bus_end = 0xFF },
+    .{ .segment = pci.core.SegmentId.of(1), .base = seg1_base, .bus_start = 0x00, .bus_end = 0x3F },
 };
-var ecam = try zpci.config.Ecam.from(&segments);
+var ecam = try pci.config.Ecam.from(&segments);
 
 // Runtime scratch sizing when segments are not compile-time-known.
-const upper = zpci.topology.enumerate.sizeBound(&segments);
-const nodes = try allocator.alloc(zpci.topology.tree.Node, upper);
+const upper = pci.topology.enumerate.sizeBound(&segments);
+const nodes = try allocator.alloc(pci.topology.tree.Node, upper);
 defer allocator.free(nodes);
-const roots = try allocator.alloc(zpci.topology.tree.NodeIndex, upper);
+const roots = try allocator.alloc(pci.topology.tree.NodeIndex, upper);
 defer allocator.free(roots);
 
-const tree = try zpci.topology.enumerate.intoScratch(.{
+const tree = try pci.topology.enumerate.intoScratch(.{
     .config = ecam.configSpace(),
     .segments = &segments,
     .nodes = nodes,
@@ -353,7 +353,7 @@ _ = tree;
 // After the caller programs bus numbers via docs/specs/resources/bus.md,
 // they re-run enumerate.intoScratch with the same scratch to discover
 // the downstream tree.
-const tree_after_programming = try zpci.topology.enumerate.intoScratch(.{
+const tree_after_programming = try pci.topology.enumerate.intoScratch(.{
     .config = ecam.configSpace(),
     .segments = &segments,
     .nodes = &nodes,
@@ -366,7 +366,7 @@ _ = tree_after_programming;
 
 ```zig
 // Hot-plug event fired; discard the old tree and re-enumerate.
-const new_tree = try zpci.topology.enumerate.intoScratch(.{
+const new_tree = try pci.topology.enumerate.intoScratch(.{
     .config = ecam.configSpace(),
     .segments = &segments,
     .nodes = &nodes,

@@ -231,15 +231,15 @@ Not used:
 pub const extended = @import("capabilities/extended.zig");
 ```
 
-Callers reach the public surface as `zpci.capabilities.extended.Iterator`, `zpci.capabilities.extended.Cursor`, `zpci.capabilities.extended.ExtCapability`, and `zpci.capabilities.extended.Id`.
+Callers reach the public surface as `pci.capabilities.extended.Iterator`, `pci.capabilities.extended.Cursor`, `pci.capabilities.extended.ExtCapability`, and `pci.capabilities.extended.Id`.
 
 ## Usage
 
 Walk extended capabilities:
 
 ```zig
-const function = try zpci.config.Function.validate(config, sbdf);
-var it = try zpci.capabilities.extended.Iterator.validate(function);
+const function = try pci.config.Function.validate(config, sbdf);
+var it = try pci.capabilities.extended.Iterator.validate(function);
 
 while (try it.next()) |cap| {
     _ = cap; // initial library does not decode extended payloads
@@ -249,7 +249,7 @@ while (try it.next()) |cap| {
 Cursor read:
 
 ```zig
-const cur = try zpci.capabilities.extended.Cursor.from(function, cap.offset);
+const cur = try pci.capabilities.extended.Cursor.from(function, cap.offset);
 const word_at_4 = try cur.read32(4);
 _ = word_at_4;
 ```
@@ -257,7 +257,7 @@ _ = word_at_4;
 Handle malformed list:
 
 ```zig
-var it = try zpci.capabilities.extended.Iterator.validate(function);
+var it = try pci.capabilities.extended.Iterator.validate(function);
 while (true) {
     const maybe = it.next() catch |err| switch (err) {
         error.MalformedCapability => break,

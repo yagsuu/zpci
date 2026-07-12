@@ -40,7 +40,7 @@ Deferred:
 
 - `Bdf` is a `packed struct(u16)`. The bit layout matches the PCIe Requester ID encoding: `function` in the three LSBs, `device` in the next five bits, `bus` in the high byte. The field declaration order is LSB-first per Zig's packed-struct layout rule.
 - `Sbdf` is a `packed struct(u32)` carrying a `Bdf` in the low 16 bits and a `SegmentId` in the high 16 bits. Field declaration order is LSB-first.
-- Construction names follow `core/ids.md`: `of` is `comptime`-only; `from` is runtime and returns `error.InvalidIdentifier` (mapped from `zpci.Error`) on out-of-range input.
+- Construction names follow `core/ids.md`: `of` is `comptime`-only; `from` is runtime and returns `error.InvalidIdentifier` (mapped from `pci.core.Error`) on out-of-range input.
 - Comptime layout assertions live at the end of each type body per `docs/guidelines/conventions.md` §Compile-time assertions.
 - Neither `Bdf` nor `Sbdf` may have its fields taken by reference (`&bdf.bus`). All internal helpers read fields by value. New helpers must follow the same rule.
 
@@ -253,7 +253,7 @@ pub fn format(self: Sbdf, writer: *std.Io.Writer) !void {
 
 ## Errors
 
-`core/bdf` surfaces no named local `Error` type. Runtime constructors `Bdf.from` and `Sbdf.from` return the inline set `error{InvalidIdentifier}`, a subset of `zpci.Error` per `docs/specs/core/errors.md`. ECAM offset helpers do not return errors: their inputs are pre-validated (`device` and `function` by the `Bdf` type system, `bus` by `inSegmentRange`, `register` by `u12`).
+`core/bdf` surfaces no named local `Error` type. Runtime constructors `Bdf.from` and `Sbdf.from` return the inline set `error{InvalidIdentifier}`, a subset of `pci.core.Error` per `docs/specs/core/errors.md`. ECAM offset helpers do not return errors: their inputs are pre-validated (`device` and `function` by the `Bdf` type system, `bus` by `inSegmentRange`, `register` by `u12`).
 
 ## Facade re-export `[zpci]`
 
@@ -266,21 +266,21 @@ pub const Bdf = bdf.Bdf;
 pub const Sbdf = bdf.Sbdf;
 ```
 
-The implementation module owns the offset helpers (`busRelativeOffset`, `ecamOffset`, `inSegmentRange`) and the iteration bounds (`max_device`, `max_function`); those are consumed via the implementation module path inside zpci and are not re-exported through the facade. Callers reach the types as `zpci.core.Bdf` and `zpci.core.Sbdf`.
+The implementation module owns the offset helpers (`busRelativeOffset`, `ecamOffset`, `inSegmentRange`) and the iteration bounds (`max_device`, `max_function`); those are consumed via the implementation module path inside zpci and are not re-exported through the facade. Callers reach the types as `pci.core.Bdf` and `pci.core.Sbdf`.
 
 ## Usage
 
 Comptime literals:
 
 ```zig
-const bdf = zpci.core.Bdf.of(0, 1, 0);
-const addr = zpci.core.Sbdf.of(0, 0, 1, 0);
+const bdf = pci.core.Bdf.of(0, 1, 0);
+const addr = pci.core.Sbdf.of(0, 0, 1, 0);
 ```
 
 Runtime construction:
 
 ```zig
-const bdf = try zpci.core.Bdf.from(bus_byte, device_byte, function_byte);
+const bdf = try pci.core.Bdf.from(bus_byte, device_byte, function_byte);
 ```
 
 Multifunction discovery:
@@ -308,7 +308,7 @@ const vendor_id_ptr: *const u16 = @ptrCast(@alignCast(segment.base + offset));
 Sorted iteration:
 
 ```zig
-std.sort.pdq(zpci.core.Sbdf, list, {}, zpci.core.Sbdf.lessThan);
+std.sort.pdq(pci.core.Sbdf, list, {}, pci.core.Sbdf.lessThan);
 ```
 
 Formatting:

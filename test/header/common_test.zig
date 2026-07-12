@@ -2,16 +2,16 @@
 
 const std = @import("std");
 
-const zpci = @import("zpci");
+const pci = @import("pci");
 
-const Bist = zpci.header.Bist;
-const Command = zpci.header.Command;
-const CommonHeader = zpci.header.CommonHeader;
-const Function = zpci.config.Function;
-const Sbdf = zpci.core.Sbdf;
-const Status = zpci.header.Status;
-const TestConfigSpace = zpci.testing.config.TestConfigSpace;
-const View = zpci.header.common.View;
+const Bist = pci.header.Bist;
+const Command = pci.header.Command;
+const CommonHeader = pci.header.CommonHeader;
+const Function = pci.config.Function;
+const Sbdf = pci.core.Sbdf;
+const Status = pci.header.Status;
+const TestConfigSpace = pci.testing.config.TestConfigSpace;
+const View = pci.header.common.View;
 
 const function_window_size: usize = 0x1000;
 const offset = struct {
@@ -155,7 +155,7 @@ test "unit: View reads every common-header field from seeded config bytes" {
     try std.testing.expectEqual(@as(u16, 0x1234), (try view.vendorId()).value);
     try std.testing.expectEqual(@as(u16, 0xABCD), (try view.deviceId()).value);
     try std.testing.expectEqual(@as(u8, 0x42), (try view.revisionId()).value);
-    try std.testing.expect((try view.classCode()).eql(zpci.core.ClassCode.from(0x0C, 0x03, 0x30)));
+    try std.testing.expect((try view.classCode()).eql(pci.core.ClassCode.from(0x0C, 0x03, 0x30)));
     try std.testing.expectEqual(@as(u16, 0x0557), @as(u16, @bitCast(try view.command())));
     try std.testing.expectEqual(@as(u16, 0xFDB8), @as(u16, @bitCast(try view.status())));
     try std.testing.expectEqual(@as(u8, 0x10), try view.cacheLineSize());
