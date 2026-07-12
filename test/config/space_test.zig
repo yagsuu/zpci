@@ -219,6 +219,24 @@ test "unit: unchecked performs no validation I/O and reads live bytes" {
     try std.testing.expectError(error.BadHeaderType, function.headerKind());
 }
 
+test "unit: Function eq compares backend identity and SBDF" {
+    // Compare handles over the same bytes, different functions, and different backends.
+    var bytes_a: [function_window_size]u8 = undefined;
+    var bytes_b: [function_window_size]u8 = undefined;
+    seedFunction(&bytes_a, .{});
+    seedFunction(&bytes_b, .{});
+    const sbdf_a = Sbdf.of(0, 0, 10, 0);
+    const sbdf_b = Sbdf.of(0, 0, 11, 0);
+    var backend_a = TestConfigSpace.initSingle(sbdf_a, &bytes_a);
+    var backend_b = TestConfigSpace.initSingle(sbdf_a, &bytes_b);
+    const config_a = backend_a.configSpace();
+    const function = Function.unchecked(config_a, sbdf_a);
+
+    try std.testing.expect(function.eq(Function.unchecked(config_a, sbdf_a)));
+    try std.testing.expect(!function.eq(Function.unchecked(config_a, sbdf_b)));
+    try std.testing.expect(!function.eq(Function.unchecked(backend_b.configSpace(), sbdf_a)));
+}
+
 test "unit: scoped reads and writes use the stored Sbdf" {
     // Function-scoped I/O must route through the stored SBDF rather than the caller restating it.
     var bytes_a: [function_window_size]u8 = undefined;

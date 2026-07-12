@@ -21,10 +21,10 @@ test "unit: aggregateWindows maps child kinds to ordered bridge requirements" {
     // Mix all resource classes and assert the three bridge windows are emitted in fixed offset order.
     const function = testFunction(1);
     const children = [_]Requirement{
-        childRequirement(function, .mmio64_pref, 0x20_0000, 0x20_0000),
-        childRequirement(function, .io, 0x1000, 0x1000),
-        childRequirement(function, .mmio64, 0x20_0000, 0x20_0000),
-        childRequirement(function, .mmio32_pref, 0x10_0000, 0x10_0000),
+        childRequirement(function, .{ .kind = .mmio64_pref, .size = 0x20_0000, .alignment = 0x20_0000 }),
+        childRequirement(function, .{ .kind = .io, .size = 0x1000, .alignment = 0x1000 }),
+        childRequirement(function, .{ .kind = .mmio64, .size = 0x20_0000, .alignment = 0x20_0000 }),
+        childRequirement(function, .{ .kind = .mmio32_pref, .size = 0x10_0000, .alignment = 0x10_0000 }),
     };
 
     var out: [3]Requirement = undefined;
@@ -40,8 +40,8 @@ test "unit: aggregateWindows keeps all-64-bit prefetchable bucket 64-bit" {
     // Feed only 64-bit prefetchable descendants so a stray 32-bit downgrade is visible.
     const function = testFunction(2);
     const children = [_]Requirement{
-        childRequirement(function, .mmio64_pref, 0x10_0000, 0x10_0000),
-        childRequirement(function, .mmio64_pref, 0x20_0000, 0x20_0000),
+        childRequirement(function, .{ .kind = .mmio64_pref, .size = 0x10_0000, .alignment = 0x10_0000 }),
+        childRequirement(function, .{ .kind = .mmio64_pref, .size = 0x20_0000, .alignment = 0x20_0000 }),
     };
 
     var out: [1]Requirement = undefined;
@@ -55,16 +55,16 @@ test "unit: aggregateWindows rejects short scratch without modifying it" {
     // Require three output slots while providing two, then prove scratch is untouched.
     const function = testFunction(3);
     const children = [_]Requirement{
-        childRequirement(function, .io, 0x1000, 0x1000),
-        childRequirement(function, .mmio32, 0x10_0000, 0x10_0000),
-        childRequirement(function, .mmio64_pref, 0x10_0000, 0x10_0000),
+        childRequirement(function, .{ .kind = .io, .size = 0x1000, .alignment = 0x1000 }),
+        childRequirement(function, .{ .kind = .mmio32, .size = 0x10_0000, .alignment = 0x10_0000 }),
+        childRequirement(function, .{ .kind = .mmio64_pref, .size = 0x10_0000, .alignment = 0x10_0000 }),
     };
-    const sentinel = childRequirement(function, .mmio32, 0x4000, 0x4000);
+    const sentinel = childRequirement(function, .{ .kind = .mmio32, .size = 0x4000, .alignment = 0x4000 });
     var out = [_]Requirement{ sentinel, sentinel };
 
     try std.testing.expectError(error.StorageExhausted, bridge.aggregateWindows(function, &children, &out));
-    try expectSameRequirement(sentinel, out[0]);
-    try expectSameRequirement(sentinel, out[1]);
+    try expectSameRequirement(.{ .expected = sentinel, .actual = out[0] });
+    try expectSameRequirement(.{ .expected = sentinel, .actual = out[1] });
 
     var none: [0]Requirement = .{};
     try std.testing.expectError(error.StorageExhausted, bridge.aggregateWindows(function, children[0..1], &none));
@@ -74,10 +74,10 @@ test "unit: aggregateWindows sorts by descending alignment and skips zero-sized 
     // Compare the packed size against the known optimum for the spec's descending-alignment greedy order.
     const function = testFunction(4);
     const children = [_]Requirement{
-        childRequirement(function, .io, 0x1000, 0x1000),
-        childRequirement(function, .io, 0x10_0000, 0x10_0000),
-        childRequirement(function, .io, 0, 0x1000),
-        childRequirement(function, .io, 0x4000, 0x4000),
+        childRequirement(function, .{ .kind = .io, .size = 0x1000, .alignment = 0x1000 }),
+        childRequirement(function, .{ .kind = .io, .size = 0x10_0000, .alignment = 0x10_0000 }),
+        childRequirement(function, .{ .kind = .io, .size = 0, .alignment = 0x1000 }),
+        childRequirement(function, .{ .kind = .io, .size = 0x4000, .alignment = 0x4000 }),
     };
 
     var first_out: [1]Requirement = undefined;
@@ -87,13 +87,13 @@ test "unit: aggregateWindows sorts by descending alignment and skips zero-sized 
 
     try std.testing.expectEqual(@as(usize, 1), first.len);
     try expectBridgeRequirement(function, first[0], .io, .io, 0x20_0000, 0x10_0000);
-    try expectSameRequirement(first[0], second[0]);
+    try expectSameRequirement(.{ .expected = first[0], .actual = second[0] });
 }
 
 test "unit: aggregateWindows raises bridge granularity above tiny child alignment" {
     // Use a 512-byte IO child to verify the aggregate alignment and size are raised to 4 KiB.
     const function = testFunction(5);
-    const children = [_]Requirement{childRequirement(function, .io, 0x200, 0x200)};
+    const children = [_]Requirement{childRequirement(function, .{ .kind = .io, .size = 0x200, .alignment = 0x200 })};
 
     var out: [1]Requirement = undefined;
     const windows = try bridge.aggregateWindows(function, &children, &out);
@@ -104,7 +104,7 @@ test "unit: aggregateWindows raises bridge granularity above tiny child alignmen
 test "unit: aggregateWindows returns an empty borrowed prefix for no live children" {
     // Include only a zero-sized child so the defensive skip path produces no bridge windows.
     const function = testFunction(6);
-    const children = [_]Requirement{childRequirement(function, .mmio32, 0, 0x1000)};
+    const children = [_]Requirement{childRequirement(function, .{ .kind = .mmio32, .size = 0, .alignment = 0x1000 })};
 
     var out: [1]Requirement = undefined;
     const windows = try bridge.aggregateWindows(function, &children, &out);
@@ -351,11 +351,17 @@ fn fakeWrite32(context: *anyopaque, sbdf: Sbdf, offset: usize, value: u32) Confi
     _ = value;
 }
 
-fn childRequirement(function: Function, kind: Kind, size: u64, alignment: u64) Requirement {
+const RequirementShape = struct {
+    kind: Kind,
+    size: u64,
+    alignment: u64,
+};
+
+fn childRequirement(function: Function, shape: RequirementShape) Requirement {
     return .{
-        .kind = kind,
-        .size = size,
-        .alignment = alignment,
+        .kind = shape.kind,
+        .size = shape.size,
+        .alignment = shape.alignment,
         .source = .{ .endpoint_expansion_rom = function },
     };
 }
@@ -391,37 +397,35 @@ fn expectBridgeRequirement(
     try std.testing.expectEqual(kind, actual.kind);
     try std.testing.expectEqual(size, actual.size);
     try std.testing.expectEqual(alignment, actual.alignment);
+
     switch (actual.source) {
         .bridge_window => |source| {
             try std.testing.expectEqual(window, source.window);
-            try expectSameFunction(function, source.function);
+            try std.testing.expect(function.eq(source.function));
         },
         else => return error.TestExpectedEqual,
     }
 }
 
-fn expectSameRequirement(expected: Requirement, actual: Requirement) !void {
-    try std.testing.expectEqual(expected.kind, actual.kind);
-    try std.testing.expectEqual(expected.size, actual.size);
-    try std.testing.expectEqual(expected.alignment, actual.alignment);
-    try std.testing.expectEqual(std.meta.activeTag(expected.source), std.meta.activeTag(actual.source));
-    switch (expected.source) {
-        .endpoint_expansion_rom => |function| try expectSameFunction(function, actual.source.endpoint_expansion_rom),
+fn expectSameRequirement(options: struct { expected: Requirement, actual: Requirement }) !void {
+    try std.testing.expectEqual(options.expected.kind, options.actual.kind);
+    try std.testing.expectEqual(options.expected.size, options.actual.size);
+    try std.testing.expectEqual(options.expected.alignment, options.actual.alignment);
+    try std.testing.expectEqual(std.meta.activeTag(options.expected.source), std.meta.activeTag(options.actual.source));
+
+    switch (options.expected.source) {
+        .endpoint_expansion_rom => |function| {
+            try std.testing.expect(function.eq(options.actual.source.endpoint_expansion_rom));
+        },
         .bridge_window => |source| {
-            try std.testing.expectEqual(source.window, actual.source.bridge_window.window);
-            try expectSameFunction(source.function, actual.source.bridge_window.function);
+            try std.testing.expectEqual(source.window, options.actual.source.bridge_window.window);
+            try std.testing.expect(source.function.eq(options.actual.source.bridge_window.function));
         },
         .endpoint_bar => |bar| {
-            try std.testing.expectEqual(bar.index, actual.source.endpoint_bar.index);
-            try expectSameFunction(bar.function, actual.source.endpoint_bar.function);
+            try std.testing.expectEqual(bar.index, options.actual.source.endpoint_bar.index);
+            try std.testing.expect(bar.function.eq(options.actual.source.endpoint_bar.function));
         },
     }
-}
-
-fn expectSameFunction(expected: Function, actual: Function) !void {
-    try std.testing.expect(expected.sbdf.eql(actual.sbdf));
-    try std.testing.expect(expected.config.context == actual.config.context);
-    try std.testing.expect(expected.config.vtable == actual.config.vtable);
 }
 
 fn expectIoEncoding(actual: EncodedWindow, expected: ExpectedIo) !void {

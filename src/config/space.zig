@@ -56,6 +56,15 @@ pub const Function = struct {
         return .{ .config = config, .sbdf = sbdf };
     }
 
+    /// Returns true when both handles target the same backend and SBDF.
+    pub fn eq(self: Function, other: Function) bool {
+        const same_context = self.config.context == other.config.context;
+        const same_vtable = self.config.vtable == other.config.vtable;
+        const same_sbdf = self.sbdf.eql(other.sbdf);
+
+        return same_context and same_vtable and same_sbdf;
+    }
+
     pub fn read8(self: Function, byte_offset: usize) ConfigSpace.Error!u8 {
         return self.config.read8(self.sbdf, byte_offset);
     }

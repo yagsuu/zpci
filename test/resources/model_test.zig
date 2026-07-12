@@ -5,6 +5,7 @@ const std = @import("std");
 const zpci = @import("zpci");
 
 const Aperture = zpci.resources.model.Aperture;
+const Assignment = zpci.resources.model.Assignment;
 const Entry = zpci.bar.Entry;
 const Function = zpci.config.Function;
 const Kind = zpci.resources.model.Kind;
@@ -187,8 +188,9 @@ test "unit: Requirement.fromExpansionRom maps nonzero ROM size to MMIO32" {
     try std.testing.expectEqual(Kind.mmio32, requirement.kind);
     try std.testing.expectEqual(@as(u64, 0x20_0000), requirement.size);
     try std.testing.expectEqual(@as(u64, 0x20_0000), requirement.alignment);
+
     switch (requirement.source) {
-        .endpoint_expansion_rom => |source_function| try expectSameFunction(function, source_function),
+        .endpoint_expansion_rom => |source_function| try std.testing.expect(function.eq(source_function)),
         else => return error.TestExpectedEqual,
     }
 }
@@ -219,6 +221,45 @@ test "unit: Requirement.fromBarSlice preserves BAR order and rejects short outpu
     try std.testing.expectError(error.StorageExhausted, Requirement.fromBarSlice(function, &entries, &short));
 }
 
+test "unit: Assignment function returns the owner for every source kind" {
+    // Cover all requirement-source variants so grouping code can call the owning Assignment method.
+    var bytes: [function_window_size]u8 = @splat(0);
+    const sbdf = Sbdf.of(0, 0, 5, 0);
+    var backend = TestConfigSpace.initSingle(sbdf, &bytes);
+    const function = Function.unchecked(backend.configSpace(), sbdf);
+    const assignments = [_]Assignment{
+        .{
+            .requirement = Requirement.fromBar(function, ioEntry(0, 0x100)).?,
+            .pool = .io,
+            .base = 0x1000,
+        },
+        .{
+            .requirement = Requirement.fromExpansionRom(function, 0x2000).?,
+            .pool = .mmio32,
+            .base = 0x8000_0000,
+        },
+        .{
+            .requirement = .{
+                .kind = .mmio64,
+                .size = 0x10_0000,
+                .alignment = 0x10_0000,
+                .source = .{
+                    .bridge_window = .{
+                        .function = function,
+                        .window = .memory,
+                    },
+                },
+            },
+            .pool = .mmio64,
+            .base = 0x1_0000_0000,
+        },
+    };
+
+    for (assignments) |assignment| {
+        try std.testing.expect(function.eq(assignment.function()));
+    }
+}
+
 const ExpectedEligible = struct {
     io: bool = false,
     mmio32: bool = false,
@@ -245,19 +286,14 @@ fn expectBarRequirement(function: Function, requirement: Requirement, expected: 
     try std.testing.expectEqual(expected.kind, requirement.kind);
     try std.testing.expectEqual(expected.size, requirement.size);
     try std.testing.expectEqual(expected.size, requirement.alignment);
+
     switch (requirement.source) {
         .endpoint_bar => |source| {
             try std.testing.expectEqual(expected.index, source.index);
-            try expectSameFunction(function, source.function);
+            try std.testing.expect(function.eq(source.function));
         },
         else => return error.TestExpectedEqual,
     }
-}
-
-fn expectSameFunction(expected: Function, actual: Function) !void {
-    try std.testing.expect(expected.sbdf.eql(actual.sbdf));
-    try std.testing.expect(expected.config.context == actual.config.context);
-    try std.testing.expect(expected.config.vtable == actual.config.vtable);
 }
 
 fn noneEntry(index: usize) Entry {

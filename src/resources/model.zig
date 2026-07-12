@@ -184,6 +184,15 @@ pub const Assignment = struct {
     requirement: Requirement,
     pool: Kind,
     base: u64,
+
+    /// Returns the function that owns the assigned requirement.
+    pub fn function(self: Assignment) config.Function {
+        return switch (self.requirement.source) {
+            .endpoint_bar => |source| source.function,
+            .endpoint_expansion_rom => |owner| owner,
+            .bridge_window => |source| source.function,
+        };
+    }
 };
 
 pub const bridge_io_alignment: u64 = 0x1000;

@@ -21,6 +21,7 @@ comptime {
     _ = @import("resources/assignment_test.zig");
     _ = @import("resources/bridge_test.zig");
     _ = @import("resources/bus_test.zig");
+    _ = @import("resources/programming_test.zig");
     _ = @import("topology/enumerate_test.zig");
     _ = @import("topology/tree_test.zig");
     _ = @import("topology/bridge_test.zig");
