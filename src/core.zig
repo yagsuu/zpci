@@ -4,6 +4,10 @@ const bdf = @import("core/bdf.zig");
 const errors = @import("core/errors.zig");
 const ids = @import("core/ids.zig");
 
+pub const bus_count: usize = 256;
+pub const device_count: usize = bdf.max_device;
+pub const function_count: usize = bdf.max_function;
+
 pub const BaseClass = ids.BaseClass;
 pub const Bdf = bdf.Bdf;
 pub const ClassCode = ids.ClassCode;

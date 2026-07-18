@@ -8,6 +8,12 @@ const Bdf = pci.core.Bdf;
 const Sbdf = pci.core.Sbdf;
 const SegmentId = pci.core.SegmentId;
 
+test "unit: core exports conventional BDF iteration counts" {
+    try std.testing.expectEqual(@as(usize, 256), pci.core.bus_count);
+    try std.testing.expectEqual(@as(usize, 32), pci.core.device_count);
+    try std.testing.expectEqual(@as(usize, 8), pci.core.function_count);
+}
+
 test "layout: Bdf is packed struct(u16) with LSB-first PCIe Requester ID layout" {
     // Guard the wire-compatible requester-id layout consumed by packing, sorting, and ECAM math.
     try std.testing.expectEqual(@as(usize, 2), @sizeOf(Bdf));
