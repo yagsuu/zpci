@@ -27,6 +27,7 @@ Related specs:
 Owned:
 
 - `CommonHeader` `extern struct` covering the first 16 bytes (`0x00..=0x0F`) shared between every header type.
+- `register` absolute config-space offsets and the packed `HeaderType` wire representation for responder-side byte materialization.
 - `Command` and `Status` packed-struct decodings of the 16-bit Command and Status registers.
 - `header.common.View`, a borrowed typed view over `config.Function`.
 - Typed read/write helpers for command, status, BIST, cache line size, latency timer, capabilities pointer, interrupt line, and interrupt pin.
@@ -96,6 +97,22 @@ Beyond the first 16 bytes, the rest of the common header (`0x10..=0x3F`) overlap
 | `0x3D` | Interrupt pin | 8 bits |
 
 The capabilities pointer is meaningful only when `Status.capabilities_list` is set; walking the list itself is owned by `docs/specs/capabilities/list.md`.
+
+## Public wire declarations `[std]`
+
+`header.common.register` exposes the absolute byte offsets for every field in
+`CommonHeader` plus `capabilities_pointer`, `interrupt_line`, and
+`interrupt_pin`; their values are the layout and table offsets above.
+
+```zig
+pub const HeaderType = packed struct(u8) {
+    layout: u7,
+    multifunction: bool,
+};
+```
+
+`layout` preserves every raw seven-bit layout value. `config.Function` owns
+validation and accepts only the type-0 and type-1 values.
 
 ## Command register `[std]`
 

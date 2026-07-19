@@ -17,6 +17,18 @@ pub const Layout = enum {
     type1,
 };
 
+/// Bit encodings in a BAR low dword.
+pub const raw = struct {
+    pub const io_space: u32 = 1 << 0;
+    pub const io_reserved: u32 = 1 << 1;
+    pub const memory_type_mask: u32 = 0b11 << 1;
+    pub const memory_type_32: u32 = 0b00 << 1;
+    pub const memory_type_64: u32 = 0b10 << 1;
+    pub const prefetchable: u32 = 1 << 3;
+    pub const io_address_mask: u32 = 0xFFFF_FFFC;
+    pub const memory_address_mask: u32 = 0xFFFF_FFF0;
+};
+
 /// BAR decode and sizing errors.
 pub const Error = ConfigSpace.Error || error{
     MalformedBar,
@@ -105,12 +117,12 @@ pub const View = struct {
         try self.assertLowSlot(index);
 
         const low = try self.readBar(index);
-        const raw = RawBar{
+        const bar = RawBar{
             .low = low,
             .high = if (isMemory64Low(low)) try self.readBar(index + 1) else 0,
         };
 
-        return decodeEntry(self.layout, index, raw);
+        return decodeEntry(self.layout, index, bar);
     }
 
     /// Effects: disables the matching decode bit, writes all-ones, reads size, and restores.
@@ -256,14 +268,14 @@ const SizingProbe = struct {
 
         const saved_low = try view.readBar(index);
 
-        if (saved_low & 0x1 != 0) {
-            if (saved_low & 0x2 != 0) return error.MalformedBar;
+        if (saved_low & raw.io_space != 0) {
+            if (saved_low & raw.io_reserved != 0) return error.MalformedBar;
             return SizingProbe.initIo(view, index, saved_low, command);
         }
 
-        return switch ((saved_low >> 1) & 0b11) {
-            0b00 => SizingProbe.initMemory32(view, index, saved_low, command),
-            0b10 => blk: {
+        return switch (saved_low & raw.memory_type_mask) {
+            raw.memory_type_32 => SizingProbe.initMemory32(view, index, saved_low, command),
+            raw.memory_type_64 => blk: {
                 if (index + 1 >= view.count()) return error.MalformedBar;
 
                 const saved_high = try view.readBar(index + 1);
@@ -377,7 +389,7 @@ const SizingProbe = struct {
 
         return switch (self.space) {
             .io => blk: {
-                const mask = probed.low & 0xFFFF_FFFC;
+                const mask = probed.low & raw.io_address_mask;
                 if (mask == 0) break :blk .{ .index = self.index, .slot_count = 1, .kind = .none };
 
                 break :blk .{
@@ -420,51 +432,51 @@ fn barCount(layout: Layout) usize {
 }
 
 fn barOffset(index: usize) usize {
-    return 0x10 + 4 * index;
+    return header.type0.register.bar_base + header.type0.register.bar_stride * index;
 }
 
 fn isMemory64Low(low: u32) bool {
     const implemented = low != 0;
-    const memory = low & 0x1 == 0;
-    const width_64 = ((low >> 1) & 0b11) == 0b10;
+    const memory = low & raw.io_space == 0;
+    const width_64 = low & raw.memory_type_mask == raw.memory_type_64;
     return implemented and memory and width_64;
 }
 
-fn decodeEntry(layout: Layout, index: usize, raw: RawBar) Error!Entry {
-    if (raw.low == 0) return .{ .index = index, .slot_count = 1, .kind = .none };
+fn decodeEntry(layout: Layout, index: usize, bar: RawBar) Error!Entry {
+    if (bar.low == 0) return .{ .index = index, .slot_count = 1, .kind = .none };
 
-    if (raw.low & 0x1 != 0) {
-        if (raw.low & 0x2 != 0) return error.MalformedBar;
+    if (bar.low & raw.io_space != 0) {
+        if (bar.low & raw.io_reserved != 0) return error.MalformedBar;
         return .{
             .index = index,
             .slot_count = 1,
-            .kind = .{ .io = .{ .base = ioBase(raw.low), .size = 0 } },
+            .kind = .{ .io = .{ .base = ioBase(bar.low), .size = 0 } },
         };
     }
 
-    return switch ((raw.low >> 1) & 0b11) {
-        0b00 => .{
+    return switch (bar.low & raw.memory_type_mask) {
+        raw.memory_type_32 => .{
             .index = index,
             .slot_count = 1,
             .kind = .{ .memory = .{
-                .base = memoryBase32(raw.low),
+                .base = memoryBase32(bar.low),
                 .size = 0,
                 .width = .bits_32,
-                .prefetchable = isPrefetchable(raw.low),
+                .prefetchable = isPrefetchable(bar.low),
             } },
         },
-        0b10 => blk: {
+        raw.memory_type_64 => blk: {
             if (index + 1 >= barCount(layout)) return error.MalformedBar;
-            if (raw.high & 0xF != 0) return error.MalformedBar;
+            if (bar.high & 0xF != 0) return error.MalformedBar;
 
             break :blk .{
                 .index = index,
                 .slot_count = 2,
                 .kind = .{ .memory = .{
-                    .base = memoryBase64(raw),
+                    .base = memoryBase64(bar),
                     .size = 0,
                     .width = .bits_64,
-                    .prefetchable = isPrefetchable(raw.low),
+                    .prefetchable = isPrefetchable(bar.low),
                 } },
             };
         },
@@ -473,33 +485,33 @@ fn decodeEntry(layout: Layout, index: usize, raw: RawBar) Error!Entry {
 }
 
 fn ioBase(low: u32) u32 {
-    return low & 0xFFFF_FFFC;
+    return low & raw.io_address_mask;
 }
 
 fn memoryBase32(low: u32) u64 {
-    return @as(u64, low & 0xFFFF_FFF0);
+    return @as(u64, low & raw.memory_address_mask);
 }
 
-fn memoryBase64(raw: RawBar) u64 {
-    const low_base = memoryBase32(raw.low);
-    const high_base = @as(u64, raw.high) << 32;
+fn memoryBase64(bar: RawBar) u64 {
+    const low_base = memoryBase32(bar.low);
+    const high_base = @as(u64, bar.high) << 32;
     return high_base | low_base;
 }
 
 fn memorySize32(probed_low: u32) u64 {
-    const mask = probed_low & 0xFFFF_FFF0;
+    const mask = probed_low & raw.memory_address_mask;
     return @as(u64, ~mask +% 1);
 }
 
 fn memorySize64(probed: RawBar) u64 {
-    const low_mask = @as(u64, probed.low & 0xFFFF_FFF0);
+    const low_mask = @as(u64, probed.low & raw.memory_address_mask);
     const high_mask = @as(u64, probed.high) << 32;
     const mask = high_mask | low_mask;
     return ~mask +% 1;
 }
 
 fn isPrefetchable(low: u32) bool {
-    return low & 0x8 != 0;
+    return low & raw.prefetchable != 0;
 }
 
 comptime {

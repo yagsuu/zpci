@@ -14,7 +14,7 @@ const View = pci.interrupts.msi.View;
 const msi = pci.interrupts.msi;
 const register = msi.register;
 const standard = pci.capabilities.list.standard;
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const test_base: u8 = 0x80;
 const test_sbdf = Sbdf.of(0, 0, 0, 0);
 const offset = struct {
@@ -397,7 +397,7 @@ const ExpectedWrite = struct {
 
 const MsiConfig = struct {
     sbdf: Sbdf = test_sbdf,
-    bytes: [function_window_size]u8 = @splat(0),
+    bytes: [pcie_window_size]u8 = @splat(0),
     read_count: usize = 0,
     write_count: usize = 0,
     writes: [32]ExpectedWrite = undefined,
@@ -532,34 +532,34 @@ fn seedMsiCapability(backend: *MsiConfig, base: u8, control: u16) void {
     store16(&backend.bytes, @as(usize, base) + register.message_control, control);
 }
 
-fn seedHead(bytes: *[function_window_size]u8, head: u8) void {
+fn seedHead(bytes: *[pcie_window_size]u8, head: u8) void {
     store16(bytes, offset.status, status.capabilities_list);
     bytes[standard.head_offset] = head;
 }
 
-fn seedCapabilityNode(bytes: *[function_window_size]u8, base: u8, id: u8, next: u8) void {
+fn seedCapabilityNode(bytes: *[pcie_window_size]u8, base: u8, id: u8, next: u8) void {
     bytes[base] = id;
     bytes[@as(usize, base) + 1] = next;
 }
 
-fn load16(bytes: *const [function_window_size]u8, byte_offset: usize) u16 {
+fn load16(bytes: *const [pcie_window_size]u8, byte_offset: usize) u16 {
     const low = @as(u16, bytes[byte_offset]);
     const high = @as(u16, bytes[byte_offset + 1]) << 8;
     return high | low;
 }
 
-fn store16(bytes: *[function_window_size]u8, byte_offset: usize, value: u16) void {
+fn store16(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u16) void {
     bytes[byte_offset] = @truncate(value);
     bytes[byte_offset + 1] = @truncate(value >> 8);
 }
 
-fn load32(bytes: *const [function_window_size]u8, byte_offset: usize) u32 {
+fn load32(bytes: *const [pcie_window_size]u8, byte_offset: usize) u32 {
     const low = @as(u32, load16(bytes, byte_offset));
     const high = @as(u32, load16(bytes, byte_offset + 2)) << 16;
     return high | low;
 }
 
-fn store32(bytes: *[function_window_size]u8, byte_offset: usize, value: u32) void {
+fn store32(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u32) void {
     store16(bytes, byte_offset, @truncate(value));
     store16(bytes, byte_offset + 2, @truncate(value >> 16));
 }

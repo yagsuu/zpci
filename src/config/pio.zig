@@ -15,7 +15,7 @@ const pio_supported = builtin.cpu.arch == .x86_64;
 
 pub const config_address_port = Port.fromInt(0xCF8);
 pub const config_data_port_base = Port.fromInt(0xCFC);
-pub const pio_config_window_size: usize = 0x100;
+pub const pci_window_size: usize = 0x100;
 pub const supported_segment = core.SegmentId.from(0);
 
 pub const Pio = struct {
@@ -87,8 +87,8 @@ pub const Pio = struct {
 
 fn checkAccess(sbdf: Sbdf, offset: usize, width: usize) ConfigSpace.Error!void {
     if (!sbdf.segment.eql(supported_segment)) return error.OutOfBounds;
-    if (offset > pio_config_window_size) return error.OutOfBounds;
-    if (width > pio_config_window_size - offset) return error.OutOfBounds;
+    if (offset > pci_window_size) return error.OutOfBounds;
+    if (width > pci_window_size - offset) return error.OutOfBounds;
     if (width == 2 and offset % 2 != 0) return error.UnalignedAccess;
     if (width == 4 and offset % 4 != 0) return error.UnalignedAccess;
 }
@@ -110,7 +110,7 @@ test "unit: PIO constants expose the conventional CF8/CFC ports and 256-byte win
 
     try testing.expectEqual(@as(u16, 0xCF8), config_address_port.raw());
     try testing.expectEqual(@as(u16, 0xCFC), config_data_port_base.raw());
-    try testing.expectEqual(@as(usize, 0x100), pio_config_window_size);
+    try testing.expectEqual(@as(usize, 0x100), pci_window_size);
     try testing.expect(supported_segment.eql(core.SegmentId.from(0)));
 }
 

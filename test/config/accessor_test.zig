@@ -9,13 +9,13 @@ const ConfigSpace = pci.config.ConfigSpace;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
 const Sbdf = pci.core.Sbdf;
 
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 
 /// Restricted backend that reports `UnsupportedAccessWidth` for any 4-byte
 /// access. Used to prove the accessor propagates backend width failures
 /// after shape validation succeeds.
 const NoDwordConfig = struct {
-    bytes: [function_window_size]u8 = @splat(0),
+    bytes: [pcie_window_size]u8 = @splat(0),
 
     fn configSpace(self: *NoDwordConfig) ConfigSpace {
         return ConfigSpace.init(@ptrCast(self), &vtable);
@@ -39,7 +39,7 @@ const NoDwordConfig = struct {
     fn read16(context: *anyopaque, sbdf: Sbdf, offset: usize) ConfigSpace.Error!u16 {
         _ = sbdf;
         const self: *NoDwordConfig = @ptrCast(@alignCast(context));
-        // ConfigSpace validated offset+2 <= function_window_size before dispatch,
+        // ConfigSpace validated offset+2 <= pcie_window_size before dispatch,
         // so load cannot report EndOfStream.
         const wrapped = stdx.bytes.load(stdx.layout.Le(u16), &self.bytes, offset) catch |err| switch (err) {
             error.EndOfStream => unreachable,
@@ -64,7 +64,7 @@ const NoDwordConfig = struct {
         _ = sbdf;
         const self: *NoDwordConfig = @ptrCast(@alignCast(context));
         const encoded = stdx.layout.Le(u16).fromNative(value);
-        // ConfigSpace validated offset+2 <= function_window_size before dispatch,
+        // ConfigSpace validated offset+2 <= pcie_window_size before dispatch,
         // so store cannot report EndOfStream.
         stdx.bytes.store(stdx.layout.Le(u16), &self.bytes, offset, encoded) catch |err| switch (err) {
             error.EndOfStream => unreachable,
@@ -82,7 +82,7 @@ const NoDwordConfig = struct {
 
 test "unit: read8/write8 round-trip at boundary and unaligned offsets" {
     // Boundary writes plus exact reads prove byte accesses require only containment, not alignment.
-    var buf: [function_window_size]u8 = @splat(0);
+    var buf: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
     const config = backend.configSpace();
@@ -97,7 +97,7 @@ test "unit: read8/write8 round-trip at boundary and unaligned offsets" {
 
 test "unit: read16/write16 round-trip encodes little-endian" {
     // A native u16 written through ConfigSpace must appear in backing storage as PCI little-endian bytes.
-    var buf: [function_window_size]u8 = @splat(0);
+    var buf: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
     const config = backend.configSpace();
@@ -110,7 +110,7 @@ test "unit: read16/write16 round-trip encodes little-endian" {
 
 test "unit: read32/write32 round-trip encodes little-endian" {
     // A native u32 written through ConfigSpace must appear in backing storage as PCI little-endian bytes.
-    var buf: [function_window_size]u8 = @splat(0);
+    var buf: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
     const config = backend.configSpace();
@@ -122,23 +122,23 @@ test "unit: read32/write32 round-trip encodes little-endian" {
 
 test "malformed: read/write beyond 4 KiB reports OutOfBounds" {
     // Just-past-end windows for each width must fail before the backend can read or write.
-    var buf: [function_window_size]u8 = @splat(0);
+    var buf: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
     const config = backend.configSpace();
 
-    try std.testing.expectError(error.OutOfBounds, config.read8(sbdf, function_window_size));
-    try std.testing.expectError(error.OutOfBounds, config.read16(sbdf, function_window_size - 1));
-    try std.testing.expectError(error.OutOfBounds, config.read32(sbdf, function_window_size - 3));
-    try std.testing.expectError(error.OutOfBounds, config.write8(sbdf, function_window_size, 0));
-    try std.testing.expectError(error.OutOfBounds, config.write16(sbdf, function_window_size - 1, 0));
-    try std.testing.expectError(error.OutOfBounds, config.write32(sbdf, function_window_size - 3, 0));
+    try std.testing.expectError(error.OutOfBounds, config.read8(sbdf, pcie_window_size));
+    try std.testing.expectError(error.OutOfBounds, config.read16(sbdf, pcie_window_size - 1));
+    try std.testing.expectError(error.OutOfBounds, config.read32(sbdf, pcie_window_size - 3));
+    try std.testing.expectError(error.OutOfBounds, config.write8(sbdf, pcie_window_size, 0));
+    try std.testing.expectError(error.OutOfBounds, config.write16(sbdf, pcie_window_size - 1, 0));
+    try std.testing.expectError(error.OutOfBounds, config.write32(sbdf, pcie_window_size - 3, 0));
 }
 
 test "malformed: containment beats alignment for end-of-window offsets" {
     // Overrunning windows must report containment failure even when the same offset is misaligned.
     // read32(0xFFF) is both unaligned and overruns; containment must win.
-    var buf: [function_window_size]u8 = @splat(0);
+    var buf: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
     const config = backend.configSpace();
@@ -150,7 +150,7 @@ test "malformed: containment beats alignment for end-of-window offsets" {
 
 test "malformed: offset arithmetic overflow reports OutOfBounds" {
     // Offsets near usize overflow must map to OutOfBounds instead of wrapping into the valid window.
-    var buf: [function_window_size]u8 = @splat(0);
+    var buf: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
     const config = backend.configSpace();
@@ -161,7 +161,7 @@ test "malformed: offset arithmetic overflow reports OutOfBounds" {
 
 test "malformed: unaligned read16/write16 reports UnalignedAccess after containment succeeds" {
     // Contained odd offsets for 16-bit access must be rejected as natural-alignment violations.
-    var buf: [function_window_size]u8 = @splat(0);
+    var buf: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
     const config = backend.configSpace();
@@ -174,7 +174,7 @@ test "malformed: unaligned read16/write16 reports UnalignedAccess after containm
 
 test "malformed: unaligned read32/write32 reports UnalignedAccess after containment succeeds" {
     // Contained non-4-byte offsets for 32-bit access must be rejected as natural-alignment violations.
-    var buf: [function_window_size]u8 = @splat(0);
+    var buf: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
     const config = backend.configSpace();
@@ -187,13 +187,13 @@ test "malformed: unaligned read32/write32 reports UnalignedAccess after containm
 
 test "malformed: failed writes leave storage unchanged" {
     // Failed shape validation and backend width errors must leave byte-backed storage unchanged.
-    var buf: [function_window_size]u8 = @splat(0xA5);
+    var buf: [pcie_window_size]u8 = @splat(0xA5);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
     const config = backend.configSpace();
     const before = buf;
 
-    try std.testing.expectError(error.OutOfBounds, config.write8(sbdf, function_window_size, 0));
+    try std.testing.expectError(error.OutOfBounds, config.write8(sbdf, pcie_window_size, 0));
     try std.testing.expectEqualSlices(u8, &before, &buf);
 
     try std.testing.expectError(error.UnalignedAccess, config.write16(sbdf, 1, 0xBEEF));
@@ -209,8 +209,8 @@ test "malformed: failed writes leave storage unchanged" {
 
 test "unit: multi-entry dispatch isolates distinct SBDF storage" {
     // Distinct SBDF entries must isolate reads and writes to the addressed function's storage.
-    var buf_a: [function_window_size]u8 = @splat(0);
-    var buf_b: [function_window_size]u8 = @splat(0);
+    var buf_a: [pcie_window_size]u8 = @splat(0);
+    var buf_b: [pcie_window_size]u8 = @splat(0);
     var entries = [_]TestConfigSpace.Entry{
         .{ .sbdf = Sbdf.of(0, 0, 1, 0), .bytes = &buf_a },
         .{ .sbdf = Sbdf.of(0, 0, 2, 0), .bytes = &buf_b },
@@ -230,8 +230,8 @@ test "unit: multi-entry dispatch takes the first entry when SBDFs alias" {
     // Duplicate Sbdf entries with distinct storage prove that ordering
     // beats identity: a broken implementation returning the last match
     // would visibly break, not silently coincide.
-    var buf_first: [function_window_size]u8 = @splat(0xAA);
-    var buf_second: [function_window_size]u8 = @splat(0xBB);
+    var buf_first: [pcie_window_size]u8 = @splat(0xAA);
+    var buf_second: [pcie_window_size]u8 = @splat(0xBB);
     const sbdf = Sbdf.of(0, 0, 3, 0);
     var entries = [_]TestConfigSpace.Entry{
         .{ .sbdf = sbdf, .bytes = &buf_first },
@@ -250,7 +250,7 @@ test "unit: multi-entry dispatch takes the first entry when SBDFs alias" {
 
 test "unit: unmatched Sbdf reads as absence marker and drops writes" {
     // Missing SBDFs must model absent hardware with all-ones reads and ignored writes, not accessor errors.
-    var buf: [function_window_size]u8 = @splat(0);
+    var buf: [pcie_window_size]u8 = @splat(0);
     var backend = TestConfigSpace.initSingle(Sbdf.of(0, 0, 0, 0), &buf);
     const config = backend.configSpace();
     const absent = Sbdf.of(0, 0, 5, 0);
@@ -260,7 +260,7 @@ test "unit: unmatched Sbdf reads as absence marker and drops writes" {
     try std.testing.expectEqual(@as(u8, 0xFF), try config.read8(absent, 0x07));
 
     try config.write32(absent, 0x00, 0xDEAD_BEEF);
-    try std.testing.expectEqualSlices(u8, &@as([function_window_size]u8, @splat(0)), &buf);
+    try std.testing.expectEqualSlices(u8, &@as([pcie_window_size]u8, @splat(0)), &buf);
 }
 
 test "malformed: backend UnsupportedAccessWidth surfaces after shape validation" {
@@ -285,13 +285,13 @@ test "malformed: containment/alignment fail before the backend runs" {
     const config = backend.configSpace();
     const sbdf = Sbdf.of(0, 0, 0, 0);
 
-    try std.testing.expectError(error.OutOfBounds, config.read32(sbdf, function_window_size));
+    try std.testing.expectError(error.OutOfBounds, config.read32(sbdf, pcie_window_size));
     try std.testing.expectError(error.UnalignedAccess, config.read32(sbdf, 2));
 }
 
 test "unit: ConfigSpace handle copies share the same backend context" {
     // Copying a ConfigSpace value must copy the handle, so both copies observe the same backend state.
-    var buf: [function_window_size]u8 = @splat(0);
+    var buf: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 0, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &buf);
     const config_a = backend.configSpace();

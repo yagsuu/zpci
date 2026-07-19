@@ -213,6 +213,9 @@ const space = @import("config/space.zig");
 
 pub const ConfigSpace = accessor.ConfigSpace;
 pub const Function = space.Function;
+pub const HeaderKind = space.HeaderKind;
+pub const pci_window_size = space.pci_window_size;
+pub const pcie_window_size = space.pcie_window_size;
 
 pub const Ecam = ecam.Ecam;
 pub const Segment = ecam.Segment;

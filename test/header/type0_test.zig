@@ -14,7 +14,7 @@ const Type0Header = pci.header.Type0Header;
 const View = pci.header.type0.View;
 
 const bar_count = pci.header.type0.bar_count;
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const offset = struct {
     const vendor_id: usize = 0x00;
     const bars: usize = 0x10;
@@ -46,6 +46,25 @@ test "layout: Type0Header covers endpoint-specific PCI config bytes" {
     try std.testing.expectEqual(@as(usize, 0x2F), @offsetOf(Type0Header, "max_latency"));
 }
 
+test "layout: type-0 register constants expose absolute PCI offsets" {
+    const register = pci.header.type0.register;
+
+    try std.testing.expectEqual(@as(usize, 0x10), register.bar_base);
+    try std.testing.expectEqual(@as(usize, 4), register.bar_stride);
+    try std.testing.expectEqual(@as(usize, 0x10), register.bar(0));
+    try std.testing.expectEqual(@as(usize, 0x24), register.bar(5));
+    try std.testing.expectEqual(@as(usize, 0x28), register.cardbus_cis_pointer);
+    try std.testing.expectEqual(@as(usize, 0x2C), register.subsystem);
+    try std.testing.expectEqual(@as(usize, 0x2C), register.subsystem_vendor_id);
+    try std.testing.expectEqual(@as(usize, 0x2E), register.subsystem_id);
+    try std.testing.expectEqual(@as(usize, 0x30), register.expansion_rom_base);
+    try std.testing.expectEqual(@as(usize, 0x34), register.capabilities_pointer);
+    try std.testing.expectEqual(@as(usize, 0x3C), register.interrupt_line);
+    try std.testing.expectEqual(@as(usize, 0x3D), register.interrupt_pin);
+    try std.testing.expectEqual(@as(usize, 0x3E), register.min_grant);
+    try std.testing.expectEqual(@as(usize, 0x3F), register.max_latency);
+}
+
 test "layout: ExpansionRom maps enable and base address bits" {
     // Pins expansion-ROM bit semantics by decoding enable, reserved, and shifted-base fields.
     try std.testing.expectEqual(@as(comptime_int, 32), @bitSizeOf(ExpansionRom));
@@ -71,7 +90,7 @@ test "unit: View reads every type-0 endpoint field from seeded config bytes" {
         0x5000_0010,
         0x6000_0014,
     };
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedType0Header(&bytes, .{
         .bars = bars,
         .cardbus_cis = 0xCAFE_BABE,
@@ -106,7 +125,7 @@ test "unit: View reads every type-0 endpoint field from seeded config bytes" {
 
 test "unit: View writes exact type-0 endpoint bytes" {
     // Writes through the public view, then checks the exact endpoint bytes and little-endian order.
-    var bytes: [function_window_size]u8 = @splat(0xA5);
+    var bytes: [pcie_window_size]u8 = @splat(0xA5);
     const sbdf = Sbdf.of(0, 0, 2, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const view = View.init(Function.unchecked(backend.configSpace(), sbdf));
@@ -123,7 +142,7 @@ test "unit: View writes exact type-0 endpoint bytes" {
 
 test "unit: common returns a common-header view over the same function" {
     // Reads a common-header field through the type-0 view to verify it preserves the same function.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     store16(&bytes, offset.vendor_id, 0x1234);
     const sbdf = Sbdf.of(0, 0, 3, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -132,7 +151,7 @@ test "unit: common returns a common-header view over the same function" {
     try std.testing.expectEqual(@as(u16, 0x1234), (try view.common().vendorId()).value);
 }
 
-fn seedType0Header(bytes: *[function_window_size]u8, fields: struct {
+fn seedType0Header(bytes: *[pcie_window_size]u8, fields: struct {
     bars: [bar_count]u32,
     cardbus_cis: u32,
     subsystem_vendor: u16,
@@ -161,12 +180,12 @@ fn seedType0Header(bytes: *[function_window_size]u8, fields: struct {
     bytes[offset.max_latency] = fields.max_latency;
 }
 
-fn store16(bytes: *[function_window_size]u8, byte_offset: usize, value: u16) void {
+fn store16(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u16) void {
     bytes[byte_offset] = @truncate(value);
     bytes[byte_offset + 1] = @truncate(value >> 8);
 }
 
-fn store32(bytes: *[function_window_size]u8, byte_offset: usize, value: u32) void {
+fn store32(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u32) void {
     bytes[byte_offset] = @truncate(value);
     bytes[byte_offset + 1] = @truncate(value >> 8);
     bytes[byte_offset + 2] = @truncate(value >> 16);

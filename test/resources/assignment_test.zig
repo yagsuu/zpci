@@ -18,7 +18,7 @@ const RootWindows = assignment.RootWindows;
 const Source = assignment.Source;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 
 test "unit: sizeBound sums all nodes while empty roots emit no assignments" {
     // Include an unreachable node so the sizing helper remains an upper bound, not a reachability walk.
@@ -362,7 +362,7 @@ fn expectPlacements(cases: []const PlacementCase) !void {
 }
 
 const FunctionFixture = struct {
-    bytes: [function_window_size]u8 = @splat(0),
+    bytes: [pcie_window_size]u8 = @splat(0),
     backend: TestConfigSpace = undefined,
     function: Function = undefined,
 

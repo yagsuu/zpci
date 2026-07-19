@@ -14,7 +14,7 @@ const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
 const pcie = pci.capabilities.pcie;
 const register = pcie.register;
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const test_sbdf = Sbdf.of(0, 0, 0, 0);
 const standard = pci.capabilities.list.standard;
 const status = struct {
@@ -179,7 +179,7 @@ test "unit: enum helpers map named encodings and reject reserved encodings" {
 
 test "unit: validate accepts PCIe capabilities and rejects malformed offsets and revision zero" {
     // Direct validation must cache version from the capability body and reject only offset/revision defects.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedPcieCapability(&bytes, 0x80, 1, 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const function = uncheckedFunction(&backend);
@@ -205,7 +205,7 @@ test "unit: validate accepts PCIe capabilities and rejects malformed offsets and
 
 test "unit: find returns PCIe view, null for absence, and propagates malformed traversal" {
     // The PCIe finder is responsible for preserving list walk errors instead of reporting absence.
-    var found_bytes: [function_window_size]u8 = @splat(0);
+    var found_bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&found_bytes, 0x40);
     seedCapabilityNode(&found_bytes, 0x40, @intFromEnum(Id.msi), 0x80);
     seedPcieCapability(&found_bytes, 0x80, 2, 0);
@@ -216,20 +216,20 @@ test "unit: find returns PCIe view, null for absence, and propagates malformed t
     try std.testing.expectEqual(@as(u8, 0x80), view.base);
     try std.testing.expectEqual(@as(u4, 2), view.version);
 
-    var absent_bytes: [function_window_size]u8 = @splat(0);
+    var absent_bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&absent_bytes, 0x40);
     seedCapabilityNode(&absent_bytes, 0x40, @intFromEnum(Id.msi), 0);
     var absent_backend = TestConfigSpace.initSingle(test_sbdf, &absent_bytes);
     try std.testing.expectEqual(@as(?pcie.View, null), try pcie.View.find(uncheckedFunction(&absent_backend)));
 
-    var cycle_bytes: [function_window_size]u8 = @splat(0);
+    var cycle_bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&cycle_bytes, 0x40);
     seedCapabilityNode(&cycle_bytes, 0x40, @intFromEnum(Id.msi), 0x44);
     seedCapabilityNode(&cycle_bytes, 0x44, @intFromEnum(Id.msi_x), 0x40);
     var cycle_backend = TestConfigSpace.initSingle(test_sbdf, &cycle_bytes);
     try std.testing.expectError(error.MalformedCapability, pcie.View.find(uncheckedFunction(&cycle_backend)));
 
-    var malformed_bytes: [function_window_size]u8 = @splat(0);
+    var malformed_bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&malformed_bytes, 0x40);
     seedCapabilityNode(&malformed_bytes, 0x40, @intFromEnum(Id.msi), 0x42);
     var malformed_backend = TestConfigSpace.initSingle(test_sbdf, &malformed_bytes);
@@ -238,7 +238,7 @@ test "unit: find returns PCIe view, null for absence, and propagates malformed t
 
 test "unit: v1 accessors read exact base-relative whole registers" {
     // Distinct raw values across device/link/slot/root registers expose wrong offsets and hidden RMW writes.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedPcieCapability(&bytes, 0x80, 1, 0);
     store32(&bytes, 0x80 + register.device.capabilities, 0xA39C_5A15);
     store16(&bytes, 0x80 + register.device.control, 0xFFFF);
@@ -264,7 +264,7 @@ test "unit: v1 accessors read exact base-relative whole registers" {
 
 test "unit: v1 accessors write exact base-relative whole registers" {
     // Distinct values across device/link/slot/root registers expose wrong offsets and hidden RMW writes.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedPcieCapability(&bytes, 0x80, 1, 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const view = try pcie.View.validate(uncheckedFunction(&backend), capabilityAt(0x80));
@@ -355,7 +355,7 @@ test "unit: v2 accessors gate UnsupportedRevision before config access" {
 
 test "unit: v2 accessors read and write exact whole registers on revision two or newer" {
     // Revision two enables the extended range while still requiring exact whole-register access.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedPcieCapability(&bytes, 0x80, 2, 0);
     store32(&bytes, 0x80 + register.device.capabilities_2, 0xC5A3_7E1F);
     store16(&bytes, 0x80 + register.device.control_2, 0x0A51);
@@ -410,7 +410,7 @@ test "unit: v2 accessors read and write exact whole registers on revision two or
 
 test "unit: caller-side whole-register round trips preserve reserved bits" {
     // Read-mutate-write through public structs must retain reserved fields visible in the raw register image.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedPcieCapability(&bytes, 0x80, 2, 0);
     store16(&bytes, 0x80 + register.root.control, 0xFFE0);
     store16(&bytes, 0x80 + register.slot.control_2, 0x7E5A);
@@ -539,21 +539,21 @@ fn makeCapabilities(version: u4) u16 {
         (@as(u16, 0x12) << 9);
 }
 
-fn enableCapabilities(bytes: *[function_window_size]u8) void {
+fn enableCapabilities(bytes: *[pcie_window_size]u8) void {
     store16(bytes, offset.status, status.capabilities_list);
 }
 
-fn seedHead(bytes: *[function_window_size]u8, head: u8) void {
+fn seedHead(bytes: *[pcie_window_size]u8, head: u8) void {
     enableCapabilities(bytes);
     bytes[standard.head_offset] = head;
 }
 
-fn seedCapabilityNode(bytes: *[function_window_size]u8, base: u8, id: u8, next: u8) void {
+fn seedCapabilityNode(bytes: *[pcie_window_size]u8, base: u8, id: u8, next: u8) void {
     bytes[base] = id;
     bytes[@as(usize, base) + 1] = next;
 }
 
-fn seedPcieCapability(bytes: *[function_window_size]u8, base: u8, version: u4, next: u8) void {
+fn seedPcieCapability(bytes: *[pcie_window_size]u8, base: u8, version: u4, next: u8) void {
     seedCapabilityNode(bytes, base, @intFromEnum(Id.pci_express), next);
     store16(bytes, @as(usize, base) + register.capabilities, makeCapabilities(version));
 }

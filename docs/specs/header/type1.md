@@ -31,6 +31,7 @@ Owned:
 - `Type1Header` `extern struct` covering the 48 bytes (`0x10..=0x3F`) following the common header for header type 1.
 - Compile-time layout assertions for `Type1Header`.
 - `bridge_bar_count` constant.
+- `register` absolute config-space offsets for responder-side byte materialization.
 - `header.type1.View` borrowed typed view over `config.Function`.
 - Typed reads for every type-1 field listed below.
 - Typed writes that the bridge enumerator and resource programmer must issue exactly once per field, without hidden read-modify-write.
@@ -135,6 +136,12 @@ Absolute config-space offsets for the same fields:
 | `0x3C` | `interrupt_line` | 8 bits |
 | `0x3D` | `interrupt_pin` | 8 bits |
 | `0x3E` | `bridge_control` | 16 bits |
+
+## Public wire constants `[std]`
+
+`header.type1.register` exposes every absolute offset in the table above.
+`bar_base` is `0x10`, `bar_stride` is `4`, and `bar(index)` returns the
+absolute offset for `index < bridge_bar_count`.
 
 ## Bridge Control register `[std]`
 

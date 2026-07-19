@@ -19,7 +19,7 @@ const View = pci.interrupts.msix.View;
 
 const msix = pci.interrupts.msix;
 const standard = pci.capabilities.list.standard;
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const test_sbdf = Sbdf.of(0, 0, 0, 0);
 const cap_base: u8 = 0x40;
 const offset = struct {
@@ -60,7 +60,7 @@ test "layout: constants and packed words match the MSI-X wire layout" {
 
 test "unit: validate decodes locations and snapshot span helpers" {
     // Validate once, then assert size, table span, PBA ceil span, and decoded offset/BIR snapshots.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{
         .table_size_minus_one = 32,
         .table_bir = 2,
@@ -80,7 +80,7 @@ test "unit: validate decodes locations and snapshot span helpers" {
 
 test "unit: validate decodes independent Table and PBA BIR values" {
     // Seed different legal BIRs to prove the two locator registers are not collapsed together.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{
         .table_size_minus_one = 0,
         .table_bir = 4,
@@ -100,7 +100,7 @@ test "unit: validate decodes independent Table and PBA BIR values" {
 
 test "unit: maximum table size produces maximum table and PBA spans" {
     // Exercise the u11 maximum encoding so off-by-one sizing defects change both byte spans.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{ .table_size_minus_one = 0x7FF });
     var backend = ConfigBackend.init(&bytes);
     const view = try validateView(&backend);
@@ -113,12 +113,12 @@ test "unit: maximum table size produces maximum table and PBA spans" {
 test "malformed: validate rejects reserved Table and PBA BIR encodings" {
     // Try both reserved low-bit encodings on each locator register and require MalformedField.
     inline for (.{ @as(u3, 6), @as(u3, 7) }) |reserved_bir| {
-        var table_bytes: [function_window_size]u8 = @splat(0);
+        var table_bytes: [pcie_window_size]u8 = @splat(0);
         seedMsixCapability(&table_bytes, .{ .table_bir = reserved_bir, .pba_bir = 0 });
         var table_backend = ConfigBackend.init(&table_bytes);
         try std.testing.expectError(error.MalformedField, validateView(&table_backend));
 
-        var pba_bytes: [function_window_size]u8 = @splat(0);
+        var pba_bytes: [pcie_window_size]u8 = @splat(0);
         seedMsixCapability(&pba_bytes, .{ .table_bir = 0, .pba_bir = reserved_bir });
         var pba_backend = ConfigBackend.init(&pba_bytes);
         try std.testing.expectError(error.MalformedField, validateView(&pba_backend));
@@ -127,7 +127,7 @@ test "malformed: validate rejects reserved Table and PBA BIR encodings" {
 
 test "unit: find reports present, absent, and malformed traversal results" {
     // Walk real capability-list bytes to distinguish a found MSI-X capability from absence and cycles.
-    var present_bytes: [function_window_size]u8 = @splat(0);
+    var present_bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&present_bytes, 0x40);
     seedCapability(&present_bytes, 0x40, 0x09, 0x80);
     seedCapability(&present_bytes, 0x80, msix.cap_id, 0);
@@ -137,21 +137,21 @@ test "unit: find reports present, absent, and malformed traversal results" {
     try std.testing.expectEqual(@as(u8, 0x80), present.base);
     try std.testing.expectEqual(@as(u16, 4), present.tableSize());
 
-    var no_list_bytes: [function_window_size]u8 = @splat(0);
+    var no_list_bytes: [pcie_window_size]u8 = @splat(0);
     no_list_bytes[standard.head_offset] = cap_base;
     seedCapability(&no_list_bytes, cap_base, msix.cap_id, 0);
     seedMsixPayload(&no_list_bytes, cap_base, .{});
     var no_list_backend = ConfigBackend.init(&no_list_bytes);
     try std.testing.expectEqual(@as(?View, null), try View.find(functionFor(&no_list_backend)));
 
-    var absent_bytes: [function_window_size]u8 = @splat(0);
+    var absent_bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&absent_bytes, 0x40);
     seedCapability(&absent_bytes, 0x40, @intFromEnum(pci.capabilities.list.Id.msi), 0x44);
     seedCapability(&absent_bytes, 0x44, @intFromEnum(pci.capabilities.list.Id.pci_express), 0);
     var absent_backend = ConfigBackend.init(&absent_bytes);
     try std.testing.expectEqual(@as(?View, null), try View.find(functionFor(&absent_backend)));
 
-    var cycle_bytes: [function_window_size]u8 = @splat(0);
+    var cycle_bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&cycle_bytes, 0x40);
     seedCapability(&cycle_bytes, 0x40, 0x09, 0x44);
     seedCapability(&cycle_bytes, 0x44, @intFromEnum(pci.capabilities.list.Id.msi), 0x40);
@@ -161,7 +161,7 @@ test "unit: find reports present, absent, and malformed traversal results" {
 
 test "unit: live config reads observe current Message Control without refreshing snapshots" {
     // Mutate config bytes after validate to prove status bits are live while table metadata is cached.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{
         .table_size_minus_one = 7,
         .table_bir = 1,
@@ -195,7 +195,7 @@ test "unit: live config reads observe current Message Control without refreshing
 
 test "unit: table and PBA reads reconstruct values and reject invalid bounds before I/O" {
     // Read real table/PBA bytes, then use too-small windows and out-of-range vectors to prove guards fire first.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{ .table_size_minus_one = 63 });
     var config_backend = ConfigBackend.init(&bytes);
     const view = try validateView(&config_backend);
@@ -238,7 +238,7 @@ test "unit: table and PBA reads reconstruct values and reject invalid bounds bef
 
 test "unit: config writes preserve reserved bits and map write/readback failures" {
     // Exercise Message Control RMW commits, preserved bits, failure mapping, and restore.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{
         .table_size_minus_one = 0x123,
         .reserved = 0b101,
@@ -290,7 +290,7 @@ test "unit: config writes preserve reserved bits and map write/readback failures
 
 test "unit: programEntry self-masks, preserves reserved bits, and writes fields in order" {
     // Program vector 1 and assert the observable write/readback sequence around the self-mask window.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{ .table_size_minus_one = 3, .msix_enable = true });
     var config_backend = ConfigBackend.init(&bytes);
     const view = try validateView(&config_backend);
@@ -324,7 +324,7 @@ test "unit: programEntry self-masks, preserves reserved bits, and writes fields 
 
 test "failure: programEntry save read failures issue no writes" {
     // Fail the first save read and assert the programming error is returned without touching table bytes.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{ .table_size_minus_one = 1 });
     var config_backend = ConfigBackend.init(&bytes);
     const view = try validateView(&config_backend);
@@ -345,7 +345,7 @@ test "failure: programEntry save read failures issue no writes" {
 
 test "failure: programEntry rolls back a readback mismatch to the saved entry" {
     // Corrupt the address-low readback and require reverse-order restores to recover the saved dwords.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{ .table_size_minus_one = 1 });
     var config_backend = ConfigBackend.init(&bytes);
     const view = try validateView(&config_backend);
@@ -373,7 +373,7 @@ test "failure: programEntry rolls back a readback mismatch to the saved entry" {
 
 test "unit: programEntries handles empty input, upfront bounds, and failure boundaries" {
     // Drive a three-entry batch and fail entry 1 so entry 0 commits, entry 1 rolls back, and entry 2 is untouched.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{ .table_size_minus_one = 2 });
     var config_backend = ConfigBackend.init(&bytes);
     const view = try validateView(&config_backend);
@@ -433,7 +433,7 @@ test "unit: programEntries handles empty input, upfront bounds, and failure boun
 
 test "unit: setVectorMask preserves reserved bits and rolls back readback mismatch" {
     // Toggle only Vector Control.masked, then force a mismatch and require restored pre-state bytes.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{ .table_size_minus_one = 1 });
     var config_backend = ConfigBackend.init(&bytes);
     const view = try validateView(&config_backend);
@@ -473,7 +473,7 @@ test "unit: setVectorMask preserves reserved bits and rolls back readback mismat
 
 test "integration: cross-BIR callers can use distinct BAR memories without cross-touching" {
     // Use separate table and PBA fakes to prove each operation reaches only the accessor the caller supplied.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedMsixCapability(&bytes, .{
         .table_size_minus_one = 0,
         .table_bir = 4,
@@ -521,7 +521,7 @@ const ConfigBackend = struct {
     corrupt_readback16: ?u16 = null,
 
     fn init(bytes: []u8) ConfigBackend {
-        std.debug.assert(bytes.len == function_window_size);
+        std.debug.assert(bytes.len == pcie_window_size);
         return .{ .bytes = bytes };
     }
 

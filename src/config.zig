@@ -14,3 +14,6 @@ pub const Ecam = ecam.Ecam;
 pub const Segment = ecam.Segment;
 
 pub const Pio = pio.Pio;
+
+pub const pci_window_size = space.pci_window_size;
+pub const pcie_window_size = space.pcie_window_size;

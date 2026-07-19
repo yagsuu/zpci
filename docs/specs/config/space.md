@@ -25,7 +25,8 @@ Related specs:
 
 Owned:
 
-- `function_window_size` constant for the PCIe 4 KiB function configuration window.
+- `pcie_window_size` constant for the PCIe 4 KiB function configuration window.
+- `pci_window_size` constant for the 256-byte conventional PCI configuration space.
 - Fixed common config offsets needed before header specs are available.
 - `HeaderKind` dispatch enum for type-0 endpoint and type-1 bridge headers.
 - `Function` borrowed view (`ConfigSpace` + `core.Sbdf`).
@@ -65,7 +66,8 @@ No `extern struct` is introduced here. Reads go through `ConfigSpace`; multi-byt
 ## Public constants and types
 
 ```zig
-pub const function_window_size: usize = 0x1000;
+pub const pci_window_size: usize = 0x100;
+pub const pcie_window_size: usize = 0x1000;
 
 pub const HeaderKind = enum {
     type0,

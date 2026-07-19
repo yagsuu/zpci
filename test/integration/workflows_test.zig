@@ -27,7 +27,7 @@ const TestBarMemory = pci.testing.memory.TestBarMemory;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
 const VirtAddr = stdx.addr.VirtAddr;
 
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 
 const offset = struct {
     const vendor_id: usize = 0x00;
@@ -70,7 +70,7 @@ test "integration: public facade exposes workflow namespaces" {
 
 test "integration: capability traversal walks seeded config bytes" {
     // Walk standard and extended capability chains from one byte-backed function.
-    var bytes: [function_window_size]u8 = undefined;
+    var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.pcie_capability });
     seedCapability(&bytes, .{
         .base = offset.pcie_capability,
@@ -112,7 +112,7 @@ test "integration: capability traversal walks seeded config bytes" {
 
 test "integration: enumerate assign program memory BAR" {
     // Enumerate a function, lower one BAR requirement, then assert commit writes the assigned base.
-    var endpoint: [function_window_size]u8 = undefined;
+    var endpoint: [pcie_window_size]u8 = undefined;
     seedFunction(&endpoint, .{ .command = 0x0003 });
     store32(&endpoint, offset.bar0, 0x0000_0000);
 
@@ -171,8 +171,8 @@ test "integration: enumerate assign program memory BAR" {
 
 test "integration: bus commit enables bridge subtree enumeration" {
     // Program bridge bus numbers and re-enumerate to prove the child bus becomes reachable.
-    var bridge: [function_window_size]u8 = undefined;
-    var endpoint: [function_window_size]u8 = undefined;
+    var bridge: [pcie_window_size]u8 = undefined;
+    var endpoint: [pcie_window_size]u8 = undefined;
     seedFunction(&bridge, .{ .header = 0x01 });
     seedFunction(&endpoint, .{ .header = 0x00 });
 
@@ -228,7 +228,7 @@ test "integration: bus commit enables bridge subtree enumeration" {
 
 test "integration: MSI routing programs discovered capability" {
     // Discover an MSI capability and verify caller routing is reflected in config-space state.
-    var bytes: [function_window_size]u8 = undefined;
+    var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.msi_capability });
     seedCapability(&bytes, .{ .base = offset.msi_capability, .id = pci.interrupts.msi.cap_id, .next = 0 });
     store16(&bytes, offset.msi_capability + pci.interrupts.msi.register.message_control, msiControlRaw(.{
@@ -254,7 +254,7 @@ test "integration: MSI routing programs discovered capability" {
 
 test "integration: MSI-X routing programs caller BAR memory" {
     // Discover MSI-X metadata, program caller-owned table memory, and read pending state from PBA memory.
-    var bytes: [function_window_size]u8 = undefined;
+    var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.msix_capability });
     seedCapability(&bytes, .{ .base = offset.msix_capability, .id = pci.interrupts.msix.cap_id, .next = 0 });
     seedMsixPayload(&bytes, offset.msix_capability, .{
@@ -295,7 +295,7 @@ test "integration: MSI-X routing programs caller BAR memory" {
     try std.testing.expect(try view.enabled());
 }
 
-fn seedFunction(bytes: *[function_window_size]u8, fields: struct {
+fn seedFunction(bytes: *[pcie_window_size]u8, fields: struct {
     vendor: u16 = 0x1234,
     device: u16 = 0x5678,
     command: u16 = 0,

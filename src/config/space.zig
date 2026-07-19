@@ -5,7 +5,11 @@ const core = @import("../core.zig");
 
 const ConfigSpace = accessor.ConfigSpace;
 
-pub const function_window_size: usize = accessor.function_window_size;
+/// Size of conventional PCI configuration space before PCIe extended space.
+pub const pci_window_size: usize = 0x100;
+
+/// Size of one PCIe function configuration-space window.
+pub const pcie_window_size: usize = accessor.pcie_window_size;
 
 pub const HeaderKind = enum {
     type0,

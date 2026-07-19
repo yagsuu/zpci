@@ -69,7 +69,7 @@ Target gating, supported-target predicate, and inline-asm semantics are owned by
 ```zig
 pub const config_address_port = stdx.arch.x86_64.Port.fromInt(0xCF8);
 pub const config_data_port_base = stdx.arch.x86_64.Port.fromInt(0xCFC);
-pub const pio_config_window_size: usize = 0x100;
+pub const pci_window_size: usize = 0x100;
 pub const supported_segment = core.SegmentId.from(0);
 ```
 

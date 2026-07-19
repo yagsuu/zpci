@@ -28,6 +28,7 @@ Owned:
 - `Type0Header` `extern struct` covering the 48 bytes (`0x10..=0x3F`) following the common header for header type 0.
 - Compile-time layout assertions for `Type0Header`.
 - `bar_count` constant.
+- `register` absolute config-space offsets for responder-side byte materialization.
 - `header.type0.View` borrowed typed view over `config.Function`.
 - Typed reads for every field at type-0 layout positions:
   - 6 BARs as raw `u32` (`0x10`, `0x14`, `0x18`, `0x1C`, `0x20`, `0x24`).
@@ -112,6 +113,12 @@ Absolute config-space offsets for the same fields:
 | `0x3D` | `interrupt_pin` | 8 bits |
 | `0x3E` | `min_grant` | 8 bits |
 | `0x3F` | `max_latency` | 8 bits |
+
+## Public wire constants `[std]`
+
+`header.type0.register` exposes every absolute offset in the table above.
+`bar_base` is `0x10`, `bar_stride` is `4`, and `bar(index)` returns the
+absolute offset for `index < bar_count`.
 
 ## Expansion ROM register `[std]`
 

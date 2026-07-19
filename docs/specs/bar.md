@@ -33,6 +33,7 @@ Owned:
 - BAR sizing probe: save → decode-disable → write all-ones → read back → restore BAR → restore Command.
 - Decode-disable orchestration through `header.common.View` (`command.io_space` / `command.memory_space`).
 - `BarRef` borrowed reference used by resource programming for the eventual base write.
+- `raw` low-dword encoding masks and flags for responder-side byte materialization.
 - Mapping decode/sizing failures to `MalformedBar` and post-probe restore failures to `ProgrammingPartial`.
 
 Deferred:
@@ -66,6 +67,10 @@ BAR low-slot bit decoding:
 | Memory base | bits `31..4` |
 | IO bit `1` | reserved, must be `0` |
 | IO base | bits `31..2` |
+
+`bar.raw` exposes these encodings as `u32` constants: `io_space`,
+`io_reserved`, `memory_type_mask`, `memory_type_32`, `memory_type_64`,
+`prefetchable`, `io_address_mask`, and `memory_address_mask`.
 
 `Kind` reflects these:
 

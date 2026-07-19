@@ -22,6 +22,26 @@ pub const standard = struct {
     };
 };
 
+/// Byte offsets relative to a standard capability's base.
+pub const register = struct {
+    pub const id: u8 = 0x00;
+    pub const next: u8 = 0x01;
+};
+
+/// Wire representation of a standard capability's two-byte header.
+pub const Header = packed struct(u16) {
+    id: u8 = 0,
+    next: u8 = 0,
+
+    comptime {
+        std.debug.assert(@sizeOf(Header) == 2);
+        std.debug.assert(@alignOf(Header) == 2);
+        std.debug.assert(@bitSizeOf(Header) == 16);
+        std.debug.assert(@bitOffsetOf(Header, "id") == 0);
+        std.debug.assert(@bitOffsetOf(Header, "next") == 8);
+    }
+};
+
 pub const Error = ConfigSpace.Error || error{MalformedCapability};
 
 pub const Id = enum(u8) {
@@ -68,8 +88,8 @@ pub const Iterator = struct {
         if (self.visited.isSet(slot)) return error.MalformedCapability;
         _ = self.visited.set(slot) catch unreachable;
 
-        const id = try self.function.read8(p);
-        const raw_next = try self.function.read8(@as(usize, p) + 1);
+        const id = try self.function.read8(@as(usize, p) + register.id);
+        const raw_next = try self.function.read8(@as(usize, p) + register.next);
         if (raw_next & 0b11 != 0) return error.MalformedCapability;
 
         self.head = if (raw_next == 0) null else raw_next;

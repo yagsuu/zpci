@@ -24,6 +24,7 @@ Related specs:
 Owned:
 
 - `Capability` value identifying a list node by capability id and offset.
+- Packed `Header` wire representation for a standard capability's ID and next-pointer bytes.
 - `capabilities.list.Iterator` over one `config.Function`'s standard capability list.
 - The `common.Status.capabilities_list` precondition.
 - Pointer-range and alignment validation for the next pointer.
@@ -48,17 +49,36 @@ This spec assumes a little-endian host, per `docs/specs/architecture.md` §Host 
 ## Public constants
 
 ```zig
-pub const head_offset: u8 = 0x34;
+pub const standard = struct {
+    pub const head_offset: u8 = 0x34;
 
-pub const cap_window_start: u8 = 0x40;
-pub const cap_window_end: u8 = 0xFC;
-pub const cap_window_step: u8 = 4;
+    pub const window = struct {
+        pub const start: u8 = 0x40;
+        pub const end: u8 = 0xFC;
+        pub const step: u8 = 4;
+        pub const slot_count: usize = 48;
+    };
+};
 
-pub const cap_window_slot_count: usize =
-    @intCast(((cap_window_end - cap_window_start) / cap_window_step) + 1); // 48
+/// Byte offsets relative to a standard capability's base.
+pub const register = struct {
+    pub const id: u8 = 0x00;
+    pub const next: u8 = 0x01;
+};
+
+/// Wire representation of a standard capability's two-byte header.
+pub const Header = packed struct(u16) {
+    id: u8,
+    next: u8,
+};
 ```
 
-`cap_window_slot_count` is the number of legal node positions in the conventional capability window. The capability list cannot have more nodes than positions; cycle detection therefore needs exactly `cap_window_slot_count` bits of state.
+`Header` preserves raw pointer bits; `Iterator` owns next-pointer alignment,
+range, and cycle validation.
+
+`standard.window.slot_count` is the number of legal node positions in the
+conventional capability window. The capability list cannot have more nodes
+than positions; cycle detection therefore needs exactly that many bits of state.
 
 ## Capability tag
 

@@ -15,7 +15,7 @@ const Sbdf = pci.core.Sbdf;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
 const eligiblePools = pci.resources.model.eligiblePools;
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 
 test "unit: eligiblePools implements the resource-kind truth table" {
     // Drive every requirement kind against every pool so one flipped eligibility bit is visible.
@@ -118,7 +118,7 @@ test "unit: RootWindows.get selects the aperture for each resource kind" {
 
 test "unit: Requirement.fromBar drops absent and zero-sized BARs" {
     // Feed the null-producing BAR shapes so unimplemented or pathological probe results do not allocate resources.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 1, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);
@@ -133,7 +133,7 @@ test "unit: Requirement.fromBar drops absent and zero-sized BARs" {
 
 test "unit: Requirement.fromBar maps IO and memory BAR variants" {
     // Table-drive non-null BAR kinds and assert kind, natural alignment, and BAR source identity.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 2, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);
@@ -177,7 +177,7 @@ test "unit: Requirement.fromBar maps IO and memory BAR variants" {
 
 test "unit: Requirement.fromExpansionRom maps nonzero ROM size to MMIO32" {
     // Convert zero and nonzero ROM probe sizes so only real ROM apertures become requirements.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 3, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);
@@ -197,7 +197,7 @@ test "unit: Requirement.fromExpansionRom maps nonzero ROM size to MMIO32" {
 
 test "unit: Requirement.fromBarSlice preserves BAR order and rejects short output" {
     // Mix skipped and kept entries to prove compaction is stable and capacity is checked up front.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 4, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);
@@ -223,7 +223,7 @@ test "unit: Requirement.fromBarSlice preserves BAR order and rejects short outpu
 
 test "unit: Assignment function returns the owner for every source kind" {
     // Cover all requirement-source variants so grouping code can call the owning Assignment method.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 5, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);

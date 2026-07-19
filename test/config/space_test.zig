@@ -11,7 +11,7 @@ const Function = pci.config.Function;
 const HeaderKind = pci.config.HeaderKind;
 const Sbdf = pci.core.Sbdf;
 
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const offset = struct {
     const vendor_id: usize = 0x00;
     const device_id: usize = 0x02;
@@ -21,6 +21,11 @@ const offset = struct {
     const base_class: usize = 0x0B;
     const header_type: usize = 0x0E;
 };
+
+test "layout: config window constants expose PCI and PCIe sizes" {
+    try std.testing.expectEqual(@as(usize, 0x100), pci.config.pci_window_size);
+    try std.testing.expectEqual(@as(usize, 0x1000), pci.config.pcie_window_size);
+}
 
 /// Byte-backed `ConfigSpace` backend for Function view tests.
 const TestConfig = struct {
@@ -34,7 +39,7 @@ const TestConfig = struct {
     };
 
     fn init(entries: []Entry) TestConfig {
-        for (entries) |entry| std.debug.assert(entry.bytes.len == function_window_size);
+        for (entries) |entry| std.debug.assert(entry.bytes.len == pcie_window_size);
         return .{ .entries = entries };
     }
 
@@ -112,7 +117,7 @@ const TestConfig = struct {
     }
 };
 
-fn seedFunction(bytes: *[function_window_size]u8, fields: struct {
+fn seedFunction(bytes: *[pcie_window_size]u8, fields: struct {
     vendor: u16 = 0x1234,
     device: u16 = 0x5678,
     revision: u8 = 0x9A,
@@ -131,28 +136,28 @@ fn seedFunction(bytes: *[function_window_size]u8, fields: struct {
     bytes[offset.header_type] = fields.header;
 }
 
-fn store16(bytes: *[function_window_size]u8, byte_offset: usize, value: u16) void {
+fn store16(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u16) void {
     const encoded = stdx.layout.Le(u16).fromNative(value);
     stdx.bytes.store(stdx.layout.Le(u16), bytes, byte_offset, encoded) catch |err| switch (err) {
         error.EndOfStream => unreachable,
     };
 }
 
-fn load16(bytes: *const [function_window_size]u8, byte_offset: usize) u16 {
+fn load16(bytes: *const [pcie_window_size]u8, byte_offset: usize) u16 {
     const wrapped = stdx.bytes.load(stdx.layout.Le(u16), bytes, byte_offset) catch |err| switch (err) {
         error.EndOfStream => unreachable,
     };
     return wrapped.native();
 }
 
-fn oneEntryConfig(bytes: *[function_window_size]u8, sbdf: Sbdf, entry: *[1]TestConfig.Entry) TestConfig {
+fn oneEntryConfig(bytes: *[pcie_window_size]u8, sbdf: Sbdf, entry: *[1]TestConfig.Entry) TestConfig {
     entry[0] = .{ .sbdf = sbdf, .bytes = bytes };
     return TestConfig.init(entry);
 }
 
 test "unit: validate accepts present type0 and reads identifiers" {
     // A present type-0 function must validate and expose common identifier fields as typed values.
-    var bytes: [function_window_size]u8 = undefined;
+    var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .header = 0x00 });
     const sbdf = Sbdf.of(0, 0, 1, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -169,7 +174,7 @@ test "unit: validate accepts present type0 and reads identifiers" {
 
 test "unit: validate accepts type1 while masking multifunction bit" {
     // Header dispatch must ignore the multifunction bit while preserving isMultifunction().
-    var bytes: [function_window_size]u8 = undefined;
+    var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .header = 0x81 });
     const sbdf = Sbdf.of(0, 0, 2, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -182,7 +187,7 @@ test "unit: validate accepts type1 while masking multifunction bit" {
 
 test "malformed: validate reports AbsentFunction for vendor id FFFF" {
     // Vendor ID 0xFFFF must stop validation at AbsentFunction before reading header type.
-    var bytes: [function_window_size]u8 = undefined;
+    var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .vendor = 0xFFFF, .header = 0x00 });
     const sbdf = Sbdf.of(0, 0, 3, 0);
     var entries: [1]TestConfig.Entry = undefined;
@@ -194,7 +199,7 @@ test "malformed: validate reports AbsentFunction for vendor id FFFF" {
 
 test "malformed: validate reports BadHeaderType after masking multifunction bit" {
     // Unsupported masked header layouts must map to BadHeaderType after presence succeeds.
-    var bytes: [function_window_size]u8 = undefined;
+    var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .header = 0x82 });
     const sbdf = Sbdf.of(0, 0, 4, 0);
     var entries: [1]TestConfig.Entry = undefined;
@@ -206,7 +211,7 @@ test "malformed: validate reports BadHeaderType after masking multifunction bit"
 
 test "unit: unchecked performs no validation I/O and reads live bytes" {
     // The unchecked constructor must not validate and its methods must observe current backend bytes.
-    var bytes: [function_window_size]u8 = undefined;
+    var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .vendor = 0xFFFF, .header = 0x7F });
     const sbdf = Sbdf.of(0, 0, 5, 0);
     var entries: [1]TestConfig.Entry = undefined;
@@ -221,8 +226,8 @@ test "unit: unchecked performs no validation I/O and reads live bytes" {
 
 test "unit: Function eq compares backend identity and SBDF" {
     // Compare handles over the same bytes, different functions, and different backends.
-    var bytes_a: [function_window_size]u8 = undefined;
-    var bytes_b: [function_window_size]u8 = undefined;
+    var bytes_a: [pcie_window_size]u8 = undefined;
+    var bytes_b: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes_a, .{});
     seedFunction(&bytes_b, .{});
     const sbdf_a = Sbdf.of(0, 0, 10, 0);
@@ -239,8 +244,8 @@ test "unit: Function eq compares backend identity and SBDF" {
 
 test "unit: scoped reads and writes use the stored Sbdf" {
     // Function-scoped I/O must route through the stored SBDF rather than the caller restating it.
-    var bytes_a: [function_window_size]u8 = undefined;
-    var bytes_b: [function_window_size]u8 = undefined;
+    var bytes_a: [pcie_window_size]u8 = undefined;
+    var bytes_b: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes_a, .{ .vendor = 0x1111 });
     seedFunction(&bytes_b, .{ .vendor = 0x2222 });
     const sbdf_a = Sbdf.of(0, 0, 6, 0);
@@ -260,7 +265,7 @@ test "unit: scoped reads and writes use the stored Sbdf" {
 
 test "unit: identifier reads observe live bytes without absence translation" {
     // Identifier reads after validation must return live wire values instead of cached presence state.
-    var bytes: [function_window_size]u8 = undefined;
+    var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .vendor = 0x1234 });
     const sbdf = Sbdf.of(0, 0, 8, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -273,7 +278,7 @@ test "unit: identifier reads observe live bytes without absence translation" {
 
 test "malformed: ConfigSpace errors propagate through Function methods" {
     // Function methods must propagate ConfigSpace validation and backend errors without remapping them.
-    var bytes: [function_window_size]u8 = undefined;
+    var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{});
     const sbdf = Sbdf.of(0, 0, 9, 0);
     var entries: [1]TestConfig.Entry = undefined;
@@ -281,7 +286,7 @@ test "malformed: ConfigSpace errors propagate through Function methods" {
     const function = Function.unchecked(backend.configSpace(), sbdf);
 
     try std.testing.expectError(error.UnalignedAccess, function.read16(1));
-    try std.testing.expectError(error.OutOfBounds, function.write32(function_window_size, 0));
+    try std.testing.expectError(error.OutOfBounds, function.write32(pcie_window_size, 0));
 
     backend.fail_read8 = true;
     try std.testing.expectError(error.UnsupportedAccessWidth, Function.validate(backend.configSpace(), sbdf));

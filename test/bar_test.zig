@@ -28,7 +28,7 @@ const Sbdf = pci.core.Sbdf;
 const View = pci.bar.View;
 
 const bar_count: usize = pci.header.type0.bar_count;
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const offset = struct {
     const command: usize = 0x04;
     const header_type: usize = 0x0E;
@@ -44,6 +44,19 @@ test "layout: pci.bar facade exposes BAR counts and header layouts" {
 
     try std.testing.expectEqual(@as(usize, 6), View.init(function, .type0).count());
     try std.testing.expectEqual(@as(usize, 2), View.init(function, .type1).count());
+}
+
+test "layout: BAR raw constants encode the PCI low dword" {
+    const raw = pci.bar.raw;
+
+    try std.testing.expectEqual(@as(u32, 0x0000_0001), raw.io_space);
+    try std.testing.expectEqual(@as(u32, 0x0000_0002), raw.io_reserved);
+    try std.testing.expectEqual(@as(u32, 0x0000_0006), raw.memory_type_mask);
+    try std.testing.expectEqual(@as(u32, 0x0000_0000), raw.memory_type_32);
+    try std.testing.expectEqual(@as(u32, 0x0000_0004), raw.memory_type_64);
+    try std.testing.expectEqual(@as(u32, 0x0000_0008), raw.prefetchable);
+    try std.testing.expectEqual(@as(u32, 0xFFFF_FFFC), raw.io_address_mask);
+    try std.testing.expectEqual(@as(u32, 0xFFFF_FFF0), raw.memory_address_mask);
 }
 
 test "unit: View.detect maps config header kind to BAR layout" {
@@ -328,7 +341,7 @@ fn expectCommandWrites(backend: *const ProbeConfig, expected: []const u16) !void
 
 const ProbeConfig = struct {
     sbdf: Sbdf = Sbdf.of(0, 0, 1, 0),
-    bytes: [function_window_size]u8 = @splat(0),
+    bytes: [pcie_window_size]u8 = @splat(0),
     probe_values: [bar_count]u32 = @splat(0),
     probe_active: [bar_count]bool = @splat(false),
     read_count: usize = 0,
@@ -449,18 +462,18 @@ fn barIndex(byte_offset: usize) ?usize {
     return index;
 }
 
-fn load16(bytes: *const [function_window_size]u8, byte_offset: usize) u16 {
+fn load16(bytes: *const [pcie_window_size]u8, byte_offset: usize) u16 {
     const low = @as(u16, bytes[byte_offset]);
     const high = @as(u16, bytes[byte_offset + 1]) << 8;
     return high | low;
 }
 
-fn store16(bytes: *[function_window_size]u8, byte_offset: usize, value: u16) void {
+fn store16(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u16) void {
     bytes[byte_offset] = @truncate(value);
     bytes[byte_offset + 1] = @truncate(value >> 8);
 }
 
-fn load32(bytes: *const [function_window_size]u8, byte_offset: usize) u32 {
+fn load32(bytes: *const [pcie_window_size]u8, byte_offset: usize) u32 {
     const byte0 = @as(u32, bytes[byte_offset]);
     const byte1 = @as(u32, bytes[byte_offset + 1]) << 8;
     const byte2 = @as(u32, bytes[byte_offset + 2]) << 16;
@@ -468,7 +481,7 @@ fn load32(bytes: *const [function_window_size]u8, byte_offset: usize) u32 {
     return byte3 | byte2 | byte1 | byte0;
 }
 
-fn store32(bytes: *[function_window_size]u8, byte_offset: usize, value: u32) void {
+fn store32(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u32) void {
     bytes[byte_offset] = @truncate(value);
     bytes[byte_offset + 1] = @truncate(value >> 8);
     bytes[byte_offset + 2] = @truncate(value >> 16);

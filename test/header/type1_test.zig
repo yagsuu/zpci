@@ -14,7 +14,7 @@ const Type1Header = pci.header.Type1Header;
 const View = pci.header.type1.View;
 
 const bridge_bar_count = pci.header.type1.bridge_bar_count;
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const offset = struct {
     const bars: usize = 0x10;
     const primary_bus: usize = 0x18;
@@ -66,6 +66,35 @@ test "layout: Type1Header covers bridge-specific PCI config bytes" {
     try std.testing.expectEqual(@as(usize, 0x2E), @offsetOf(Type1Header, "bridge_control"));
 }
 
+test "layout: type-1 register constants expose absolute PCI offsets" {
+    const register = pci.header.type1.register;
+
+    try std.testing.expectEqual(@as(usize, 0x10), register.bar_base);
+    try std.testing.expectEqual(@as(usize, 4), register.bar_stride);
+    try std.testing.expectEqual(@as(usize, 0x10), register.bar(0));
+    try std.testing.expectEqual(@as(usize, 0x14), register.bar(1));
+    try std.testing.expectEqual(@as(usize, 0x18), register.primary_bus);
+    try std.testing.expectEqual(@as(usize, 0x19), register.secondary_bus);
+    try std.testing.expectEqual(@as(usize, 0x1A), register.subordinate_bus);
+    try std.testing.expectEqual(@as(usize, 0x1B), register.secondary_latency);
+    try std.testing.expectEqual(@as(usize, 0x1C), register.io_base);
+    try std.testing.expectEqual(@as(usize, 0x1D), register.io_limit);
+    try std.testing.expectEqual(@as(usize, 0x1E), register.secondary_status);
+    try std.testing.expectEqual(@as(usize, 0x20), register.memory_base);
+    try std.testing.expectEqual(@as(usize, 0x22), register.memory_limit);
+    try std.testing.expectEqual(@as(usize, 0x24), register.prefetchable_memory_base);
+    try std.testing.expectEqual(@as(usize, 0x26), register.prefetchable_memory_limit);
+    try std.testing.expectEqual(@as(usize, 0x28), register.prefetchable_base_upper);
+    try std.testing.expectEqual(@as(usize, 0x2C), register.prefetchable_limit_upper);
+    try std.testing.expectEqual(@as(usize, 0x30), register.io_base_upper);
+    try std.testing.expectEqual(@as(usize, 0x32), register.io_limit_upper);
+    try std.testing.expectEqual(@as(usize, 0x34), register.capabilities_pointer);
+    try std.testing.expectEqual(@as(usize, 0x38), register.expansion_rom_base);
+    try std.testing.expectEqual(@as(usize, 0x3C), register.interrupt_line);
+    try std.testing.expectEqual(@as(usize, 0x3D), register.interrupt_pin);
+    try std.testing.expectEqual(@as(usize, 0x3E), register.bridge_control);
+}
+
 test "layout: BridgeControl maps parity response and timer bits" {
     // Pins bridge-control bit semantics by decoding a mixed raw word and round-tripping it.
     try std.testing.expectEqual(@as(comptime_int, 16), @bitSizeOf(BridgeControl));
@@ -104,7 +133,7 @@ test "layout: BridgeControl maps parity response and timer bits" {
 test "unit: View reads every type-1 bridge field from seeded config bytes" {
     // Seeds config bytes at every bridge offset, then verifies the public view decodes them.
     const bars = [_]u32{ 0x1000_0004, 0x2000_0008 };
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedType1Header(&bytes, .{
         .bars = bars,
         .primary_bus = 0x01,
@@ -160,7 +189,7 @@ test "unit: View reads every type-1 bridge field from seeded config bytes" {
 
 test "unit: View writes exact type-1 bridge bytes" {
     // Writes through the public view, then checks the exact bridge bytes and little-endian order.
-    var bytes: [function_window_size]u8 = @splat(0xA5);
+    var bytes: [pcie_window_size]u8 = @splat(0xA5);
     const sbdf = Sbdf.of(0, 0, 2, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const view = View.init(Function.unchecked(backend.configSpace(), sbdf));
@@ -237,7 +266,7 @@ test "unit: View writes exact type-1 bridge bytes" {
     try std.testing.expectEqual(@as(u8, 0xAD), bytes[offset.bridge_control + 1]);
 }
 
-fn seedType1Header(bytes: *[function_window_size]u8, fields: struct {
+fn seedType1Header(bytes: *[pcie_window_size]u8, fields: struct {
     bars: [bridge_bar_count]u32,
     primary_bus: u8,
     secondary_bus: u8,
@@ -288,12 +317,12 @@ fn seedType1Header(bytes: *[function_window_size]u8, fields: struct {
     store16(bytes, offset.bridge_control, fields.bridge_control);
 }
 
-fn store16(bytes: *[function_window_size]u8, byte_offset: usize, value: u16) void {
+fn store16(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u16) void {
     bytes[byte_offset] = @truncate(value);
     bytes[byte_offset + 1] = @truncate(value >> 8);
 }
 
-fn store32(bytes: *[function_window_size]u8, byte_offset: usize, value: u32) void {
+fn store32(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u32) void {
     bytes[byte_offset] = @truncate(value);
     bytes[byte_offset + 1] = @truncate(value >> 8);
     bytes[byte_offset + 2] = @truncate(value >> 16);

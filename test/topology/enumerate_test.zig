@@ -16,7 +16,7 @@ const HeaderKind = pci.config.HeaderKind;
 const SegmentId = pci.core.SegmentId;
 const VirtAddr = stdx.addr.VirtAddr;
 
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const cap_base: u8 = 0x40;
 const offset = struct {
     const vendor_id: usize = 0x00;
@@ -106,7 +106,7 @@ const TestConfigSpace = struct {
     fn write16(context: *anyopaque, address: Sbdf, byte_offset: usize, value: u16) ConfigSpace.Error!void {
         const self: *TestConfigSpace = @ptrCast(@alignCast(context));
         const bytes = self.functionBytes(address) orelse return;
-        store16(bytes[0..function_window_size], byte_offset, value);
+        store16(bytes[0..pcie_window_size], byte_offset, value);
     }
 
     fn write32(context: *anyopaque, address: Sbdf, byte_offset: usize, value: u32) ConfigSpace.Error!void {
@@ -419,8 +419,8 @@ fn functionBytes(fields: struct {
     secondary: u8 = 0,
     subordinate: u8 = 0,
     ari: bool = false,
-}) [function_window_size]u8 {
-    var bytes: [function_window_size]u8 = @splat(0);
+}) [pcie_window_size]u8 {
+    var bytes: [pcie_window_size]u8 = @splat(0);
     store16(&bytes, offset.vendor_id, fields.vendor);
     store16(&bytes, offset.device_id, fields.device);
     bytes[offset.header_type] = fields.header;

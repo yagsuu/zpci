@@ -9,7 +9,7 @@ const core = @import("../core.zig");
 const OffsetRange = stdx.core.Range(usize);
 
 /// One PCIe function's configuration window is 4 KiB.
-pub const function_window_size: usize = 0x1000;
+pub const pcie_window_size: usize = 0x1000;
 
 /// Borrowed handle over backend-owned PCI configuration space. The only
 /// public function-pointer seam for config-space I/O in zpci; views and
@@ -95,10 +95,9 @@ pub const ConfigSpace = struct {
 fn validateAccess(offset: usize, width: usize) ConfigSpace.Error!void {
     std.debug.assert(width == 1 or width == 2 or width == 4);
 
-    const window = OffsetRange.fromBounds(0, function_window_size) catch |err| switch (err) {
-        // 0 <= function_window_size, so InvalidRange cannot fire; Overflow /
-        // OutOfBounds are not producible by fromBounds itself.
-        error.InvalidRange, error.Overflow, error.OutOfBounds => unreachable,
+    const window = OffsetRange.fromBounds(0, pcie_window_size) catch |err| switch (err) {
+        // 0 <= pcie_window_size, so InvalidRange cannot fire.
+        error.InvalidRange => unreachable,
     };
     const access = OffsetRange.fromStartLen(offset, width) catch return error.OutOfBounds;
 

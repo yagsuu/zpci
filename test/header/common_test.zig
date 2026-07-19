@@ -14,7 +14,7 @@ const Status = pci.header.Status;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
 const View = pci.header.common.View;
 
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const offset = struct {
     const vendor_id: usize = 0x00;
     const device_id: usize = 0x02;
@@ -48,6 +48,39 @@ test "layout: CommonHeader covers the first 16 common PCI config bytes" {
     try std.testing.expectEqual(@as(usize, 0x0D), @offsetOf(CommonHeader, "latency_timer"));
     try std.testing.expectEqual(@as(usize, 0x0E), @offsetOf(CommonHeader, "header_type"));
     try std.testing.expectEqual(@as(usize, 0x0F), @offsetOf(CommonHeader, "bist"));
+}
+
+test "layout: common register constants expose absolute PCI offsets" {
+    const register = pci.header.common.register;
+
+    try std.testing.expectEqual(@as(usize, 0x00), register.vendor_id);
+    try std.testing.expectEqual(@as(usize, 0x02), register.device_id);
+    try std.testing.expectEqual(@as(usize, 0x04), register.command);
+    try std.testing.expectEqual(@as(usize, 0x06), register.status);
+    try std.testing.expectEqual(@as(usize, 0x08), register.revision_id);
+    try std.testing.expectEqual(@as(usize, 0x09), register.prog_if);
+    try std.testing.expectEqual(@as(usize, 0x0A), register.subclass);
+    try std.testing.expectEqual(@as(usize, 0x0B), register.base_class);
+    try std.testing.expectEqual(@as(usize, 0x0C), register.cache_line_size);
+    try std.testing.expectEqual(@as(usize, 0x0D), register.latency_timer);
+    try std.testing.expectEqual(@as(usize, 0x0E), register.header_type);
+    try std.testing.expectEqual(@as(usize, 0x0F), register.bist);
+    try std.testing.expectEqual(@as(usize, 0x34), register.capabilities_pointer);
+    try std.testing.expectEqual(@as(usize, 0x3C), register.interrupt_line);
+    try std.testing.expectEqual(@as(usize, 0x3D), register.interrupt_pin);
+}
+
+test "layout: HeaderType maps layout and multifunction bits" {
+    const HeaderType = pci.header.common.HeaderType;
+
+    try std.testing.expectEqual(@as(comptime_int, 8), @bitSizeOf(HeaderType));
+    try std.testing.expectEqual(@as(comptime_int, 0), @bitOffsetOf(HeaderType, "layout"));
+    try std.testing.expectEqual(@as(comptime_int, 7), @bitOffsetOf(HeaderType, "multifunction"));
+
+    const decoded: HeaderType = @bitCast(@as(u8, 0x81));
+    try std.testing.expectEqual(@as(u7, 0x01), decoded.layout);
+    try std.testing.expect(decoded.multifunction);
+    try std.testing.expectEqual(@as(u8, 0x02), (HeaderType{ .layout = 0x02 }).raw());
 }
 
 test "layout: Command maps the PCI command register bits" {
@@ -131,7 +164,7 @@ test "layout: Bist maps completion, start, and capable bits" {
 
 test "unit: View reads every common-header field from seeded config bytes" {
     // Seeds config bytes at every common-header offset, then verifies the public view decodes them.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedCommonHeader(&bytes, .{
         .vendor = 0x1234,
         .device = 0xABCD,
@@ -171,7 +204,7 @@ test "unit: View reads every common-header field from seeded config bytes" {
 
 test "unit: View writes exact common-header bytes" {
     // Writes through the public view, then checks the exact PCI config bytes and little-endian order.
-    var bytes: [function_window_size]u8 = @splat(0xA5);
+    var bytes: [pcie_window_size]u8 = @splat(0xA5);
     const sbdf = Sbdf.of(0, 0, 2, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const view = View.init(Function.unchecked(backend.configSpace(), sbdf));
@@ -199,7 +232,7 @@ test "unit: View writes exact common-header bytes" {
 
 test "malformed: missing function is rejected by validate and not translated by View" {
     // Probes an absent SBDF to verify validation rejects it while unchecked reads expose absent bytes.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedCommonHeader(&bytes, .{ .vendor = 0x1234, .header = 0x00 });
     const present = Sbdf.of(0, 0, 3, 0);
     const missing = Sbdf.of(0, 0, 4, 0);
@@ -215,7 +248,7 @@ test "malformed: missing function is rejected by validate and not translated by 
 
 test "malformed: View rejects reserved interrupt-pin bytes" {
     // Seeds the first reserved INTx pin byte and verifies typed decode reports a malformed field.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedCommonHeader(&bytes, .{ .interrupt_pin = 5 });
     const sbdf = Sbdf.of(0, 0, 5, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -224,7 +257,7 @@ test "malformed: View rejects reserved interrupt-pin bytes" {
     try std.testing.expectError(error.MalformedField, view.interruptPin());
 }
 
-fn seedCommonHeader(bytes: *[function_window_size]u8, fields: struct {
+fn seedCommonHeader(bytes: *[pcie_window_size]u8, fields: struct {
     vendor: u16 = 0x1234,
     device: u16 = 0x5678,
     command: u16 = 0,
@@ -259,7 +292,7 @@ fn seedCommonHeader(bytes: *[function_window_size]u8, fields: struct {
     bytes[offset.interrupt_pin] = fields.interrupt_pin;
 }
 
-fn store16(bytes: *[function_window_size]u8, byte_offset: usize, value: u16) void {
+fn store16(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u16) void {
     bytes[byte_offset] = @truncate(value);
     bytes[byte_offset + 1] = @truncate(value >> 8);
 }

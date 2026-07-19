@@ -16,7 +16,7 @@ const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
 const list = pci.capabilities.list;
 const standard = list.standard;
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const test_sbdf = Sbdf.of(0, 0, 0, 0);
 const offset = struct {
     const status: usize = 0x06;
@@ -38,9 +38,29 @@ test "layout: standard capability window covers conventional dword slots" {
     try std.testing.expectEqual(standard.window.slot_count, @divExact(span, step) + 1);
 }
 
+test "layout: standard capability register constants are base-relative" {
+    const register = pci.capabilities.list.register;
+
+    try std.testing.expectEqual(@as(u8, 0x00), register.id);
+    try std.testing.expectEqual(@as(u8, 0x01), register.next);
+}
+
+test "layout: standard capability Header maps ID and next bytes" {
+    const Header = pci.capabilities.list.Header;
+
+    try std.testing.expectEqual(@as(comptime_int, 16), @bitSizeOf(Header));
+    try std.testing.expectEqual(@as(comptime_int, 0), @bitOffsetOf(Header, "id"));
+    try std.testing.expectEqual(@as(comptime_int, 8), @bitOffsetOf(Header, "next"));
+
+    const decoded: Header = @bitCast(@as(u16, 0x8010));
+    try std.testing.expectEqual(@as(u8, 0x10), decoded.id);
+    try std.testing.expectEqual(@as(u8, 0x80), decoded.next);
+    try std.testing.expectEqual(@as(u16, 0x4411), @as(u16, @bitCast(Header{ .id = 0x11, .next = 0x44 })));
+}
+
 test "unit: validate returns empty traversal when status capability bit is clear" {
     // Seed a nonzero head and real node; the cleared status bit must make them unreachable.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     bytes[standard.head_offset] = standard.window.start;
     seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
@@ -53,7 +73,7 @@ test "unit: validate returns empty traversal when status capability bit is clear
 
 test "unit: validate treats a masked zero head pointer as an empty list" {
     // Enable capability traversal but set only reserved low head bits; masking must terminate.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     enableCapabilities(&bytes);
     bytes[standard.head_offset] = 0b11;
     seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0);
@@ -67,7 +87,7 @@ test "unit: validate treats a masked zero head pointer as an empty list" {
 
 test "unit: iterator yields one capability and then terminates on zero next" {
     // Seed one PCI Express capability and assert raw id, typed tag, and terminal next handling.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&bytes, standard.window.start);
     seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
@@ -83,7 +103,7 @@ test "unit: iterator yields one capability and then terminates on zero next" {
 
 test "unit: iterator walks multiple capabilities in next-pointer order" {
     // Chain unknown, MSI, and MSI-X capabilities at non-contiguous legal slots.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&bytes, 0x40);
     seedCapability(&bytes, 0x40, 0x09, 0x80);
     seedCapability(&bytes, 0x80, @intFromEnum(Id.msi), 0xFC);
@@ -107,7 +127,7 @@ test "unit: iterator walks multiple capabilities in next-pointer order" {
 
 test "unit: find returns first matching capability and null when absent" {
     // Search through mixed ids using both the free helper and the stateful iterator method.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&bytes, 0x40);
     seedCapability(&bytes, 0x40, 0x09, 0x80);
     seedCapability(&bytes, 0x80, @intFromEnum(Id.msi), 0xC0);
@@ -127,7 +147,7 @@ test "unit: find returns first matching capability and null when absent" {
 
 test "malformed: iterator rejects an initial head outside the capability window" {
     // A below-window head must fail before any capability is reported.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&bytes, standard.window.start - standard.window.step);
     seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
@@ -138,7 +158,7 @@ test "malformed: iterator rejects an initial head outside the capability window"
 
 test "malformed: iterator rejects reserved bits in a next pointer before yielding node" {
     // Reserved low bits in the current node's next byte make that node malformed.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&bytes, standard.window.start);
     seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0x42);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
@@ -151,7 +171,7 @@ test "malformed: iterator rejects reserved bits in a next pointer before yieldin
 
 test "malformed: iterator rejects next pointers outside the capability window" {
     // An aligned next pointer below the legal window is rejected when traversal reaches it.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&bytes, standard.window.start);
     seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0x20);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
@@ -166,7 +186,7 @@ test "malformed: iterator rejects next pointers outside the capability window" {
 
 test "malformed: iterator detects cycles without losing already yielded nodes" {
     // A two-node loop must yield each node once and reject the revisit.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&bytes, 0x40);
     seedCapability(&bytes, 0x40, @intFromEnum(Id.pci_express), 0x44);
     seedCapability(&bytes, 0x44, @intFromEnum(Id.msi), 0x40);
@@ -182,7 +202,7 @@ test "malformed: iterator detects cycles without losing already yielded nodes" {
 
 test "malformed: find reports malformed lists instead of returning absence" {
     // Searching through a cycle for an absent id must surface corruption, not null.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&bytes, 0x40);
     seedCapability(&bytes, 0x40, @intFromEnum(Id.msi), 0x44);
     seedCapability(&bytes, 0x44, @intFromEnum(Id.msi_x), 0x40);
@@ -194,7 +214,7 @@ test "malformed: find reports malformed lists instead of returning absence" {
 
 test "malformed: Cursor.from rejects bases outside aligned capability slots" {
     // Cursor construction validates capability-node placement without performing config I/O.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const function = uncheckedFunction(&backend);
 
@@ -204,7 +224,7 @@ test "malformed: Cursor.from rejects bases outside aligned capability slots" {
 
 test "unit: Cursor reads and writes relative to its capability base" {
     // Seed payload bytes and verify each access width uses base-relative little-endian offsets.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     bytes[0x40] = 0x12;
     store16(&bytes, 0x42, 0xBEEF);
     store32(&bytes, 0x44, 0xCAFE_BABE);
@@ -227,7 +247,7 @@ test "unit: Cursor reads and writes relative to its capability base" {
 
 test "malformed: Cursor maps containment and alignment failures to MalformedCapability" {
     // Requests that escape the conventional 256-byte window or break width alignment never reach storage.
-    var bytes: [function_window_size]u8 = @splat(0xA5);
+    var bytes: [pcie_window_size]u8 = @splat(0xA5);
     const before = bytes;
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const function = uncheckedFunction(&backend);
@@ -256,7 +276,7 @@ test "malformed: Cursor propagates backend errors after its own validation passe
 }
 
 const NoDwordConfig = struct {
-    bytes: [function_window_size]u8 = @splat(0),
+    bytes: [pcie_window_size]u8 = @splat(0),
     sbdf: Sbdf = test_sbdf,
 
     fn configSpace(self: *NoDwordConfig) ConfigSpace {
@@ -316,16 +336,16 @@ fn uncheckedFunction(backend: *TestConfigSpace) Function {
     return Function.unchecked(backend.configSpace(), test_sbdf);
 }
 
-fn enableCapabilities(bytes: *[function_window_size]u8) void {
+fn enableCapabilities(bytes: *[pcie_window_size]u8) void {
     store16(bytes, offset.status, status.capabilities_list);
 }
 
-fn seedHead(bytes: *[function_window_size]u8, head: u8) void {
+fn seedHead(bytes: *[pcie_window_size]u8, head: u8) void {
     enableCapabilities(bytes);
     bytes[standard.head_offset] = head;
 }
 
-fn seedCapability(bytes: *[function_window_size]u8, base: u8, id: u8, next: u8) void {
+fn seedCapability(bytes: *[pcie_window_size]u8, base: u8, id: u8, next: u8) void {
     bytes[base] = id;
     bytes[@as(usize, base) + 1] = next;
 }

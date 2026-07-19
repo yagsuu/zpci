@@ -21,7 +21,7 @@ const TestConfigSpace = testing_config.TestConfigSpace;
 const Tree = tree.Tree;
 const Window = bridge.Window;
 
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const test_sbdf = Sbdf.of(0, 0, 0, 0);
 
 test "unit: bridge semantic records expose expected field behavior" {
@@ -51,7 +51,7 @@ test "unit: BusRange reports unprogrammed and forwarded buses" {
 
 test "topology: busRangeOf reads exact type1 bus-number bytes" {
     // Back a type-1 node with config bytes and decode the three bus registers without validation policy.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     bytes[0x18] = 0x11;
     bytes[0x19] = 0x22;
     bytes[0x1A] = 0x33;
@@ -67,7 +67,7 @@ test "topology: busRangeOf reads exact type1 bus-number bytes" {
 
 test "topology: windowStateOf preserves disabled IO memory and prefetchable encodings" {
     // Use base-greater-than-limit encodings to ensure disabled windows still expose decoded raw bounds.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     bytes[0x1C] = 0x00;
     bytes[0x1D] = 0x00;
     store16(&bytes, 0x20, 0x2000);
@@ -93,7 +93,7 @@ test "topology: windowStateOf preserves disabled IO memory and prefetchable enco
 
 test "topology: windowStateOf decodes enabled 32-bit IO memory and prefetchable windows" {
     // Populate every bridge-window register group and verify byte-range alignment and inclusivity.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     bytes[0x1C] = 0x20;
     bytes[0x1D] = 0x30;
     store16(&bytes, 0x30, 0x0001);
@@ -161,7 +161,7 @@ test "unit: PrefetchableWindow contains checks closed bounds zero size disabled 
 
 test "topology: windowStateOf reconstructs 64-bit prefetchable windows" {
     // Set both low-register 64-bit indicators and verify upper dwords participate in decoded bounds.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     store16(&bytes, 0x24, 0x0011);
     store16(&bytes, 0x26, 0x0021);
     store32(&bytes, 0x28, 0x0000_0004);
@@ -183,7 +183,7 @@ test "topology: windowStateOf reconstructs 64-bit prefetchable windows" {
 
 test "topology: pathTo returns root-first chain through parent links" {
     // Build a borrowed tree view so the helper walks the same parent-link shape used by topology iterators.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const nodes = [_]Node{
         bridgeNode(&backend, null),
@@ -202,7 +202,7 @@ test "topology: pathTo returns root-first chain through parent links" {
 
 test "failure: pathTo reports StorageExhausted without touching scratch" {
     // Make the ancestor chain longer than scratch and use sentinels to prove the upfront guard is non-mutating.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     var nodes = [_]Node{
         bridgeNode(&backend, null),
@@ -234,13 +234,13 @@ fn node(backend: *TestConfigSpace, header_kind: HeaderKind, parent: ?NodeIndex) 
     };
 }
 
-fn store16(bytes: *[function_window_size]u8, offset: usize, value: u16) void {
+fn store16(bytes: *[pcie_window_size]u8, offset: usize, value: u16) void {
     std.debug.assert(offset + 2 <= bytes.len);
     bytes[offset] = @truncate(value);
     bytes[offset + 1] = @truncate(value >> 8);
 }
 
-fn store32(bytes: *[function_window_size]u8, offset: usize, value: u32) void {
+fn store32(bytes: *[pcie_window_size]u8, offset: usize, value: u32) void {
     std.debug.assert(offset + 4 <= bytes.len);
     bytes[offset] = @truncate(value);
     bytes[offset + 1] = @truncate(value >> 8);

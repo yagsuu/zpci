@@ -10,7 +10,7 @@ const core = @import("../core.zig");
 const ConfigSpace = config.ConfigSpace;
 const Sbdf = core.Sbdf;
 
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 
 /// Byte-backed host-test backend for `ConfigSpace`.
 pub const TestConfigSpace = struct {
@@ -27,12 +27,12 @@ pub const TestConfigSpace = struct {
     };
 
     pub fn initSingle(sbdf: Sbdf, bytes: []u8) TestConfigSpace {
-        std.debug.assert(bytes.len == function_window_size);
+        std.debug.assert(bytes.len == pcie_window_size);
         return .{ .backing = .{ .single = .{ .sbdf = sbdf, .bytes = bytes } } };
     }
 
     pub fn init(entries: []Entry) TestConfigSpace {
-        for (entries) |entry| std.debug.assert(entry.bytes.len == function_window_size);
+        for (entries) |entry| std.debug.assert(entry.bytes.len == pcie_window_size);
         return .{ .backing = .{ .multi = entries } };
     }
 

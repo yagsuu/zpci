@@ -13,18 +13,24 @@ const Pin = pin.Pin;
 
 pub const bar_count: usize = 6;
 
-const offset = struct {
-    const bars: usize = 0x10;
-    const cardbus_cis_ptr: usize = 0x28;
-    const subsystem: usize = 0x2C;
-    const subsystem_vendor_id: usize = 0x2C;
-    const subsystem_id: usize = 0x2E;
-    const expansion_rom_base: usize = 0x30;
-    const cap_ptr: usize = 0x34;
-    const interrupt_line: usize = 0x3C;
-    const interrupt_pin: usize = 0x3D;
-    const min_grant: usize = 0x3E;
-    const max_latency: usize = 0x3F;
+pub const register = struct {
+    pub const bar_base: usize = 0x10;
+    pub const bar_stride: usize = 4;
+    pub const cardbus_cis_pointer: usize = 0x28;
+    pub const subsystem: usize = 0x2C;
+    pub const subsystem_vendor_id: usize = 0x2C;
+    pub const subsystem_id: usize = 0x2E;
+    pub const expansion_rom_base: usize = 0x30;
+    pub const capabilities_pointer: usize = 0x34;
+    pub const interrupt_line: usize = 0x3C;
+    pub const interrupt_pin: usize = 0x3D;
+    pub const min_grant: usize = 0x3E;
+    pub const max_latency: usize = 0x3F;
+
+    pub fn bar(index: usize) usize {
+        std.debug.assert(index < bar_count);
+        return bar_base + bar_stride * index;
+    }
 };
 
 pub const Type0Header = extern struct {
@@ -76,32 +82,32 @@ pub const View = struct {
 
     pub fn rawBar(self: View, index: usize) ConfigSpace.Error!u32 {
         std.debug.assert(index < bar_count);
-        return self.function.read32(offset.bars + 4 * index);
+        return self.function.read32(register.bar(index));
     }
 
     pub fn cardbusCisPointer(self: View) ConfigSpace.Error!u32 {
-        return self.function.read32(offset.cardbus_cis_ptr);
+        return self.function.read32(register.cardbus_cis_pointer);
     }
 
     pub fn subsystemVendorId(self: View) ConfigSpace.Error!u16 {
-        return self.function.read16(offset.subsystem_vendor_id);
+        return self.function.read16(register.subsystem_vendor_id);
     }
 
     pub fn subsystemId(self: View) ConfigSpace.Error!u16 {
-        return self.function.read16(offset.subsystem_id);
+        return self.function.read16(register.subsystem_id);
     }
 
     pub fn expansionRomBase(self: View) ConfigSpace.Error!ExpansionRom {
-        const raw = try self.function.read32(offset.expansion_rom_base);
+        const raw = try self.function.read32(register.expansion_rom_base);
         return @bitCast(raw);
     }
 
     pub fn capabilitiesPointer(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.cap_ptr);
+        return self.function.read8(register.capabilities_pointer);
     }
 
     pub fn subsystem(self: View) ConfigSpace.Error!Subsystem {
-        const raw = try self.function.read32(offset.subsystem);
+        const raw = try self.function.read32(register.subsystem);
         return .{
             .vendor_id = @truncate(raw),
             .id = @truncate(raw >> 16),
@@ -109,27 +115,27 @@ pub const View = struct {
     }
 
     pub fn interruptLine(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.interrupt_line);
+        return self.function.read8(register.interrupt_line);
     }
 
     pub fn interruptPin(self: View) (ConfigSpace.Error || Pin.Error)!Pin {
-        return Pin.from(try self.function.read8(offset.interrupt_pin));
+        return Pin.from(try self.function.read8(register.interrupt_pin));
     }
 
     pub fn minGrant(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.min_grant);
+        return self.function.read8(register.min_grant);
     }
 
     pub fn maxLatency(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.max_latency);
+        return self.function.read8(register.max_latency);
     }
 
     pub fn setInterruptLine(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.interrupt_line, value);
+        return self.function.write8(register.interrupt_line, value);
     }
 
     pub fn setExpansionRomBase(self: View, value: u32) ConfigSpace.Error!void {
-        return self.function.write32(offset.expansion_rom_base, value);
+        return self.function.write32(register.expansion_rom_base, value);
     }
 
     pub fn common(self: View) CommonView {

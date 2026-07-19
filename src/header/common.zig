@@ -9,19 +9,40 @@ const pin = @import("../interrupts/pin.zig");
 const ConfigSpace = config.ConfigSpace;
 const Pin = pin.Pin;
 
-const offset = struct {
-    const vendor_id: usize = 0x00;
-    const device_id: usize = 0x02;
-    const command: usize = 0x04;
-    const status: usize = 0x06;
-    const revision_id: usize = 0x08;
-    const cache_line_size: usize = 0x0C;
-    const latency_timer: usize = 0x0D;
-    const header_type: usize = 0x0E;
-    const bist: usize = 0x0F;
-    const cap_ptr: usize = 0x34;
-    const interrupt_line: usize = 0x3C;
-    const interrupt_pin: usize = 0x3D;
+pub const register = struct {
+    pub const vendor_id: usize = 0x00;
+    pub const device_id: usize = 0x02;
+    pub const command: usize = 0x04;
+    pub const status: usize = 0x06;
+    pub const revision_id: usize = 0x08;
+    pub const prog_if: usize = 0x09;
+    pub const subclass: usize = 0x0A;
+    pub const base_class: usize = 0x0B;
+    pub const cache_line_size: usize = 0x0C;
+    pub const latency_timer: usize = 0x0D;
+    pub const header_type: usize = 0x0E;
+    pub const bist: usize = 0x0F;
+    pub const capabilities_pointer: usize = 0x34;
+    pub const interrupt_line: usize = 0x3C;
+    pub const interrupt_pin: usize = 0x3D;
+};
+
+/// Wire representation of the Header Type register.
+pub const HeaderType = packed struct(u8) {
+    layout: u7 = 0,
+    multifunction: bool = false,
+
+    comptime {
+        std.debug.assert(@sizeOf(HeaderType) == 1);
+        std.debug.assert(@alignOf(HeaderType) == 1);
+        std.debug.assert(@bitSizeOf(HeaderType) == 8);
+        std.debug.assert(@bitOffsetOf(HeaderType, "layout") == 0);
+        std.debug.assert(@bitOffsetOf(HeaderType, "multifunction") == 7);
+    }
+
+    pub fn raw(self: HeaderType) u8 {
+        return @bitCast(self);
+    }
 };
 
 pub const CommonHeader = extern struct {
@@ -126,41 +147,41 @@ pub const View = struct {
     }
 
     pub fn command(self: View) ConfigSpace.Error!Command {
-        const raw = try self.function.read16(offset.command);
+        const raw = try self.function.read16(register.command);
         return @bitCast(raw);
     }
 
     pub fn setCommand(self: View, value: Command) ConfigSpace.Error!void {
-        return self.function.write16(offset.command, @bitCast(value));
+        return self.function.write16(register.command, @bitCast(value));
     }
 
     pub fn status(self: View) ConfigSpace.Error!Status {
-        const raw = try self.function.read16(offset.status);
+        const raw = try self.function.read16(register.status);
         return @bitCast(raw);
     }
 
     pub fn clearStatusBits(self: View, bits: Status) ConfigSpace.Error!void {
-        return self.function.write16(offset.status, @bitCast(bits));
+        return self.function.write16(register.status, @bitCast(bits));
     }
 
     pub fn cacheLineSize(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.cache_line_size);
+        return self.function.read8(register.cache_line_size);
     }
 
     pub fn setCacheLineSize(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.cache_line_size, value);
+        return self.function.write8(register.cache_line_size, value);
     }
 
     pub fn latencyTimer(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.latency_timer);
+        return self.function.read8(register.latency_timer);
     }
 
     pub fn setLatencyTimer(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.latency_timer, value);
+        return self.function.write8(register.latency_timer, value);
     }
 
     pub fn headerTypeByte(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.header_type);
+        return self.function.read8(register.header_type);
     }
 
     pub fn isMultifunction(self: View) ConfigSpace.Error!bool {
@@ -168,27 +189,27 @@ pub const View = struct {
     }
 
     pub fn bist(self: View) ConfigSpace.Error!Bist {
-        const raw = try self.function.read8(offset.bist);
+        const raw = try self.function.read8(register.bist);
         return @bitCast(raw);
     }
 
     pub fn setBist(self: View, value: Bist) ConfigSpace.Error!void {
-        return self.function.write8(offset.bist, @bitCast(value));
+        return self.function.write8(register.bist, @bitCast(value));
     }
 
     pub fn capabilitiesPointer(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.cap_ptr);
+        return self.function.read8(register.capabilities_pointer);
     }
 
     pub fn interruptLine(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.interrupt_line);
+        return self.function.read8(register.interrupt_line);
     }
 
     pub fn setInterruptLine(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.interrupt_line, value);
+        return self.function.write8(register.interrupt_line, value);
     }
 
     pub fn interruptPin(self: View) (ConfigSpace.Error || Pin.Error)!Pin {
-        return Pin.from(try self.function.read8(offset.interrupt_pin));
+        return Pin.from(try self.function.read8(register.interrupt_pin));
     }
 };

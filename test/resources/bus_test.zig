@@ -11,7 +11,7 @@ const Function = pci.config.Function;
 const Sbdf = pci.core.Sbdf;
 
 const commit = bus.commit;
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 const offset_primary: usize = 0x18;
 const offset_secondary: usize = 0x19;
 const offset_subordinate: usize = 0x1A;
@@ -265,7 +265,7 @@ const ExpectedBus = struct {
 };
 
 const ForestFixture = struct {
-    bytes: [8][function_window_size]u8,
+    bytes: [8][pcie_window_size]u8,
     entries: [8]LoggedConfig.Entry,
     sbdfs: [8]Sbdf,
     count: usize,
@@ -331,7 +331,7 @@ const LoggedConfig = struct {
     };
 
     fn init(entries: []Entry) LoggedConfig {
-        for (entries) |entry| std.debug.assert(entry.bytes.len == function_window_size);
+        for (entries) |entry| std.debug.assert(entry.bytes.len == pcie_window_size);
         return .{ .entries = entries };
     }
 

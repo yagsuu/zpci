@@ -15,12 +15,12 @@ const Sbdf = pci.core.Sbdf;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
 const ext = pci.capabilities.extended.ext;
-const function_window_size: usize = 0x1000;
+const pcie_window_size: usize = 0x1000;
 
 const find = pci.capabilities.extended.find;
 
 const NoDwordConfig = struct {
-    bytes: [function_window_size]u8 = @splat(0),
+    bytes: [pcie_window_size]u8 = @splat(0),
 
     fn configSpace(self: *NoDwordConfig) ConfigSpace {
         return ConfigSpace.init(@ptrCast(self), &vtable);
@@ -101,7 +101,7 @@ test "unit: iterator treats absent extended config and zero head as empty" {
     };
 
     for (heads) |head| {
-        var bytes: [function_window_size]u8 = @splat(0xA5);
+        var bytes: [pcie_window_size]u8 = @splat(0xA5);
         store32(&bytes, ext.window.start, head);
         const sbdf = Sbdf.of(0, 0, 0, 0);
         var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -116,7 +116,7 @@ test "unit: iterator treats absent extended config and zero head as empty" {
 
 test "unit: iterator yields a single extended capability and terminates" {
     // Seed one root header and assert decoded id, version, offset, and terminal next handling.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     storeHeader(&bytes, ext.window.start, 0x0001, 3, 0);
     const sbdf = Sbdf.of(0, 0, 1, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -132,7 +132,7 @@ test "unit: iterator yields a single extended capability and terminates" {
 
 test "unit: iterator traverses multiple extended capabilities through the end slot" {
     // Chain non-contiguous headers through the final slot to prove next-pointer order and end-boundary handling.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     storeHeader(&bytes, ext.window.start, 0x0001, 1, 0x120);
     storeHeader(&bytes, 0x120, 0x0002, 5, ext.window.end);
     storeHeader(&bytes, ext.window.end, 0x0003, 15, 0);
@@ -150,7 +150,7 @@ test "unit: iterator traverses multiple extended capabilities through the end sl
 
 test "unit: find returns the first matching capability and null for a terminated miss" {
     // Search a three-node chain to prove matching returns the node and terminated misses return null.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     storeHeader(&bytes, ext.window.start, 0x000A, 1, 0x108);
     storeHeader(&bytes, 0x108, 0x000B, 2, 0x110);
     storeHeader(&bytes, 0x110, 0x000C, 3, 0);
@@ -172,7 +172,7 @@ test "malformed: iterator rejects next pointers outside extended capability slot
     };
 
     for (next_offsets) |next| {
-        var bytes: [function_window_size]u8 = @splat(0);
+        var bytes: [pcie_window_size]u8 = @splat(0);
         storeHeader(&bytes, ext.window.start, 0x000D, 1, next);
         const sbdf = Sbdf.of(0, 0, 4, 0);
         var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -187,7 +187,7 @@ test "malformed: iterator rejects next pointers outside extended capability slot
 
 test "malformed: iterator detects cycles before yielding a repeated capability" {
     // Build a two-node loop and assert traversal rejects the repeated slot after yielding each unique node.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     storeHeader(&bytes, ext.window.start, 0x0010, 1, 0x108);
     storeHeader(&bytes, 0x108, 0x0011, 2, ext.window.start);
     const sbdf = Sbdf.of(0, 0, 5, 0);
@@ -209,7 +209,7 @@ test "malformed: cursor rejects bases outside extended capability slots" {
         0x102,
     };
 
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 6, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);
@@ -221,7 +221,7 @@ test "malformed: cursor rejects bases outside extended capability slots" {
 
 test "unit: cursor reads and writes relative to an extended capability base" {
     // Seed payload bytes and verify base-relative reads and writes hit exact extended-config offsets.
-    var bytes: [function_window_size]u8 = @splat(0);
+    var bytes: [pcie_window_size]u8 = @splat(0);
     store32(&bytes, 0x130, 0xDEAD_BEEF);
     const sbdf = Sbdf.of(0, 0, 7, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -238,7 +238,7 @@ test "unit: cursor reads and writes relative to an extended capability base" {
 
 test "malformed: cursor maps containment and alignment failures to MalformedCapability" {
     // Exercise end-window containment and alignment checks; the sentinel byte proves rejected writes do not run.
-    var bytes: [function_window_size]u8 = @splat(0x5A);
+    var bytes: [pcie_window_size]u8 = @splat(0x5A);
     const sbdf = Sbdf.of(0, 0, 8, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);
@@ -278,7 +278,7 @@ fn expectCapability(cap: ExtCapability, expected: struct {
     try std.testing.expectEqual(expected.offset, cap.offset);
 }
 
-fn storeHeader(bytes: *[function_window_size]u8, byte_offset: u16, id: u16, version: u4, next: u16) void {
+fn storeHeader(bytes: *[pcie_window_size]u8, byte_offset: u16, id: u16, version: u4, next: u16) void {
     store32(bytes, byte_offset, header(id, version, next));
 }
 
@@ -286,14 +286,14 @@ fn header(id: u16, version: u4, next: u16) u32 {
     return @as(u32, id) | (@as(u32, version) << 16) | (@as(u32, next) << 20);
 }
 
-fn store32(bytes: *[function_window_size]u8, byte_offset: usize, value: u32) void {
+fn store32(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u32) void {
     const encoded = stdx.layout.Le(u32).fromNative(value);
     stdx.bytes.store(stdx.layout.Le(u32), bytes, byte_offset, encoded) catch |err| switch (err) {
         error.EndOfStream => unreachable,
     };
 }
 
-fn load16(bytes: *const [function_window_size]u8, byte_offset: usize) u16 {
+fn load16(bytes: *const [pcie_window_size]u8, byte_offset: usize) u16 {
     const wrapped = stdx.bytes.load(stdx.layout.Le(u16), bytes, byte_offset) catch |err| switch (err) {
         error.EndOfStream => unreachable,
     };

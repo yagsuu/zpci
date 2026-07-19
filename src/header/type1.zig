@@ -13,28 +13,34 @@ const Pin = pin.Pin;
 
 pub const bridge_bar_count: usize = 2;
 
-const offset = struct {
-    const bars: usize = 0x10;
-    const primary_bus: usize = 0x18;
-    const secondary_bus: usize = 0x19;
-    const subordinate_bus: usize = 0x1A;
-    const secondary_latency: usize = 0x1B;
-    const io_base: usize = 0x1C;
-    const io_limit: usize = 0x1D;
-    const secondary_status: usize = 0x1E;
-    const memory_base: usize = 0x20;
-    const memory_limit: usize = 0x22;
-    const prefetchable_memory_base: usize = 0x24;
-    const prefetchable_memory_limit: usize = 0x26;
-    const prefetchable_base_upper: usize = 0x28;
-    const prefetchable_limit_upper: usize = 0x2C;
-    const io_base_upper: usize = 0x30;
-    const io_limit_upper: usize = 0x32;
-    const cap_ptr: usize = 0x34;
-    const expansion_rom_base: usize = 0x38;
-    const interrupt_line: usize = 0x3C;
-    const interrupt_pin: usize = 0x3D;
-    const bridge_control: usize = 0x3E;
+pub const register = struct {
+    pub const bar_base: usize = 0x10;
+    pub const bar_stride: usize = 4;
+    pub const primary_bus: usize = 0x18;
+    pub const secondary_bus: usize = 0x19;
+    pub const subordinate_bus: usize = 0x1A;
+    pub const secondary_latency: usize = 0x1B;
+    pub const io_base: usize = 0x1C;
+    pub const io_limit: usize = 0x1D;
+    pub const secondary_status: usize = 0x1E;
+    pub const memory_base: usize = 0x20;
+    pub const memory_limit: usize = 0x22;
+    pub const prefetchable_memory_base: usize = 0x24;
+    pub const prefetchable_memory_limit: usize = 0x26;
+    pub const prefetchable_base_upper: usize = 0x28;
+    pub const prefetchable_limit_upper: usize = 0x2C;
+    pub const io_base_upper: usize = 0x30;
+    pub const io_limit_upper: usize = 0x32;
+    pub const capabilities_pointer: usize = 0x34;
+    pub const expansion_rom_base: usize = 0x38;
+    pub const interrupt_line: usize = 0x3C;
+    pub const interrupt_pin: usize = 0x3D;
+    pub const bridge_control: usize = 0x3E;
+
+    pub fn bar(index: usize) usize {
+        std.debug.assert(index < bridge_bar_count);
+        return bar_base + bar_stride * index;
+    }
 };
 
 pub const Type1Header = extern struct {
@@ -112,160 +118,160 @@ pub const View = struct {
 
     pub fn rawBar(self: View, index: usize) ConfigSpace.Error!u32 {
         std.debug.assert(index < bridge_bar_count);
-        return self.function.read32(offset.bars + 4 * index);
+        return self.function.read32(register.bar(index));
     }
 
     pub fn primaryBus(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.primary_bus);
+        return self.function.read8(register.primary_bus);
     }
 
     pub fn secondaryBus(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.secondary_bus);
+        return self.function.read8(register.secondary_bus);
     }
 
     pub fn subordinateBus(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.subordinate_bus);
+        return self.function.read8(register.subordinate_bus);
     }
 
     pub fn secondaryLatencyTimer(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.secondary_latency);
+        return self.function.read8(register.secondary_latency);
     }
 
     pub fn ioBase(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.io_base);
+        return self.function.read8(register.io_base);
     }
 
     pub fn ioLimit(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.io_limit);
+        return self.function.read8(register.io_limit);
     }
 
     pub fn ioBaseUpper(self: View) ConfigSpace.Error!u16 {
-        return self.function.read16(offset.io_base_upper);
+        return self.function.read16(register.io_base_upper);
     }
 
     pub fn ioLimitUpper(self: View) ConfigSpace.Error!u16 {
-        return self.function.read16(offset.io_limit_upper);
+        return self.function.read16(register.io_limit_upper);
     }
 
     pub fn secondaryStatus(self: View) ConfigSpace.Error!CommonStatus {
-        const raw = try self.function.read16(offset.secondary_status);
+        const raw = try self.function.read16(register.secondary_status);
         return @bitCast(raw);
     }
 
     pub fn memoryBase(self: View) ConfigSpace.Error!u16 {
-        return self.function.read16(offset.memory_base);
+        return self.function.read16(register.memory_base);
     }
 
     pub fn memoryLimit(self: View) ConfigSpace.Error!u16 {
-        return self.function.read16(offset.memory_limit);
+        return self.function.read16(register.memory_limit);
     }
 
     pub fn prefetchableMemoryBase(self: View) ConfigSpace.Error!u16 {
-        return self.function.read16(offset.prefetchable_memory_base);
+        return self.function.read16(register.prefetchable_memory_base);
     }
 
     pub fn prefetchableMemoryLimit(self: View) ConfigSpace.Error!u16 {
-        return self.function.read16(offset.prefetchable_memory_limit);
+        return self.function.read16(register.prefetchable_memory_limit);
     }
 
     pub fn prefetchableBaseUpper(self: View) ConfigSpace.Error!u32 {
-        return self.function.read32(offset.prefetchable_base_upper);
+        return self.function.read32(register.prefetchable_base_upper);
     }
 
     pub fn prefetchableLimitUpper(self: View) ConfigSpace.Error!u32 {
-        return self.function.read32(offset.prefetchable_limit_upper);
+        return self.function.read32(register.prefetchable_limit_upper);
     }
 
     pub fn capabilitiesPointer(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.cap_ptr);
+        return self.function.read8(register.capabilities_pointer);
     }
 
     pub fn expansionRomBase(self: View) ConfigSpace.Error!u32 {
-        return self.function.read32(offset.expansion_rom_base);
+        return self.function.read32(register.expansion_rom_base);
     }
 
     pub fn interruptLine(self: View) ConfigSpace.Error!u8 {
-        return self.function.read8(offset.interrupt_line);
+        return self.function.read8(register.interrupt_line);
     }
 
     pub fn interruptPin(self: View) (ConfigSpace.Error || Pin.Error)!Pin {
-        return Pin.from(try self.function.read8(offset.interrupt_pin));
+        return Pin.from(try self.function.read8(register.interrupt_pin));
     }
 
     pub fn bridgeControl(self: View) ConfigSpace.Error!BridgeControl {
-        const raw = try self.function.read16(offset.bridge_control);
+        const raw = try self.function.read16(register.bridge_control);
         return @bitCast(raw);
     }
 
     pub fn setPrimaryBus(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.primary_bus, value);
+        return self.function.write8(register.primary_bus, value);
     }
 
     pub fn setSecondaryBus(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.secondary_bus, value);
+        return self.function.write8(register.secondary_bus, value);
     }
 
     pub fn setSubordinateBus(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.subordinate_bus, value);
+        return self.function.write8(register.subordinate_bus, value);
     }
 
     pub fn setSecondaryLatencyTimer(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.secondary_latency, value);
+        return self.function.write8(register.secondary_latency, value);
     }
 
     pub fn setIoBase(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.io_base, value);
+        return self.function.write8(register.io_base, value);
     }
 
     pub fn setIoLimit(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.io_limit, value);
+        return self.function.write8(register.io_limit, value);
     }
 
     pub fn setIoBaseUpper(self: View, value: u16) ConfigSpace.Error!void {
-        return self.function.write16(offset.io_base_upper, value);
+        return self.function.write16(register.io_base_upper, value);
     }
 
     pub fn setIoLimitUpper(self: View, value: u16) ConfigSpace.Error!void {
-        return self.function.write16(offset.io_limit_upper, value);
+        return self.function.write16(register.io_limit_upper, value);
     }
 
     pub fn setMemoryBase(self: View, value: u16) ConfigSpace.Error!void {
-        return self.function.write16(offset.memory_base, value);
+        return self.function.write16(register.memory_base, value);
     }
 
     pub fn setMemoryLimit(self: View, value: u16) ConfigSpace.Error!void {
-        return self.function.write16(offset.memory_limit, value);
+        return self.function.write16(register.memory_limit, value);
     }
 
     pub fn setPrefetchableMemoryBase(self: View, value: u16) ConfigSpace.Error!void {
-        return self.function.write16(offset.prefetchable_memory_base, value);
+        return self.function.write16(register.prefetchable_memory_base, value);
     }
 
     pub fn setPrefetchableMemoryLimit(self: View, value: u16) ConfigSpace.Error!void {
-        return self.function.write16(offset.prefetchable_memory_limit, value);
+        return self.function.write16(register.prefetchable_memory_limit, value);
     }
 
     pub fn setPrefetchableBaseUpper(self: View, value: u32) ConfigSpace.Error!void {
-        return self.function.write32(offset.prefetchable_base_upper, value);
+        return self.function.write32(register.prefetchable_base_upper, value);
     }
 
     pub fn setPrefetchableLimitUpper(self: View, value: u32) ConfigSpace.Error!void {
-        return self.function.write32(offset.prefetchable_limit_upper, value);
+        return self.function.write32(register.prefetchable_limit_upper, value);
     }
 
     pub fn clearSecondaryStatus(self: View, bits: CommonStatus) ConfigSpace.Error!void {
-        return self.function.write16(offset.secondary_status, @bitCast(bits));
+        return self.function.write16(register.secondary_status, @bitCast(bits));
     }
 
     pub fn setInterruptLine(self: View, value: u8) ConfigSpace.Error!void {
-        return self.function.write8(offset.interrupt_line, value);
+        return self.function.write8(register.interrupt_line, value);
     }
 
     pub fn setExpansionRomBase(self: View, value: u32) ConfigSpace.Error!void {
-        return self.function.write32(offset.expansion_rom_base, value);
+        return self.function.write32(register.expansion_rom_base, value);
     }
 
     pub fn setBridgeControl(self: View, value: BridgeControl) ConfigSpace.Error!void {
-        return self.function.write16(offset.bridge_control, @bitCast(value));
+        return self.function.write16(register.bridge_control, @bitCast(value));
     }
 };
