@@ -9,11 +9,11 @@ const pci = @import("pci");
 const Assignment = pci.resources.programming.Assignment;
 const ConfigSpace = pci.config.ConfigSpace;
 const Function = pci.config.Function;
-const Kind = pci.resources.model.Kind;
+const Kind = pci.resources.Kind;
 const Plan = pci.resources.programming.Plan;
-const Requirement = pci.resources.model.Requirement;
+const Requirement = pci.resources.Requirement;
 const Sbdf = pci.core.Sbdf;
-const Source = pci.resources.model.Source;
+const Source = pci.resources.Source;
 
 const bar = pci.bar;
 const command_all: u16 = 0xFFFF;

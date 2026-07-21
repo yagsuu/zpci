@@ -4,17 +4,17 @@ const std = @import("std");
 
 const pci = @import("pci");
 
-const Aperture = pci.resources.model.Aperture;
-const Assignment = pci.resources.model.Assignment;
+const Aperture = pci.resources.Aperture;
+const Assignment = pci.resources.Assignment;
 const Entry = pci.bar.Entry;
 const Function = pci.config.Function;
-const Kind = pci.resources.model.Kind;
-const Requirement = pci.resources.model.Requirement;
-const RootWindows = pci.resources.model.RootWindows;
+const Kind = pci.resources.Kind;
+const Requirement = pci.resources.Requirement;
+const RootWindows = pci.resources.RootWindows;
 const Sbdf = pci.core.Sbdf;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
-const eligiblePools = pci.resources.model.eligiblePools;
+const eligiblePools = pci.resources.eligiblePools;
 const pcie_window_size: usize = 0x1000;
 
 test "unit: eligiblePools implements the resource-kind truth table" {
@@ -274,7 +274,7 @@ const ExpectedBarRequirement = struct {
     index: usize,
 };
 
-fn expectEligible(actual: pci.resources.model.EligibleSet, expected: ExpectedEligible) !void {
+fn expectEligible(actual: pci.resources.EligibleSet, expected: ExpectedEligible) !void {
     try std.testing.expectEqual(expected.io, actual.has(.io));
     try std.testing.expectEqual(expected.mmio32, actual.has(.mmio32));
     try std.testing.expectEqual(expected.mmio32_pref, actual.has(.mmio32_pref));

@@ -6,8 +6,8 @@ const stdx = @import("stdx");
 
 const pci = @import("pci");
 
-const Aperture = pci.resources.model.Aperture;
-const Assignment = pci.resources.model.Assignment;
+const Aperture = pci.resources.Aperture;
+const Assignment = pci.resources.Assignment;
 const AssignmentNode = pci.resources.assignment.Node;
 const BarEntry = pci.bar.Entry;
 const BusBridge = pci.resources.bus.Bridge;
@@ -15,11 +15,11 @@ const Capability = pci.capabilities.list.Capability;
 const CapabilityId = pci.capabilities.list.Id;
 const ExtCapability = pci.capabilities.extended.ExtCapability;
 const Function = pci.config.Function;
-const Kind = pci.resources.model.Kind;
+const Kind = pci.resources.Kind;
 const MsiVectorCount = pci.interrupts.msi.VectorCount;
 const Node = pci.topology.enumerate.Node;
 const NodeIndex = pci.topology.tree.NodeIndex;
-const Requirement = pci.resources.model.Requirement;
+const Requirement = pci.resources.Requirement;
 const Sbdf = pci.core.Sbdf;
 const Segment = pci.config.Segment;
 const SegmentId = pci.core.SegmentId;
