@@ -38,6 +38,8 @@ const offset = struct {
 test "layout: pci.bar facade exposes BAR counts and header layouts" {
     // Compare public constants and explicit layouts against header-owned counts.
     try std.testing.expectEqual(@as(usize, 6), pci.bar.max_entries);
+    try std.testing.expectEqual(@as(u64, 0x1_0000_0000), pci.bar.mmio32_size_max);
+    try std.testing.expectEqual(@as(u32, 0x0001_0000), pci.bar.pio_size_max);
 
     var backend = ProbeConfig.init(.type0);
     const function = Function.unchecked(backend.configSpace(), backend.sbdf);

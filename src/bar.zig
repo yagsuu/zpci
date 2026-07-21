@@ -11,6 +11,12 @@ const Function = config.Function;
 /// Upper bound on BAR entries for every supported header layout.
 pub const max_entries: usize = 6;
 
+/// Largest 32-bit MMIO BAR aperture.
+pub const mmio32_size_max: u64 = 1 << 32;
+
+/// Largest conventional PIO BAR aperture.
+pub const pio_size_max: u32 = 1 << 16;
+
 /// Header layout that determines how many BAR slots a function exposes.
 pub const Layout = enum {
     type0,
