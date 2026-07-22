@@ -82,6 +82,24 @@ pub const Aperture = struct {
 
         return base + size <= self.end();
     }
+
+    pub fn allocate(self: *Aperture, size: u64, alignment: u64) ?u64 {
+        std.debug.assert(size > 0);
+        std.debug.assert(alignment > 0);
+        std.debug.assert(std.math.isPowerOfTwo(alignment));
+        if (self.size == 0) return null;
+
+        const align_mask = alignment - 1;
+        const aligned_sum = std.math.add(u64, self.base, align_mask) catch return null;
+        const base = aligned_sum & ~align_mask;
+        const allocation_end = std.math.add(u64, base, size) catch return null;
+        if (allocation_end > self.end()) return null;
+
+        const consumed = allocation_end - self.base;
+        self.base = allocation_end;
+        self.size -= consumed;
+        return base;
+    }
 };
 
 pub const RootWindows = struct {

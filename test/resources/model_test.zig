@@ -86,6 +86,45 @@ test "unit: Aperture containment rejects overflowing requested ranges" {
     try std.testing.expect(!window.contains(max - 0x10, 0x20));
 }
 
+test "unit: Aperture allocate consumes alignment padding and consecutive ranges" {
+    // Start unaligned, then consume the exact remainder so both cursor movement and padding accounting are visible.
+    var window = Aperture.range(.mmio32_pref, 0x1001, 0x2FFF);
+
+    try std.testing.expectEqual(@as(?u64, 0x2000), window.allocate(0x800, 0x1000));
+    try std.testing.expectEqual(Kind.mmio32_pref, window.kind);
+    try std.testing.expectEqual(@as(u64, 0x2800), window.base);
+    try std.testing.expectEqual(@as(u64, 0x1800), window.size);
+
+    try std.testing.expectEqual(@as(?u64, 0x2800), window.allocate(0x1800, 0x800));
+    try std.testing.expectEqual(@as(u64, 0x4000), window.base);
+    try std.testing.expectEqual(@as(u64, 0), window.size);
+    try std.testing.expect(window.isEmpty());
+}
+
+test "unit: Aperture allocate failure leaves the aperture unchanged" {
+    // Exercise each runtime failure path: empty, too small, alignment overflow, and allocation-end overflow.
+    var empty = Aperture.absent(.io);
+    try std.testing.expectEqual(@as(?u64, null), empty.allocate(1, 1));
+    try std.testing.expectEqual(@as(u64, 0), empty.base);
+    try std.testing.expectEqual(@as(u64, 0), empty.size);
+
+    var too_small = Aperture.range(.mmio32, 0x1000, 0x100);
+    try std.testing.expectEqual(@as(?u64, null), too_small.allocate(0x101, 1));
+    try std.testing.expectEqual(@as(u64, 0x1000), too_small.base);
+    try std.testing.expectEqual(@as(u64, 0x100), too_small.size);
+
+    const max = std.math.maxInt(u64);
+    var alignment_overflow = Aperture.range(.mmio64, max - 0x7F, 0x7F);
+    try std.testing.expectEqual(@as(?u64, null), alignment_overflow.allocate(1, 0x100));
+    try std.testing.expectEqual(max - 0x7F, alignment_overflow.base);
+    try std.testing.expectEqual(@as(u64, 0x7F), alignment_overflow.size);
+
+    var end_overflow = Aperture.range(.mmio64_pref, max - 0x100, 0x100);
+    try std.testing.expectEqual(@as(?u64, null), end_overflow.allocate(0x200, 1));
+    try std.testing.expectEqual(max - 0x100, end_overflow.base);
+    try std.testing.expectEqual(@as(u64, 0x100), end_overflow.size);
+}
+
 test "unit: RootWindows.get selects the aperture for each resource kind" {
     // Use distinct ranges in every field so a wrong switch arm returns observable wrong bounds.
     const windows = RootWindows{

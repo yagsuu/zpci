@@ -245,17 +245,7 @@ fn placeInPools(requirement: Requirement, frame: *RootWindows, comptime pools: [
 
 fn tryPlaceInPool(requirement: Requirement, pool: Kind, aperture: *Aperture) ?Assignment {
     std.debug.assert(aperture.kind == pool);
-    if (aperture.size == 0) return null;
-
-    const align_mask = requirement.alignment - 1;
-    const aligned_sum = std.math.add(u64, aperture.base, align_mask) catch return null;
-    const base = aligned_sum & ~align_mask;
-    const end = std.math.add(u64, base, requirement.size) catch return null;
-    if (end > aperture.end()) return null;
-
-    const consumed = end - aperture.base;
-    aperture.base = end;
-    aperture.size -= consumed;
+    const base = aperture.allocate(requirement.size, requirement.alignment) orelse return null;
 
     std.debug.assert(base % requirement.alignment == 0);
     std.debug.assert(model.eligiblePools(requirement.kind).has(pool));

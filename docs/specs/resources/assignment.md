@@ -266,13 +266,7 @@ Given a requirement `req` and the current frame:
 ```
 for pool in preference_chain(req.kind):
     aperture := frame[pool]
-    if aperture.size == 0: continue
-    base := align_up(aperture.base, req.alignment)
-    end  := base + req.size
-    if end overflows u64: continue
-    if end > aperture.end(): continue
-    frame[pool].base := end
-    frame[pool].size := frame[pool].size - (end - aperture.base)
+    base := aperture.allocate(req.size, req.alignment) orelse continue
     return Assignment{ .requirement = req, .pool = pool, .base = base }
 return error.ResourceExhausted
 ```
@@ -280,6 +274,7 @@ return error.ResourceExhausted
 Rules:
 
 - `align_up(x, a) = (x + a - 1) & ~(a - 1)`. Overflow of the intermediate sum causes the pool to be skipped, not an error propagated.
+- `Aperture.allocate` owns checked alignment, fit validation, cursor mutation, and failure atomicity per `docs/specs/resources/model.md` §Aperture.
 - `aperture.end()` is `aperture.base + aperture.size`, taken from the current mutable state (not the initial state).
 - Advancing `aperture.base` past the placed range and shrinking `aperture.size` by the consumed span is a cursor bump. Padding for alignment is included in the consumed span.
 - `pool` on the returned `Assignment` is the pool that succeeded, which MAY differ from `req.kind` under the fallback rules above.

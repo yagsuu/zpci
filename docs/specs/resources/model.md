@@ -120,6 +120,10 @@ pub const Aperture = struct {
     pub fn isEmpty(self: Aperture) bool;
     pub fn end(self: Aperture) u64;
     pub fn contains(self: Aperture, base: u64, size: u64) bool;
+
+    /// Allocates the lowest aligned range and advances this aperture.
+    /// Returns the allocated base, or `null` without mutation when the range does not fit.
+    pub fn allocate(self: *Aperture, size: u64, alignment: u64) ?u64;
 };
 ```
 
@@ -131,6 +135,10 @@ Rules:
 - `end()` returns `base + size`. The caller supplies apertures whose `base + size` does not overflow `u64`; a caller-supplied wraparound is a programmer-error precondition, not a typed error.
 - `contains(base, size)` returns `true` iff `self.size > 0 and base >= self.base and (base + size) <= self.end() and (base + size) does not overflow u64`. A `size == 0` argument is a programmer error (assignment never asks about a zero-sized placement); `contains` treats it as `true` when `base` is inside the aperture, since a zero-sized point is trivially contained.
 - `size == 0` is the canonical "pool absent" state. Assignment reports `ResourceExhausted` when it needs a pool of that kind and every eligible aperture is empty.
+- `allocate(size, alignment)` requires `size > 0`, `alignment > 0`, and power-of-two `alignment`; violations are programmer errors.
+- Allocation chooses the lowest `base >= self.base` aligned to `alignment`. On success it returns that base, advances `self.base` to `base + size`, and reduces `self.size` by the allocation plus any leading alignment padding. `kind` is unchanged.
+- An empty aperture, alignment-rounding overflow, allocation-end overflow, or insufficient remaining space returns `null`. Failure leaves every field unchanged.
+- Allocation is monotonic within one contiguous aperture. Deallocation, hole reuse, pool fallback, and cross-aperture policy are outside this helper.
 - Overlap detection between apertures is not owned by this spec. Two apertures with overlapping `[base, end)` ranges are legal on the input side; assignment never allocates into more than one aperture per requirement, so overlap does not compromise correctness.
 
 ## RootWindows `[zpci]`
