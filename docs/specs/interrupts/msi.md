@@ -91,14 +91,14 @@ Rules:
 
 ```zig
 pub const MessageControl = packed struct(u16) {
-    msi_enable: bool,
-    multiple_message_capable: u3,
-    multiple_message_enable: u3,
-    addr_64_capable: bool,
-    pvm_capable: bool,
-    ext_msg_data_capable: bool,
-    ext_msg_data_enable: bool,
-    _reserved11: u5,
+    msi_enable: bool = false,
+    multiple_message_capable: u3 = 0,
+    multiple_message_enable: u3 = 0,
+    addr_64_capable: bool = false,
+    pvm_capable: bool = false,
+    ext_msg_data_capable: bool = false,
+    ext_msg_data_enable: bool = false,
+    _reserved11: u5 = 0,
 };
 ```
 
@@ -113,6 +113,7 @@ Rules:
 - `pvm_capable` (bit `[8]`) is RO; fixes the presence of mask and pending registers.
 - `ext_msg_data_capable` (bit `[9]`) is RO; controls the presence of the extended-message-data register.
 - `ext_msg_data_enable` (bit `[10]`) is RW.
+- Every field defaults to its zero-bit value, so `MessageControl{}` encodes `0x0000`.
 
 ## `VectorCount` `[std]`
 

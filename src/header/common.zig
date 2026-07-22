@@ -77,18 +77,18 @@ pub const CommonHeader = extern struct {
 };
 
 pub const Command = packed struct(u16) {
-    io_space: bool,
-    memory_space: bool,
-    bus_master: bool,
-    special_cycles: bool,
-    mwi_enable: bool,
-    vga_palette_snoop: bool,
-    parity_response: bool,
-    _reserved7: u1,
-    serr_enable: bool,
-    fast_back_to_back: bool,
-    interrupt_disable: bool,
-    _reserved11: u5,
+    io_space: bool = false,
+    memory_space: bool = false,
+    bus_master: bool = false,
+    special_cycles: bool = false,
+    mwi_enable: bool = false,
+    vga_palette_snoop: bool = false,
+    parity_response: bool = false,
+    _reserved7: u1 = 0,
+    serr_enable: bool = false,
+    fast_back_to_back: bool = false,
+    interrupt_disable: bool = false,
+    _reserved11: u5 = 0,
 };
 
 pub const Status = packed struct(u16) {
@@ -117,7 +117,7 @@ pub const Status = packed struct(u16) {
 };
 
 pub const Bist = packed struct(u8) {
-    completion_code: u4,
+    completion_code: u4 = 0,
     _reserved4: u2 = 0,
     start: bool = false,
     capable: bool = false,

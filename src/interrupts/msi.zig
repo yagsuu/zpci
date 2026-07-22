@@ -29,14 +29,14 @@ pub const MalformedFieldError = error{MalformedField};
 pub const InvalidRoutingError = error{InvalidRouting};
 
 pub const MessageControl = packed struct(u16) {
-    msi_enable: bool,
-    multiple_message_capable: u3,
-    multiple_message_enable: u3,
-    addr_64_capable: bool,
-    pvm_capable: bool,
-    ext_msg_data_capable: bool,
-    ext_msg_data_enable: bool,
-    _reserved11: u5,
+    msi_enable: bool = false,
+    multiple_message_capable: u3 = 0,
+    multiple_message_enable: u3 = 0,
+    addr_64_capable: bool = false,
+    pvm_capable: bool = false,
+    ext_msg_data_capable: bool = false,
+    ext_msg_data_enable: bool = false,
+    _reserved11: u5 = 0,
 
     comptime {
         std.debug.assert(@sizeOf(MessageControl) == 2);

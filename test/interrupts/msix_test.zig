@@ -46,6 +46,8 @@ test "layout: constants and packed words match the MSI-X wire layout" {
     try std.testing.expectEqual(@as(comptime_int, 16), @bitSizeOf(MessageControl));
     try std.testing.expectEqual(@as(usize, 4), @sizeOf(VectorControl));
     try std.testing.expectEqual(@as(comptime_int, 32), @bitSizeOf(VectorControl));
+    try std.testing.expectEqual(@as(u16, 0), @as(u16, @bitCast(MessageControl{})));
+    try std.testing.expectEqual(@as(u32, 0), @as(u32, @bitCast(VectorControl{})));
 
     const control: MessageControl = @bitCast(@as(u16, 0b11_101_00000000101));
     try std.testing.expectEqual(@as(u11, 5), control.table_size_minus_one);

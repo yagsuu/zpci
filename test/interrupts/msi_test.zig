@@ -49,6 +49,7 @@ test "layout: MSI register constants and MessageControl bit fields match spec" {
     try std.testing.expectEqual(@as(comptime_int, 9), @bitOffsetOf(MessageControl, "ext_msg_data_capable"));
     try std.testing.expectEqual(@as(comptime_int, 10), @bitOffsetOf(MessageControl, "ext_msg_data_enable"));
     try std.testing.expectEqual(@as(comptime_int, 11), @bitOffsetOf(MessageControl, "_reserved11"));
+    try std.testing.expectEqual(@as(u16, 0), (MessageControl{}).raw());
 }
 
 test "unit: VectorCount helpers map valid encodings and reject reserved or invalid counts" {

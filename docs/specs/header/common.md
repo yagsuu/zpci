@@ -118,18 +118,18 @@ validation and accepts only the type-0 and type-1 values.
 
 ```zig
 pub const Command = packed struct(u16) {
-    io_space: bool,
-    memory_space: bool,
-    bus_master: bool,
-    special_cycles: bool,
-    mwi_enable: bool,
-    vga_palette_snoop: bool,
-    parity_response: bool,
-    _reserved7: u1,
-    serr_enable: bool,
-    fast_back_to_back: bool,
-    interrupt_disable: bool,
-    _reserved11: u5,
+    io_space: bool = false,
+    memory_space: bool = false,
+    bus_master: bool = false,
+    special_cycles: bool = false,
+    mwi_enable: bool = false,
+    vga_palette_snoop: bool = false,
+    parity_response: bool = false,
+    _reserved7: u1 = 0,
+    serr_enable: bool = false,
+    fast_back_to_back: bool = false,
+    interrupt_disable: bool = false,
+    _reserved11: u5 = 0,
 };
 ```
 
@@ -138,6 +138,7 @@ Rules:
 - `Command` is bit-cast from the `u16` read at offset `0x04`.
 - Reserved bits round-trip unchanged on writes performed through `setCommand`.
 - Writes to `command` are ordinary config writes; no read-modify-write is hidden inside `setCommand`.
+- Every field defaults to its zero-bit value, so `Command{}` encodes `0x0000`.
 
 ## Status register `[std]`
 
@@ -180,7 +181,7 @@ Rules:
 
 ```zig
 pub const Bist = packed struct(u8) {
-    completion_code: u4,
+    completion_code: u4 = 0,
     _reserved4: u2 = 0,
     start: bool = false,
     capable: bool = false,
@@ -193,6 +194,7 @@ Rules:
 - `capable` (bit `[7]`) is RO. When `false`, the register is entirely reserved.
 - `start` (bit `[6]`) is RW. Software sets `start = true` to initiate self-test; hardware clears it on completion.
 - `completion_code` (bits `[3:0]`) is RO. `0x0` means passed; non-zero is device-specific.
+- Every field defaults to its zero-bit value, so `Bist{}` encodes `0x00`.
 - Reserved bits (`_reserved4`) round-trip unchanged on writes performed through `setBist`.
 
 ## `View` `[zpci]`

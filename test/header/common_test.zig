@@ -98,6 +98,7 @@ test "layout: Command maps the PCI command register bits" {
     try std.testing.expectEqual(@as(comptime_int, 9), @bitOffsetOf(Command, "fast_back_to_back"));
     try std.testing.expectEqual(@as(comptime_int, 10), @bitOffsetOf(Command, "interrupt_disable"));
     try std.testing.expectEqual(@as(comptime_int, 11), @bitOffsetOf(Command, "_reserved11"));
+    try std.testing.expectEqual(@as(u16, 0), @as(u16, @bitCast(Command{})));
 
     const decoded: Command = @bitCast(@as(u16, 0x0557));
     try std.testing.expect(decoded.io_space);
@@ -154,6 +155,7 @@ test "layout: Bist maps completion, start, and capable bits" {
     try std.testing.expectEqual(@as(comptime_int, 4), @bitOffsetOf(Bist, "_reserved4"));
     try std.testing.expectEqual(@as(comptime_int, 6), @bitOffsetOf(Bist, "start"));
     try std.testing.expectEqual(@as(comptime_int, 7), @bitOffsetOf(Bist, "capable"));
+    try std.testing.expectEqual(@as(u8, 0), @as(u8, @bitCast(Bist{})));
 
     const decoded: Bist = @bitCast(@as(u8, 0xD7));
     try std.testing.expectEqual(@as(u4, 0x7), decoded.completion_code);

@@ -27,10 +27,10 @@ pub const pba_bits_per_dword: usize = 32;
 pub const max_table_size: u16 = 2048;
 
 pub const MessageControl = packed struct(u16) {
-    table_size_minus_one: u11,
-    _reserved11: u3,
-    function_mask: bool,
-    msix_enable: bool,
+    table_size_minus_one: u11 = 0,
+    _reserved11: u3 = 0,
+    function_mask: bool = false,
+    msix_enable: bool = false,
 
     comptime {
         std.debug.assert(@sizeOf(MessageControl) == 2);
@@ -40,8 +40,8 @@ pub const MessageControl = packed struct(u16) {
 };
 
 pub const VectorControl = packed struct(u32) {
-    masked: bool,
-    _reserved1: u31,
+    masked: bool = false,
+    _reserved1: u31 = 0,
 
     comptime {
         std.debug.assert(@sizeOf(VectorControl) == 4);

@@ -102,10 +102,10 @@ Rules:
 
 ```zig
 pub const MessageControl = packed struct(u16) {
-    table_size_minus_one: u11,
-    _reserved11: u3,
-    function_mask: bool,
-    msix_enable: bool,
+    table_size_minus_one: u11 = 0,
+    _reserved11: u3 = 0,
+    function_mask: bool = false,
+    msix_enable: bool = false,
 };
 ```
 
@@ -116,13 +116,14 @@ Rules:
 - `table_size_minus_one` (bits `[10:0]`) is RO. Actual table size equals `table_size_minus_one + 1`, in the range `1..=2048`.
 - `function_mask` (bit `[14]`) is RW. When `true`, every vector is masked regardless of per-vector `VectorControl.masked`.
 - `msix_enable` (bit `[15]`) is RW. Master enable.
+- Every field defaults to its zero-bit value, so `MessageControl{}` encodes `0x0000`.
 
 ## `VectorControl` `[std]`
 
 ```zig
 pub const VectorControl = packed struct(u32) {
-    masked: bool,
-    _reserved1: u31,
+    masked: bool = false,
+    _reserved1: u31 = 0,
 };
 ```
 
@@ -131,6 +132,7 @@ Rules:
 - `VectorControl` is bit-cast from the `u32` read at `entry_base + entry.vector_control`.
 - `_reserved1` (bits `[31:1]`) is `RsvdP` per PCI base r5.0. `View.programEntry`, `View.programEntries`, and `View.setVectorMask` preserve these bits from the saved value.
 - `masked` (bit `[0]`) is RW.
+- Every field defaults to its zero-bit value, so `VectorControl{}` encodes `0x0000_0000`.
 
 ## `TableLocation` and `PbaLocation` `[std]`
 
