@@ -102,14 +102,14 @@ pub const Aperture = struct {
     }
 };
 
-pub const RootWindows = struct {
+pub const HostBridgeApertures = struct {
     io: Aperture = .absent(.io),
     mmio32: Aperture = .absent(.mmio32),
     mmio32_pref: Aperture = .absent(.mmio32_pref),
     mmio64: Aperture = .absent(.mmio64),
     mmio64_pref: Aperture = .absent(.mmio64_pref),
 
-    pub fn get(self: RootWindows, kind: Kind) Aperture {
+    pub fn get(self: HostBridgeApertures, kind: Kind) Aperture {
         return switch (kind) {
             .io => self.io,
             .mmio32 => self.mmio32,

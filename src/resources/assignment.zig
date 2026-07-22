@@ -8,7 +8,7 @@ pub const Requirement = model.Requirement;
 pub const Assignment = model.Assignment;
 pub const Kind = model.Kind;
 pub const Aperture = model.Aperture;
-pub const RootWindows = model.RootWindows;
+pub const HostBridgeApertures = model.HostBridgeApertures;
 pub const Source = model.Source;
 
 pub const NodeIndex = u16;
@@ -26,7 +26,7 @@ pub const Node = struct {
 pub const Input = struct {
     nodes: []const Node,
     roots: []const NodeIndex,
-    root_windows: RootWindows,
+    apertures: HostBridgeApertures,
 };
 
 pub const Plan = struct {
@@ -45,7 +45,7 @@ pub const Error = error{
 /// unplaced requirement.
 pub fn intoScratch(input: Input, scratch: []Assignment) Error!Plan {
     std.debug.assert(input.nodes.len <= max_nodes);
-    assertRootWindowsKinds(input.root_windows);
+    assertApertureKinds(input.apertures);
     assertInputShape(input);
 
     const required = try reachableRequirementCount(input);
@@ -62,7 +62,7 @@ pub fn intoScratch(input: Input, scratch: []Assignment) Error!Plan {
     for (input.roots) |root| {
         std.debug.assert(root < input.nodes.len);
         std.debug.assert(input.nodes[root].parent == null);
-        context.pushFrame(input.root_windows);
+        context.pushFrame(input.apertures);
         try context.visit(root);
         context.popFrame();
     }
@@ -88,7 +88,7 @@ const Context = struct {
     input: Input,
     scratch: []Assignment,
     out_len: usize,
-    frames: [max_depth]RootWindows,
+    frames: [max_depth]HostBridgeApertures,
     depth: usize,
 
     fn visit(self: *Context, index: NodeIndex) Error!void {
@@ -123,12 +123,12 @@ const Context = struct {
         }
     }
 
-    fn currentFrame(self: *Context) *RootWindows {
+    fn currentFrame(self: *Context) *HostBridgeApertures {
         std.debug.assert(self.depth > 0);
         return &self.frames[self.depth - 1];
     }
 
-    fn pushFrame(self: *Context, frame: RootWindows) void {
+    fn pushFrame(self: *Context, frame: HostBridgeApertures) void {
         std.debug.assert(self.depth < max_depth);
         self.frames[self.depth] = frame;
         self.depth += 1;
@@ -223,7 +223,7 @@ fn requirementLess(left: Requirement, right: Requirement) bool {
     return false;
 }
 
-fn place(requirement: Requirement, frame: *RootWindows) Error!Assignment {
+fn place(requirement: Requirement, frame: *HostBridgeApertures) Error!Assignment {
     assertRequirement(requirement);
     return switch (requirement.kind) {
         .io => placeInPools(requirement, frame, &.{.io}),
@@ -234,7 +234,7 @@ fn place(requirement: Requirement, frame: *RootWindows) Error!Assignment {
     };
 }
 
-fn placeInPools(requirement: Requirement, frame: *RootWindows, comptime pools: []const Kind) Error!Assignment {
+fn placeInPools(requirement: Requirement, frame: *HostBridgeApertures, comptime pools: []const Kind) Error!Assignment {
     for (pools) |pool| {
         std.debug.assert(model.eligiblePools(requirement.kind).has(pool));
         if (tryPlaceInPool(requirement, pool, aperturePtr(frame, pool))) |assignment| return assignment;
@@ -252,8 +252,8 @@ fn tryPlaceInPool(requirement: Requirement, pool: Kind, aperture: *Aperture) ?As
     return .{ .requirement = requirement, .pool = pool, .base = base };
 }
 
-fn childFrame(assignments: []const Assignment) RootWindows {
-    var child = RootWindows{};
+fn childFrame(assignments: []const Assignment) HostBridgeApertures {
+    var child = HostBridgeApertures{};
     for (assignments) |assignment| {
         switch (assignment.requirement.source) {
             .bridge_window => switch (assignment.requirement.kind) {
@@ -282,7 +282,7 @@ fn childFrame(assignments: []const Assignment) RootWindows {
     return child;
 }
 
-fn aperturePtr(frame: *RootWindows, kind: Kind) *Aperture {
+fn aperturePtr(frame: *HostBridgeApertures, kind: Kind) *Aperture {
     return switch (kind) {
         .io => &frame.io,
         .mmio32 => &frame.mmio32,
@@ -292,12 +292,12 @@ fn aperturePtr(frame: *RootWindows, kind: Kind) *Aperture {
     };
 }
 
-fn assertRootWindowsKinds(windows: RootWindows) void {
-    std.debug.assert(windows.io.kind == .io);
-    std.debug.assert(windows.mmio32.kind == .mmio32);
-    std.debug.assert(windows.mmio32_pref.kind == .mmio32_pref);
-    std.debug.assert(windows.mmio64.kind == .mmio64);
-    std.debug.assert(windows.mmio64_pref.kind == .mmio64_pref);
+fn assertApertureKinds(apertures: HostBridgeApertures) void {
+    std.debug.assert(apertures.io.kind == .io);
+    std.debug.assert(apertures.mmio32.kind == .mmio32);
+    std.debug.assert(apertures.mmio32_pref.kind == .mmio32_pref);
+    std.debug.assert(apertures.mmio64.kind == .mmio64);
+    std.debug.assert(apertures.mmio64_pref.kind == .mmio64_pref);
 }
 
 fn assertRequirement(requirement: Requirement) void {

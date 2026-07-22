@@ -10,7 +10,7 @@ const Entry = pci.bar.Entry;
 const Function = pci.config.Function;
 const Kind = pci.resources.Kind;
 const Requirement = pci.resources.Requirement;
-const RootWindows = pci.resources.RootWindows;
+const HostBridgeApertures = pci.resources.HostBridgeApertures;
 const Sbdf = pci.core.Sbdf;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
@@ -125,9 +125,9 @@ test "unit: Aperture allocate failure leaves the aperture unchanged" {
     try std.testing.expectEqual(@as(u64, 0x100), end_overflow.size);
 }
 
-test "unit: RootWindows.get selects the aperture for each resource kind" {
+test "unit: HostBridgeApertures.get selects the aperture for each resource kind" {
     // Use distinct ranges in every field so a wrong switch arm returns observable wrong bounds.
-    const windows = RootWindows{
+    const apertures = HostBridgeApertures{
         .io = .range(.io, 0x0010, 0x10),
         .mmio32 = .range(.mmio32, 0x1000, 0x20),
         .mmio32_pref = .range(.mmio32_pref, 0x2000, 0x30),
@@ -147,7 +147,7 @@ test "unit: RootWindows.get selects the aperture for each resource kind" {
     };
 
     for (cases) |case| {
-        const aperture = windows.get(case.kind);
+        const aperture = apertures.get(case.kind);
 
         try std.testing.expectEqual(case.kind, aperture.kind);
         try std.testing.expectEqual(case.base, aperture.base);

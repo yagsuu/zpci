@@ -154,7 +154,7 @@ test "integration: enumerate assign program memory BAR" {
     const plan = try pci.resources.assignment.intoScratch(.{
         .nodes = &assignment_nodes,
         .roots = &.{0},
-        .root_windows = .{
+        .apertures = .{
             .mmio32 = Aperture.range(.mmio32, 0x8000_0000, 0x1000),
         },
     }, &assignment_scratch);

@@ -272,7 +272,7 @@ pub const Assignment = model.Assignment;
 pub const EligibleSet = model.EligibleSet;
 pub const Kind = model.Kind;
 pub const Requirement = model.Requirement;
-pub const RootWindows = model.RootWindows;
+pub const HostBridgeApertures = model.HostBridgeApertures;
 pub const Source = model.Source;
 pub const bridge_io_alignment = model.bridge_io_alignment;
 pub const bridge_memory_alignment = model.bridge_memory_alignment;
@@ -754,7 +754,7 @@ _ = entries;
 ### Resource assignment and programming
 
 ```zig
-const windows = pci.resources.RootWindows{
+const apertures = pci.resources.HostBridgeApertures{
     .io = .{ .base = 0xC000, .size = 0x4000 },
     .mmio32 = .{ .base = 0x8000_0000, .size = 0x1000_0000 },
     .mmio64 = .{ .base = 0x1_0000_0000, .size = 0x1_0000_0000 },
@@ -763,7 +763,7 @@ const windows = pci.resources.RootWindows{
 var assignments: [256]pci.resources.Assignment = undefined;
 const plan = try pci.resources.assignment.intoScratch(.{
     .tree = tree,
-    .windows = windows,
+    .apertures = apertures,
     .scratch = &assignments,
 });
 

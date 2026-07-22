@@ -12,7 +12,7 @@ pub const Assignment = model.Assignment;
 pub const EligibleSet = model.EligibleSet;
 pub const Kind = model.Kind;
 pub const Requirement = model.Requirement;
-pub const RootWindows = model.RootWindows;
+pub const HostBridgeApertures = model.HostBridgeApertures;
 pub const Source = model.Source;
 
 pub const bridge_io_alignment = model.bridge_io_alignment;

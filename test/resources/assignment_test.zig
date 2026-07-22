@@ -14,7 +14,7 @@ const Function = config.Function;
 const Kind = assignment.Kind;
 const Node = assignment.Node;
 const Requirement = assignment.Requirement;
-const RootWindows = assignment.RootWindows;
+const HostBridgeApertures = assignment.HostBridgeApertures;
 const Source = assignment.Source;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
 
@@ -37,7 +37,7 @@ test "unit: sizeBound sums all nodes while empty roots emit no assignments" {
     const input = assignment.Input{
         .nodes = &nodes,
         .roots = &.{},
-        .root_windows = .{},
+        .apertures = .{},
     };
     var scratch: [3]Assignment = undefined;
 
@@ -78,7 +78,7 @@ test "unit: intoScratch allows more assignments than nodes" {
     const plan = try assignment.intoScratch(.{
         .nodes = nodes,
         .roots = roots,
-        .root_windows = .{ .mmio32 = .range(.mmio32, 0x8000_0000, assignment_count * 0x1000) },
+        .apertures = .{ .mmio32 = .range(.mmio32, 0x8000_0000, assignment_count * 0x1000) },
     }, scratch);
 
     try std.testing.expect(assignment_count > assignment.max_nodes);
@@ -101,7 +101,7 @@ test "unit: DFS preorder emits parent requirements before children in input orde
     const input = assignment.Input{
         .nodes = &nodes,
         .roots = &.{0},
-        .root_windows = .{ .mmio32 = .range(.mmio32, 0x8000_0000, 0x8000) },
+        .apertures = .{ .mmio32 = .range(.mmio32, 0x8000_0000, 0x8000) },
     };
     var scratch: [3]Assignment = undefined;
 
@@ -125,35 +125,35 @@ test "unit: pool preference records natural pools" {
         .{
             .name = "io natural",
             .requirement = barRequirement(function, 0, .io, 0x10, 0x10),
-            .windows = .{ .io = .range(.io, 0x1000, 0x100) },
+            .apertures = .{ .io = .range(.io, 0x1000, 0x100) },
             .pool = .io,
             .base = 0x1000,
         },
         .{
             .name = "mmio32 natural",
             .requirement = barRequirement(function, 0, .mmio32, 0x1000, 0x1000),
-            .windows = .{ .mmio32 = .range(.mmio32, 0x8000_0000, 0x2000) },
+            .apertures = .{ .mmio32 = .range(.mmio32, 0x8000_0000, 0x2000) },
             .pool = .mmio32,
             .base = 0x8000_0000,
         },
         .{
             .name = "mmio32_pref natural",
             .requirement = barRequirement(function, 0, .mmio32_pref, 0x1000, 0x1000),
-            .windows = .{ .mmio32_pref = .range(.mmio32_pref, 0x9000_0000, 0x2000) },
+            .apertures = .{ .mmio32_pref = .range(.mmio32_pref, 0x9000_0000, 0x2000) },
             .pool = .mmio32_pref,
             .base = 0x9000_0000,
         },
         .{
             .name = "mmio64 natural",
             .requirement = barRequirement(function, 0, .mmio64, 0x1000, 0x1000),
-            .windows = .{ .mmio64 = .range(.mmio64, 0x1_0000_0000, 0x2000) },
+            .apertures = .{ .mmio64 = .range(.mmio64, 0x1_0000_0000, 0x2000) },
             .pool = .mmio64,
             .base = 0x1_0000_0000,
         },
         .{
             .name = "mmio64_pref natural",
             .requirement = barRequirement(function, 0, .mmio64_pref, 0x1000, 0x1000),
-            .windows = .{ .mmio64_pref = .range(.mmio64_pref, 0x2_0000_0000, 0x2000) },
+            .apertures = .{ .mmio64_pref = .range(.mmio64_pref, 0x2_0000_0000, 0x2000) },
             .pool = .mmio64_pref,
             .base = 0x2_0000_0000,
         },
@@ -171,35 +171,35 @@ test "unit: pool preference records fallback pools" {
         .{
             .name = "mmio32_pref fallback",
             .requirement = barRequirement(function, 0, .mmio32_pref, 0x1000, 0x1000),
-            .windows = .{ .mmio32 = .range(.mmio32, 0xA000_0000, 0x2000) },
+            .apertures = .{ .mmio32 = .range(.mmio32, 0xA000_0000, 0x2000) },
             .pool = .mmio32,
             .base = 0xA000_0000,
         },
         .{
             .name = "mmio64 fallback",
             .requirement = barRequirement(function, 0, .mmio64, 0x1000, 0x1000),
-            .windows = .{ .mmio32 = .range(.mmio32, 0xB000_0000, 0x2000) },
+            .apertures = .{ .mmio32 = .range(.mmio32, 0xB000_0000, 0x2000) },
             .pool = .mmio32,
             .base = 0xB000_0000,
         },
         .{
             .name = "mmio64_pref prefetchable 32-bit fallback",
             .requirement = barRequirement(function, 0, .mmio64_pref, 0x1000, 0x1000),
-            .windows = .{ .mmio32_pref = .range(.mmio32_pref, 0xC000_0000, 0x2000) },
+            .apertures = .{ .mmio32_pref = .range(.mmio32_pref, 0xC000_0000, 0x2000) },
             .pool = .mmio32_pref,
             .base = 0xC000_0000,
         },
         .{
             .name = "mmio64_pref non-prefetchable 64-bit fallback",
             .requirement = barRequirement(function, 0, .mmio64_pref, 0x1000, 0x1000),
-            .windows = .{ .mmio64 = .range(.mmio64, 0x3_0000_0000, 0x2000) },
+            .apertures = .{ .mmio64 = .range(.mmio64, 0x3_0000_0000, 0x2000) },
             .pool = .mmio64,
             .base = 0x3_0000_0000,
         },
         .{
             .name = "mmio64_pref non-prefetchable 32-bit fallback",
             .requirement = barRequirement(function, 0, .mmio64_pref, 0x1000, 0x1000),
-            .windows = .{ .mmio32 = .range(.mmio32, 0xD000_0000, 0x2000) },
+            .apertures = .{ .mmio32 = .range(.mmio32, 0xD000_0000, 0x2000) },
             .pool = .mmio32,
             .base = 0xD000_0000,
         },
@@ -226,7 +226,7 @@ test "unit: alignment sort preserves caller requirements and placements stay con
     const input = assignment.Input{
         .nodes = &nodes,
         .roots = &.{0},
-        .root_windows = .{ .mmio32 = window },
+        .apertures = .{ .mmio32 = window },
     };
     var scratch: [6]Assignment = undefined;
 
@@ -261,7 +261,7 @@ test "unit: ResourceExhausted reports the first requirement whose chain has no r
     const input = assignment.Input{
         .nodes = &nodes,
         .roots = &.{0},
-        .root_windows = .{ .mmio32 = .range(.mmio32, 0x8000_0000, 0x2000) },
+        .apertures = .{ .mmio32 = .range(.mmio32, 0x8000_0000, 0x2000) },
     };
     var scratch: [2]Assignment = undefined;
 
@@ -281,7 +281,7 @@ test "unit: StorageExhausted is checked before scratch is modified" {
     const input = assignment.Input{
         .nodes = &nodes,
         .roots = &.{0},
-        .root_windows = .{ .mmio32 = .range(.mmio32, 0x8000_0000, 0x4000) },
+        .apertures = .{ .mmio32 = .range(.mmio32, 0x8000_0000, 0x4000) },
     };
     const sentinel = Assignment{ .requirement = reqs[0], .pool = .io, .base = 0xDEAD_BEEF };
     var scratch = [_]Assignment{sentinel};
@@ -313,7 +313,7 @@ test "unit: bridge sub-apertures come only from bridge-window assignments" {
     const input = assignment.Input{
         .nodes = &nodes,
         .roots = &.{0},
-        .root_windows = .{
+        .apertures = .{
             .io = .range(.io, 0x1000, 0x3000),
             .mmio32 = .range(.mmio32, 0x8000_0000, 0x8000),
         },
@@ -340,7 +340,7 @@ test "unit: bridge sub-apertures come only from bridge-window assignments" {
 const PlacementCase = struct {
     name: []const u8,
     requirement: Requirement,
-    windows: RootWindows,
+    apertures: HostBridgeApertures,
     pool: Kind,
     base: u64,
 };
@@ -350,7 +350,7 @@ fn expectPlacements(cases: []const PlacementCase) !void {
         errdefer std.debug.print("case: {s}\n", .{case.name});
         const reqs = [_]Requirement{case.requirement};
         const nodes = [_]Node{.{ .parent = null, .kind = .endpoint, .requirements = &reqs }};
-        const input = assignment.Input{ .nodes = &nodes, .roots = &.{0}, .root_windows = case.windows };
+        const input = assignment.Input{ .nodes = &nodes, .roots = &.{0}, .apertures = case.apertures };
         var scratch: [1]Assignment = undefined;
 
         const plan = try assignment.intoScratch(input, &scratch);

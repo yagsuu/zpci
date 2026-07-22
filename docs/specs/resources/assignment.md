@@ -1,6 +1,6 @@
 # Resource assignment
 
-Defines the pure allocation planner that consumes a caller-projected node list, a root-window aperture set, and per-node `Requirement`s, and returns a `Plan` naming one `Assignment` per input `Requirement`. Owns the `Node`, `NodeKind`, `NodeIndex`, `Input`, and `Plan` types, the DFS-preorder placement algorithm, the per-aperture requirement sort, the pool-preference order across the eligibility fallback chain, the effective sub-aperture at bridges, and the `intoScratch` / `sizeBound` entry points.
+Defines the pure allocation planner that consumes a caller-projected node list, a host-bridge aperture set, and per-node `Requirement`s, and returns a `Plan` naming one `Assignment` per input `Requirement`. Owns the `Node`, `NodeKind`, `NodeIndex`, `Input`, and `Plan` types, the DFS-preorder placement algorithm, the per-aperture requirement sort, the pool-preference order across the eligibility fallback chain, the effective sub-aperture at bridges, and the `intoScratch` / `sizeBound` entry points.
 
 Per `docs/guidelines/conventions.md` §Authority order, this domain spec is the sole authority on the assignment algorithm, the pool-preference order, and the bridge sub-aperture composition. Any conflicting declarations in `docs/specs/index.md` or `docs/specs/architecture.md` are illustrative and are corrected to match this spec.
 
@@ -25,7 +25,7 @@ Owned:
 - `NodeIndex`, `max_nodes`, `max_depth` — index and depth bounds.
 - `NodeKind` — two-variant tag distinguishing endpoints from bridges.
 - `Node` — flat per-function record carrying `parent`, `kind`, and pre-computed `requirements`.
-- `Input` — the argument struct grouping `nodes`, `roots`, and `root_windows`.
+- `Input` — the argument struct grouping `nodes`, `roots`, and `apertures`.
 - `Plan` — the returned record carrying `assignments`.
 - `intoScratch(input, scratch) Error!Plan` — the DFS-preorder placement entry point.
 - `sizeBound(nodes) usize` — upper-bound helper for sizing the `scratch` slice.
@@ -43,7 +43,7 @@ Deferred:
 - Secondary-bus reset orchestration. No approved zpci spec owns this in the initial library.
 - Backtracking, best-fit, or multi-pass placement.
 - Firmware-hint or preserve-existing-programming policy.
-- Aperture-overlap detection between `RootWindows` fields (owned by `docs/specs/resources/model.md` §Aperture).
+- Aperture-overlap detection between `HostBridgeApertures` fields (owned by `docs/specs/resources/model.md` §Aperture).
 - Diagnostic out-parameters listing rejected requirements.
 - Allocator-backed constructor (`intoAlloc`).
 - Reverse lookup from an emitted `Assignment` to its source `Node`.
@@ -54,7 +54,7 @@ Deferred:
 
 Layering constraints from `docs/specs/architecture.md`:
 
-- `resources/` imports `core/`, `config/`, `header/`, and `bar`. This spec imports `resources/model.zig` for `Requirement`, `Assignment`, `Kind`, `Source`, `RootWindows`, `Aperture`, and `eligiblePools`.
+- `resources/` imports `core/`, `config/`, `header/`, and `bar`. This spec imports `resources/model.zig` for `Requirement`, `Assignment`, `Kind`, `Source`, `HostBridgeApertures`, `Aperture`, and `eligiblePools`.
 - `resources/` MUST NOT import `topology/`. A caller that has a `tree.Tree` projects it into `[]const Node` at the callsite before calling `intoScratch`.
 - `resources/` MUST NOT import `interrupts/` or `memory/`.
 - `resources/assignment` MUST NOT write config space. Config writes belong to `docs/specs/resources/programming.md`, which consumes a `Plan`.
@@ -74,7 +74,7 @@ pub const Requirement = model.Requirement;
 pub const Assignment = model.Assignment;
 pub const Kind = model.Kind;
 pub const Aperture = model.Aperture;
-pub const RootWindows = model.RootWindows;
+pub const HostBridgeApertures = model.HostBridgeApertures;
 pub const Source = model.Source;
 
 pub const NodeIndex = u16;
@@ -92,7 +92,7 @@ pub const Node = struct {
 pub const Input = struct {
     nodes: []const Node,
     roots: []const NodeIndex,
-    root_windows: RootWindows,
+    apertures: HostBridgeApertures,
 };
 
 pub const Plan = struct {
@@ -110,12 +110,12 @@ pub fn sizeBound(nodes: []const Node) usize;
 
 Rules:
 
-- `Requirement`, `Assignment`, `Kind`, `Aperture`, `RootWindows`, and `Source` are re-exports from `docs/specs/resources/model.md`. They are not owned by this spec.
+- `Requirement`, `Assignment`, `Kind`, `Aperture`, `HostBridgeApertures`, and `Source` are re-exports from `docs/specs/resources/model.md`. They are not owned by this spec.
 - `NodeIndex` is a type alias for `u16`, not a newtype wrapper. Indices name positions in `Input.nodes`.
 - `max_nodes = 65_535` bounds one `Plan`. This matches `docs/specs/topology/tree.md` §`NodeIndex`.
 - `max_depth = 32` bounds the DFS stack; matches `docs/specs/topology/tree.md` §`max_depth`.
 - `Node` is a value type. `Node.requirements` is a borrowed slice; the caller keeps it live for the duration of `intoScratch`.
-- `Input.root_windows` is a value type; assignment copies it internally as the initial DFS frame.
+- `Input.apertures` is a value type; assignment copies it internally as the initial DFS frame.
 - `Plan.assignments` borrows `scratch`; callers MUST keep `scratch` live for the returned `Plan`'s lifetime.
 - Every method MUST NOT allocate, retry, log, synchronize, or perform I/O.
 - Every method is deterministic. Same `Input` produces byte-identical `Plan.assignments`.
@@ -145,7 +145,7 @@ Rules:
 pub const Input = struct {
     nodes: []const Node,
     roots: []const NodeIndex,
-    root_windows: RootWindows,
+    apertures: HostBridgeApertures,
 };
 ```
 
@@ -154,7 +154,7 @@ Rules:
 - `nodes.len <= max_nodes`. `intoScratch` returns `error.StorageExhausted` when this bound is violated by an internal count during placement, not by an upfront check on `nodes.len`; a violation of the bound before placement runs is a programmer error, not a typed error.
 - `roots` names one `NodeIndex` per root — an entry in `nodes` whose `parent == null`. `roots` order controls the top-level DFS order in `Plan.assignments`.
 - Every `roots[i]` MUST satisfy `roots[i] < nodes.len` and `nodes[roots[i]].parent == null`. Both are programmer-error assertions.
-- `root_windows` describes the caller-supplied aperture set at the top of the DFS. Missing pools use `Aperture{ .kind = <name>, .base = 0, .size = 0 }` per `docs/specs/resources/model.md` §RootWindows.
+- `apertures` describes the caller-supplied host-bridge aperture set at the top of the DFS. Missing pools use `Aperture{ .kind = <name>, .base = 0, .size = 0 }` per `docs/specs/resources/model.md` §HostBridgeApertures.
 
 ## `Plan` `[zpci]`
 
@@ -178,7 +178,7 @@ Rules:
 1. Compute `required = sum of nodes[i].requirements.len for every `i` reachable from a root via `parent` links`. If `required > scratch.len`, return `error.StorageExhausted`. `scratch` MUST NOT be modified.
 2. Initialize `out_len: usize = 0`.
 3. For each `root` in `input.roots` in slice order:
-   1. Push a fresh DFS frame containing a mutable copy of `input.root_windows`.
+   1. Push a fresh DFS frame containing a mutable copy of `input.apertures`.
    2. Call `visit(root)` (§Visit routine).
 4. Return `Plan{ .assignments = scratch[0..out_len] }`.
 
@@ -201,15 +201,15 @@ Rules:
 
 Rules:
 
-- Assignment MUST NOT allocate. All state lives in the fixed-capacity DFS frame stack (`[max_depth]RootWindows`) and per-node local sort buffer.
+- Assignment MUST NOT allocate. All state lives in the fixed-capacity DFS frame stack (`[max_depth]HostBridgeApertures`) and per-node local sort buffer.
 - Assignment MUST NOT perform I/O. Every field it reads comes from `input`; every field it writes goes to `scratch`.
 - Assignment MUST be deterministic. Same `input` produces byte-identical `scratch[0..out_len]`.
-- Assignment MUST NOT mutate `input.nodes`, `input.roots`, `input.root_windows`, or any `Node.requirements`.
+- Assignment MUST NOT mutate `input.nodes`, `input.roots`, `input.apertures`, or any `Node.requirements`.
 - On `error.StorageExhausted` or `error.ResourceExhausted`, `scratch` contents up to the failing write are undefined; callers MUST NOT read the slice.
 
 ### Effective apertures `[zpci]`
 
-The DFS frame carries five apertures, one per pool, matching `RootWindows`:
+The DFS frame carries five apertures, one per pool, matching `HostBridgeApertures`:
 
 ```zig
 const Frame = struct {
@@ -223,7 +223,7 @@ const Frame = struct {
 
 Each aperture tracks a live cursor: `base` advances forward and `size` shrinks as requirements are placed. A frame is a mutable copy scoped to one recursion level; the parent frame is preserved on the stack and restored on return.
 
-The initial frame is `input.root_windows`. Descendant frames are derived per §Bridge sub-aperture composition.
+The initial frame is `input.apertures`. Descendant frames are derived per §Bridge sub-aperture composition.
 
 ### Requirement sort `[zpci]`
 
@@ -378,7 +378,7 @@ comptime {
 
 - `Input.nodes` is a borrowed slice; assignment reads only.
 - `Input.roots` is a borrowed slice; assignment reads only.
-- `Input.root_windows` is a value; assignment copies it into the initial DFS frame.
+- `Input.apertures` is a value; assignment copies it into the initial DFS frame.
 - Every `Node.requirements` slice is borrowed transitively. Each `Requirement.source` in turn borrows `config.Function` (per `docs/specs/resources/model.md` §Source); lifetime follows the underlying `ConfigSpace` backend.
 - `scratch: []Assignment` is borrowed; the returned `Plan.assignments` borrows the prefix.
 - Assignment retains no references past return.
@@ -426,7 +426,7 @@ for (tree.nodes, 0..) |tnode, i| {
 const input = pci.resources.assignment.Input{
     .nodes = nodes[0..tree.nodes.len],
     .roots = tree.roots,
-    .root_windows = platform_windows,
+    .apertures = platform_apertures,
 };
 ```
 
@@ -444,7 +444,7 @@ const plan = try pci.resources.assignment.intoScratch(input, &plan_scratch);
 const plan = pci.resources.assignment.intoScratch(input, &plan_scratch) catch |err| switch (err) {
     error.ResourceExhausted => {
         // A requirement's entire pool-preference chain was empty or too small.
-        // Caller widens root windows or rejects the topology.
+        // Caller widens the host-bridge apertures or rejects the topology.
         return err;
     },
     error.StorageExhausted => {
@@ -491,8 +491,8 @@ Rules:
 **Placement:**
 
 - `unit:` empty `Input.roots` → `Plan.assignments.len == 0`, no error.
-- `unit:` single endpoint, single `.mmio32` BAR, sufficient `root_windows.mmio32` → one `Assignment`, `pool == .mmio32`.
-- `unit:` single endpoint, `.mmio64_pref` BAR, `root_windows.mmio64_pref` populated → placement in `.mmio64_pref`.
+- `unit:` single endpoint, single `.mmio32` BAR, sufficient `apertures.mmio32` → one `Assignment`, `pool == .mmio32`.
+- `unit:` single endpoint, `.mmio64_pref` BAR, `apertures.mmio64_pref` populated → placement in `.mmio64_pref`.
 - `unit:` single endpoint, `.mmio64_pref` BAR, no `.mmio64_pref` aperture, `.mmio32_pref` populated → falls back to `.mmio32_pref`.
 - `unit:` single endpoint, `.mmio64_pref` BAR, only `.mmio32` populated → falls back to `.mmio32`.
 - `unit:` single endpoint, `.mmio64` BAR, only `.mmio32` populated → falls back to `.mmio32`.

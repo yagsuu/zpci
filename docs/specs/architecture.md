@@ -36,7 +36,7 @@ Related specs:
 ```text
 caller
   -> Segment[]                            (ECAM apertures, caller-supplied)
-  -> RootWindows                          (IO/MMIO32/MMIO64 pools, caller-supplied)
+  -> HostBridgeApertures                   (IO/MMIO32/MMIO64 pools, caller-supplied)
   -> InterruptRouting                     (MSI/MSI-X message + vector identity)
   -> ConfigSpace                          (caller-constructed: Ecam | Pio | testing.config.TestConfigSpace)
   -> BarMemory                            (caller-supplied accessor for MSI-X table/PBA)
@@ -56,7 +56,7 @@ planner (whole tree)
     -> topology.enumerate                 (presence, multifunction, bridge recursion)
     -> topology.tree                      (parent/child borrowed view)
     -> resources.model.Requirement[]      (per-function BAR + bridge-window needs)
-    -> resources.assignment.plan          (allocation over RootWindows; no writes)
+    -> resources.assignment.plan          (allocation over HostBridgeApertures; no writes)
     -> resources.bridge.encodeWindow      (limit/base values, disabled encodings)
 
 programmer (commit step)

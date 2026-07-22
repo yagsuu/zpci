@@ -1,8 +1,8 @@
 # Resource model
 
-Defines the pool taxonomy, per-node requirement records, root-window apertures, per-node assignment records, and the hard eligibility table used by resource assignment. Owns the five-variant `Kind` enum (`io`, `mmio32`, `mmio32_pref`, `mmio64`, `mmio64_pref`), `Aperture`, `RootWindows`, `Source`, `Requirement`, `Assignment`, and the pure `eligiblePools` truth table.
+Defines the pool taxonomy, per-node requirement records, host-bridge apertures, per-node assignment records, and the hard eligibility table used by resource assignment. Owns the five-variant `Kind` enum (`io`, `mmio32`, `mmio32_pref`, `mmio64`, `mmio64_pref`), `Aperture`, `HostBridgeApertures`, `Source`, `Requirement`, `Assignment`, and the pure `eligiblePools` truth table.
 
-Per `docs/guidelines/conventions.md` §Authority order, this domain spec is the sole authority on the five-pool taxonomy, the eligibility truth table, and the shape of `Requirement` / `Aperture` / `RootWindows` / `Assignment`. Any conflicting declarations in `docs/specs/index.md` or `docs/specs/architecture.md` are illustrative and are corrected to match this spec.
+Per `docs/guidelines/conventions.md` §Authority order, this domain spec is the sole authority on the five-pool taxonomy, the eligibility truth table, and the shape of `Requirement` / `Aperture` / `HostBridgeApertures` / `Assignment`. Any conflicting declarations in `docs/specs/index.md` or `docs/specs/architecture.md` are illustrative and are corrected to match this spec.
 
 Markers: `[std]` = PCI / PCI Express mandated; `[zpci]` = zpci design choice.
 
@@ -27,7 +27,7 @@ Owned:
 - The closed `Kind` enum naming the five pools (`io`, `mmio32`, `mmio32_pref`, `mmio64`, `mmio64_pref`).
 - `EligibleSet` packed set and the `eligiblePools(kind)` pure function.
 - `Aperture` (one pool window supplied by the caller) with `contains` / `end` / `isEmpty` helpers.
-- `RootWindows` (five apertures) with `get(kind)` lookup.
+- `HostBridgeApertures` (five apertures) with `get(kind)` lookup.
 - `Source` tagged union identifying what a requirement decodes back to (endpoint BAR, endpoint expansion ROM, bridge window).
 - `Requirement` (kind, size, alignment, source) plus producer helpers `Requirement.fromBar` and `Requirement.fromExpansionRom`.
 - `Assignment` (requirement, pool, base) — the per-node placement record consumed by resource programming.
@@ -141,28 +141,28 @@ Rules:
 - Allocation is monotonic within one contiguous aperture. Deallocation, hole reuse, pool fallback, and cross-aperture policy are outside this helper.
 - Overlap detection between apertures is not owned by this spec. Two apertures with overlapping `[base, end)` ranges are legal on the input side; assignment never allocates into more than one aperture per requirement, so overlap does not compromise correctness.
 
-## RootWindows `[zpci]`
+## HostBridgeApertures `[zpci]`
 
 Five apertures, one per pool, always present as fields.
 
 ```zig
-pub const RootWindows = struct {
+pub const HostBridgeApertures = struct {
     io: Aperture = .absent(.io),
     mmio32: Aperture = .absent(.mmio32),
     mmio32_pref: Aperture = .absent(.mmio32_pref),
     mmio64: Aperture = .absent(.mmio64),
     mmio64_pref: Aperture = .absent(.mmio64_pref),
 
-    pub fn get(self: RootWindows, kind: Kind) Aperture;
+    pub fn get(self: HostBridgeApertures, kind: Kind) Aperture;
 };
 ```
 
 Rules:
 
-- Each field's `kind` MUST equal the field name. A caller construction that mismatches is a programmer error; `RootWindows` performs no runtime check.
+- Each field's `kind` MUST equal the field name. A caller construction that mismatches is a programmer error; `HostBridgeApertures` performs no runtime check.
 - Missing pools are represented with `Aperture.absent(<kind>)` (or the equivalent `Aperture{ .kind = <name>, .base = 0, .size = 0 }`). There is no optional aperture; `size == 0` is the canonical empty state.
 - `get(kind)` returns the field whose `kind` equals the argument. The lookup is a `switch` over five variants and constant-time.
-- `RootWindows` is a value type. Every field defaults to `Aperture.absent(<name>)`, so callers with fewer than five apertures MAY use a partial initializer such as `RootWindows{ .mmio32 = .range(.mmio32, base, size) }` and let absent pools default.
+- `HostBridgeApertures` is a value type. Every field defaults to `Aperture.absent(<name>)`, so callers with fewer than five apertures MAY use a partial initializer such as `HostBridgeApertures{ .mmio32 = .range(.mmio32, base, size) }` and let absent pools default.
 
 ## Source `[zpci]`
 
@@ -310,16 +310,16 @@ Rules:
 - `fromBar` returns `?Requirement` (`null` for unimplemented / zero-sized).
 - `fromExpansionRom` returns `?Requirement` (`null` for `size == 0`).
 - `eligiblePools` is pure; it cannot fail.
-- `Aperture.contains` / `end` / `isEmpty` and `RootWindows.get` are pure; they cannot fail.
+- `Aperture.contains` / `end` / `isEmpty` and `HostBridgeApertures.get` are pure; they cannot fail.
 
 `ResourceExhausted`, `BridgeWindowUnencodable`, and the programming variants are owned by the assignment, bridge-window, and programming specs respectively; `docs/specs/core/errors.md` fixes the vocabulary. No error variant is owned here.
 
 ## View / borrowing behavior
 
-- Every type in this spec is a value: `Kind`, `EligibleSet`, `Aperture`, `RootWindows`, `Source`, `Requirement`, `Assignment`.
+- Every type in this spec is a value: `Kind`, `EligibleSet`, `Aperture`, `HostBridgeApertures`, `Source`, `Requirement`, `Assignment`.
 - `Source` and `Requirement` transitively borrow `config.Function` through `endpoint_bar`, `endpoint_expansion_rom`, and `bridge_window.function`. Lifetime follows the underlying `ConfigSpace` backend.
 - The model does not allocate, cache, retry, or synchronize.
-- All producers (`fromBar`, `fromExpansionRom`) and all inspectors (`eligiblePools`, `Aperture.contains`, `RootWindows.get`) are `comptime`-callable when their runtime arguments are `comptime`-known.
+- All producers (`fromBar`, `fromExpansionRom`) and all inspectors (`eligiblePools`, `Aperture.contains`, `HostBridgeApertures.get`) are `comptime`-callable when their runtime arguments are `comptime`-known.
 
 ## zstdx usage
 
@@ -335,7 +335,7 @@ The five-pool taxonomy, alignment discipline, and eligibility table are PCI-doma
 pub const model = @import("resources/model.zig");
 ```
 
-Callers reach the public surface as `pci.resources.model.Kind`, `pci.resources.model.Requirement`, `pci.resources.model.RootWindows`, `pci.resources.model.Assignment`, `pci.resources.model.eligiblePools`, etc.
+Callers reach the public surface as `pci.resources.model.Kind`, `pci.resources.model.Requirement`, `pci.resources.model.HostBridgeApertures`, `pci.resources.model.Assignment`, `pci.resources.model.eligiblePools`, etc.
 
 ## Usage
 
@@ -376,10 +376,10 @@ const elig = pci.resources.model.eligiblePools(.mmio64_pref);
 // elig.io == false
 ```
 
-Describe caller-supplied root apertures:
+Describe caller-supplied host-bridge apertures:
 
 ```zig
-const windows = pci.resources.model.RootWindows{
+const apertures = pci.resources.model.HostBridgeApertures{
     .io          = .{ .kind = .io,          .base = 0x0000_1000,       .size = 0x0000_F000 },
     .mmio32      = .{ .kind = .mmio32,      .base = 0xC000_0000,       .size = 0x1000_0000 },
     .mmio32_pref = .{ .kind = .mmio32_pref, .base = 0xD000_0000,       .size = 0x1000_0000 },
@@ -418,7 +418,7 @@ switch (a.requirement.source) {
 | `Requirement.fromExpansionRom` | never | never | O(1) | none | pure | none |
 | `eligiblePools` | never | never | O(1) | none | pure | none |
 | `Aperture.contains` / `end` / `isEmpty` | never | never | O(1) `u64` range check | none | pure | none |
-| `RootWindows.get` | never | never | O(1) five-way switch | none | pure | none |
+| `HostBridgeApertures.get` | never | never | O(1) five-way switch | none | pure | none |
 | `EligibleSet.has` | never | never | O(1) | none | pure | none |
 
 No hidden caching, retry, logging, or diagnostics. Every helper is `comptime`-callable when its runtime arguments are `comptime`-known.
