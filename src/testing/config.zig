@@ -2,8 +2,6 @@
 
 const std = @import("std");
 
-const stdx = @import("stdx");
-
 const config = @import("../config.zig");
 const core = @import("../core.zig");
 
@@ -73,19 +71,15 @@ pub const TestConfigSpace = struct {
     fn read16(context: *anyopaque, sbdf: Sbdf, offset: usize) ConfigSpace.Error!u16 {
         const self: *TestConfigSpace = @ptrCast(@alignCast(context));
         const bytes = self.functionBytes(sbdf) orelse return 0xFFFF;
-        const wrapped = stdx.bytes.load(stdx.layout.Le(u16), bytes, offset) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
-        return wrapped.native();
+        if (offset > bytes.len or bytes.len - offset < @sizeOf(u16)) return error.OutOfBounds;
+        return std.mem.readInt(u16, bytes[offset..][0..@sizeOf(u16)], .little);
     }
 
     fn read32(context: *anyopaque, sbdf: Sbdf, offset: usize) ConfigSpace.Error!u32 {
         const self: *TestConfigSpace = @ptrCast(@alignCast(context));
         const bytes = self.functionBytes(sbdf) orelse return 0xFFFF_FFFF;
-        const wrapped = stdx.bytes.load(stdx.layout.Le(u32), bytes, offset) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
-        return wrapped.native();
+        if (offset > bytes.len or bytes.len - offset < @sizeOf(u32)) return error.OutOfBounds;
+        return std.mem.readInt(u32, bytes[offset..][0..@sizeOf(u32)], .little);
     }
 
     fn write8(context: *anyopaque, sbdf: Sbdf, offset: usize, value: u8) ConfigSpace.Error!void {
@@ -97,18 +91,14 @@ pub const TestConfigSpace = struct {
     fn write16(context: *anyopaque, sbdf: Sbdf, offset: usize, value: u16) ConfigSpace.Error!void {
         const self: *TestConfigSpace = @ptrCast(@alignCast(context));
         const bytes = self.functionBytes(sbdf) orelse return;
-        const encoded = stdx.layout.Le(u16).fromNative(value);
-        stdx.bytes.store(stdx.layout.Le(u16), bytes, offset, encoded) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
+        if (offset > bytes.len or bytes.len - offset < @sizeOf(u16)) return error.OutOfBounds;
+        std.mem.writeInt(u16, bytes[offset..][0..@sizeOf(u16)], value, .little);
     }
 
     fn write32(context: *anyopaque, sbdf: Sbdf, offset: usize, value: u32) ConfigSpace.Error!void {
         const self: *TestConfigSpace = @ptrCast(@alignCast(context));
         const bytes = self.functionBytes(sbdf) orelse return;
-        const encoded = stdx.layout.Le(u32).fromNative(value);
-        stdx.bytes.store(stdx.layout.Le(u32), bytes, offset, encoded) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
+        if (offset > bytes.len or bytes.len - offset < @sizeOf(u32)) return error.OutOfBounds;
+        std.mem.writeInt(u32, bytes[offset..][0..@sizeOf(u32)], value, .little);
     }
 };

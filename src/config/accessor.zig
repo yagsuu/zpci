@@ -11,9 +11,7 @@ const OffsetRange = stdx.core.Range(usize);
 /// One PCIe function's configuration window is 4 KiB.
 pub const pcie_window_size: usize = 0x1000;
 
-/// Borrowed handle over backend-owned PCI configuration space. The only
-/// public function-pointer seam for config-space I/O in zpci; views and
-/// iterators carry this value plus an `Sbdf` and walk state.
+/// Borrowed handle over backend-owned PCI configuration space
 ///
 /// Non-allocating; never sleeps or blocks. Handle copies share the
 /// backend context. Concurrency and memory ordering are backend-defined;

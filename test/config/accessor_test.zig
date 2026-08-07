@@ -2,7 +2,6 @@
 
 const std = @import("std");
 
-const stdx = @import("stdx");
 const pci = @import("pci");
 
 const ConfigSpace = pci.config.ConfigSpace;
@@ -39,12 +38,7 @@ const NoDwordConfig = struct {
     fn read16(context: *anyopaque, sbdf: Sbdf, offset: usize) ConfigSpace.Error!u16 {
         _ = sbdf;
         const self: *NoDwordConfig = @ptrCast(@alignCast(context));
-        // ConfigSpace validated offset+2 <= pcie_window_size before dispatch,
-        // so load cannot report EndOfStream.
-        const wrapped = stdx.bytes.load(stdx.layout.Le(u16), &self.bytes, offset) catch |err| switch (err) {
-            error.EndOfStream => unreachable,
-        };
-        return wrapped.native();
+        return std.mem.readInt(u16, self.bytes[offset..][0..@sizeOf(u16)], .little);
     }
 
     fn read32Unsupported(context: *anyopaque, sbdf: Sbdf, offset: usize) ConfigSpace.Error!u32 {
@@ -63,12 +57,7 @@ const NoDwordConfig = struct {
     fn write16(context: *anyopaque, sbdf: Sbdf, offset: usize, value: u16) ConfigSpace.Error!void {
         _ = sbdf;
         const self: *NoDwordConfig = @ptrCast(@alignCast(context));
-        const encoded = stdx.layout.Le(u16).fromNative(value);
-        // ConfigSpace validated offset+2 <= pcie_window_size before dispatch,
-        // so store cannot report EndOfStream.
-        stdx.bytes.store(stdx.layout.Le(u16), &self.bytes, offset, encoded) catch |err| switch (err) {
-            error.EndOfStream => unreachable,
-        };
+        std.mem.writeInt(u16, self.bytes[offset..][0..@sizeOf(u16)], value, .little);
     }
 
     fn write32Unsupported(context: *anyopaque, sbdf: Sbdf, offset: usize, value: u32) ConfigSpace.Error!void {

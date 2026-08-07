@@ -117,9 +117,11 @@ pub const PreorderIterator = struct {
         const pending = self.pop();
         const current = self.tree.node(pending.index);
         const sibling_is_in_scope = self.subtree_root == null or pending.index != self.subtree_root.?;
+
         if (sibling_is_in_scope) {
             if (current.next_sibling) |sibling| self.push(sibling, pending.path_depth);
         }
+
         if (current.first_child) |child| self.push(child, pending.path_depth + 1);
 
         return .{ .index = pending.index, .node = current };

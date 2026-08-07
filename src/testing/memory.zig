@@ -1,6 +1,6 @@
 //! BAR-memory test support. Spec: docs/specs/memory/bar.md §Testing `TestBarMemory`.
 
-const stdx = @import("stdx");
+const std = @import("std");
 
 const memory = @import("../memory.zig");
 
@@ -21,17 +21,13 @@ pub const TestBarMemory = struct {
 
     fn read32(context: *anyopaque, offset: usize) BarMemory.Error!u32 {
         const self: *TestBarMemory = @ptrCast(@alignCast(context));
-        const wrapped = stdx.bytes.load(stdx.layout.Le(u32), self.bytes, offset) catch |err| switch (err) {
-            error.EndOfStream => return error.BarMemoryOutOfBounds,
-        };
-        return wrapped.native();
+        if (offset > self.bytes.len or self.bytes.len - offset < @sizeOf(u32)) return error.BarMemoryOutOfBounds;
+        return std.mem.readInt(u32, self.bytes[offset..][0..@sizeOf(u32)], .little);
     }
 
     fn write32(context: *anyopaque, offset: usize, value: u32) BarMemory.Error!void {
         const self: *TestBarMemory = @ptrCast(@alignCast(context));
-        const encoded = stdx.layout.Le(u32).fromNative(value);
-        stdx.bytes.store(stdx.layout.Le(u32), self.bytes, offset, encoded) catch |err| switch (err) {
-            error.EndOfStream => return error.BarMemoryOutOfBounds,
-        };
+        if (offset > self.bytes.len or self.bytes.len - offset < @sizeOf(u32)) return error.BarMemoryOutOfBounds;
+        std.mem.writeInt(u32, self.bytes[offset..][0..@sizeOf(u32)], value, .little);
     }
 };

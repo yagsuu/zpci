@@ -2,8 +2,6 @@
 
 const std = @import("std");
 
-const stdx = @import("stdx");
-
 const pci = @import("pci");
 
 const Assignment = pci.resources.programming.Assignment;
@@ -620,19 +618,17 @@ fn expectAccess(expected: LoggedConfig.Access, actual: LoggedConfig.Access) !voi
 }
 
 fn load16(bytes: []const u8, byte_offset: usize) u16 {
-    return (stdx.bytes.load(stdx.layout.Le(u16), bytes, byte_offset) catch unreachable).native();
+    return std.mem.readInt(u16, bytes[byte_offset..][0..@sizeOf(u16)], .little);
 }
 
 fn load32(bytes: []const u8, byte_offset: usize) u32 {
-    return (stdx.bytes.load(stdx.layout.Le(u32), bytes, byte_offset) catch unreachable).native();
+    return std.mem.readInt(u32, bytes[byte_offset..][0..@sizeOf(u32)], .little);
 }
 
 fn store16(bytes: []u8, byte_offset: usize, value: u16) void {
-    const encoded = stdx.layout.Le(u16).fromNative(value);
-    stdx.bytes.store(stdx.layout.Le(u16), bytes, byte_offset, encoded) catch unreachable;
+    std.mem.writeInt(u16, bytes[byte_offset..][0..@sizeOf(u16)], value, .little);
 }
 
 fn store32(bytes: []u8, byte_offset: usize, value: u32) void {
-    const encoded = stdx.layout.Le(u32).fromNative(value);
-    stdx.bytes.store(stdx.layout.Le(u32), bytes, byte_offset, encoded) catch unreachable;
+    std.mem.writeInt(u32, bytes[byte_offset..][0..@sizeOf(u32)], value, .little);
 }

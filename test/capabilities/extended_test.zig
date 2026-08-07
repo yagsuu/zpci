@@ -2,7 +2,6 @@
 
 const std = @import("std");
 
-const stdx = @import("stdx");
 const pci = @import("pci");
 
 const ConfigSpace = pci.config.ConfigSpace;
@@ -44,10 +43,8 @@ const NoDwordConfig = struct {
     fn read16(context: *anyopaque, sbdf: Sbdf, byte_offset: usize) ConfigSpace.Error!u16 {
         _ = sbdf;
         const self: *NoDwordConfig = @ptrCast(@alignCast(context));
-        const wrapped = stdx.bytes.load(stdx.layout.Le(u16), &self.bytes, byte_offset) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
-        return wrapped.native();
+        if (byte_offset > self.bytes.len or self.bytes.len - byte_offset < @sizeOf(u16)) return error.OutOfBounds;
+        return std.mem.readInt(u16, self.bytes[byte_offset..][0..@sizeOf(u16)], .little);
     }
 
     fn read32Unsupported(context: *anyopaque, sbdf: Sbdf, byte_offset: usize) ConfigSpace.Error!u32 {
@@ -66,10 +63,8 @@ const NoDwordConfig = struct {
     fn write16(context: *anyopaque, sbdf: Sbdf, byte_offset: usize, value: u16) ConfigSpace.Error!void {
         _ = sbdf;
         const self: *NoDwordConfig = @ptrCast(@alignCast(context));
-        const encoded = stdx.layout.Le(u16).fromNative(value);
-        stdx.bytes.store(stdx.layout.Le(u16), &self.bytes, byte_offset, encoded) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
+        if (byte_offset > self.bytes.len or self.bytes.len - byte_offset < @sizeOf(u16)) return error.OutOfBounds;
+        std.mem.writeInt(u16, self.bytes[byte_offset..][0..@sizeOf(u16)], value, .little);
     }
 
     fn write32Unsupported(context: *anyopaque, sbdf: Sbdf, byte_offset: usize, value: u32) ConfigSpace.Error!void {
@@ -287,15 +282,9 @@ fn header(id: u16, version: u4, next: u16) u32 {
 }
 
 fn store32(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u32) void {
-    const encoded = stdx.layout.Le(u32).fromNative(value);
-    stdx.bytes.store(stdx.layout.Le(u32), bytes, byte_offset, encoded) catch |err| switch (err) {
-        error.EndOfStream => unreachable,
-    };
+    std.mem.writeInt(u32, bytes[byte_offset..][0..@sizeOf(u32)], value, .little);
 }
 
 fn load16(bytes: *const [pcie_window_size]u8, byte_offset: usize) u16 {
-    const wrapped = stdx.bytes.load(stdx.layout.Le(u16), bytes, byte_offset) catch |err| switch (err) {
-        error.EndOfStream => unreachable,
-    };
-    return wrapped.native();
+    return std.mem.readInt(u16, bytes[byte_offset..][0..@sizeOf(u16)], .little);
 }

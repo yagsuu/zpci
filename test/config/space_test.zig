@@ -2,7 +2,6 @@
 
 const std = @import("std");
 
-const stdx = @import("stdx");
 const pci = @import("pci");
 
 const ConfigSpace = pci.config.ConfigSpace;
@@ -76,20 +75,16 @@ const TestConfig = struct {
         const self: *TestConfig = @ptrCast(@alignCast(context));
         self.read_count += 1;
         const bytes = self.functionBytes(sbdf) orelse return 0xFFFF;
-        const wrapped = stdx.bytes.load(stdx.layout.Le(u16), bytes, byte_offset) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
-        return wrapped.native();
+        if (byte_offset > bytes.len or bytes.len - byte_offset < @sizeOf(u16)) return error.OutOfBounds;
+        return std.mem.readInt(u16, bytes[byte_offset..][0..@sizeOf(u16)], .little);
     }
 
     fn read32(context: *anyopaque, sbdf: Sbdf, byte_offset: usize) ConfigSpace.Error!u32 {
         const self: *TestConfig = @ptrCast(@alignCast(context));
         self.read_count += 1;
         const bytes = self.functionBytes(sbdf) orelse return 0xFFFF_FFFF;
-        const wrapped = stdx.bytes.load(stdx.layout.Le(u32), bytes, byte_offset) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
-        return wrapped.native();
+        if (byte_offset > bytes.len or bytes.len - byte_offset < @sizeOf(u32)) return error.OutOfBounds;
+        return std.mem.readInt(u32, bytes[byte_offset..][0..@sizeOf(u32)], .little);
     }
 
     fn write8(context: *anyopaque, sbdf: Sbdf, byte_offset: usize, value: u8) ConfigSpace.Error!void {
@@ -101,19 +96,15 @@ const TestConfig = struct {
     fn write16(context: *anyopaque, sbdf: Sbdf, byte_offset: usize, value: u16) ConfigSpace.Error!void {
         const self: *TestConfig = @ptrCast(@alignCast(context));
         const bytes = self.functionBytes(sbdf) orelse return;
-        const encoded = stdx.layout.Le(u16).fromNative(value);
-        stdx.bytes.store(stdx.layout.Le(u16), bytes, byte_offset, encoded) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
+        if (byte_offset > bytes.len or bytes.len - byte_offset < @sizeOf(u16)) return error.OutOfBounds;
+        std.mem.writeInt(u16, bytes[byte_offset..][0..@sizeOf(u16)], value, .little);
     }
 
     fn write32(context: *anyopaque, sbdf: Sbdf, byte_offset: usize, value: u32) ConfigSpace.Error!void {
         const self: *TestConfig = @ptrCast(@alignCast(context));
         const bytes = self.functionBytes(sbdf) orelse return;
-        const encoded = stdx.layout.Le(u32).fromNative(value);
-        stdx.bytes.store(stdx.layout.Le(u32), bytes, byte_offset, encoded) catch |err| switch (err) {
-            error.EndOfStream => return error.OutOfBounds,
-        };
+        if (byte_offset > bytes.len or bytes.len - byte_offset < @sizeOf(u32)) return error.OutOfBounds;
+        std.mem.writeInt(u32, bytes[byte_offset..][0..@sizeOf(u32)], value, .little);
     }
 };
 
@@ -137,17 +128,11 @@ fn seedFunction(bytes: *[pcie_window_size]u8, fields: struct {
 }
 
 fn store16(bytes: *[pcie_window_size]u8, byte_offset: usize, value: u16) void {
-    const encoded = stdx.layout.Le(u16).fromNative(value);
-    stdx.bytes.store(stdx.layout.Le(u16), bytes, byte_offset, encoded) catch |err| switch (err) {
-        error.EndOfStream => unreachable,
-    };
+    std.mem.writeInt(u16, bytes[byte_offset..][0..@sizeOf(u16)], value, .little);
 }
 
 fn load16(bytes: *const [pcie_window_size]u8, byte_offset: usize) u16 {
-    const wrapped = stdx.bytes.load(stdx.layout.Le(u16), bytes, byte_offset) catch |err| switch (err) {
-        error.EndOfStream => unreachable,
-    };
-    return wrapped.native();
+    return std.mem.readInt(u16, bytes[byte_offset..][0..@sizeOf(u16)], .little);
 }
 
 fn oneEntryConfig(bytes: *[pcie_window_size]u8, sbdf: Sbdf, entry: *[1]TestConfig.Entry) TestConfig {
