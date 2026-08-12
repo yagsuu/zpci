@@ -12,8 +12,7 @@ const VisitedSet = stdx.bits.BitSet.Static(ext.window.slot_count);
 
 pub const ext = struct {
     pub const window = struct {
-        pub const start: u16 = 0x100;
-        pub const end: u16 = 0xFFC;
+        pub const range = stdx.core.InclusiveRange(u16).of(0x100, 0xFFC);
         pub const step: u16 = 4;
         pub const slot_count: usize = 960;
     };
@@ -42,12 +41,12 @@ pub const Iterator = struct {
 
     /// Reads the extended-capability head dword and captures the root when present.
     pub fn validate(function: Function) Error!Iterator {
-        const head = try function.read32(ext.window.start);
+        const head = try function.read32(ext.window.range.start);
         if (head == 0 or head == 0xFFFF_FFFF) return Iterator.empty(function);
 
         return .{
             .function = function,
-            .head = ext.window.start,
+            .head = ext.window.range.start,
             .visited = VisitedSet.init(),
         };
     }
@@ -141,11 +140,10 @@ pub const Cursor = struct {
 };
 
 fn validateNodeOffset(offset: u16) Error!usize {
-    if (offset < ext.window.start) return error.MalformedCapability;
-    if (offset > ext.window.end) return error.MalformedCapability;
+    if (!ext.window.range.contains(offset)) return error.MalformedCapability;
     if (offset % ext.window.step != 0) return error.MalformedCapability;
 
-    return @intCast(@divExact(offset - ext.window.start, ext.window.step));
+    return @intCast(@divExact(offset - ext.window.range.start, ext.window.step));
 }
 
 fn validateAccess(offset: usize, width: usize, end: usize) Error!void {

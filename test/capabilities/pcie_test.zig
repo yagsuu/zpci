@@ -191,11 +191,11 @@ test "unit: validate accepts PCIe capabilities and rejects malformed offsets and
 
     try std.testing.expectError(
         error.MalformedCapability,
-        pcie.View.validate(function, capabilityAt(standard.window.start - 4)),
+        pcie.View.validate(function, capabilityAt(standard.window.range.start - 4)),
     );
     try std.testing.expectError(
         error.MalformedCapability,
-        pcie.View.validate(function, capabilityAt(standard.window.start + 1)),
+        pcie.View.validate(function, capabilityAt(standard.window.range.start + 1)),
     );
 
     store16(&bytes, 0x80 + register.capabilities, makeCapabilities(0));

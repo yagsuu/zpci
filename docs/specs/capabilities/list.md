@@ -53,8 +53,7 @@ pub const standard = struct {
     pub const head_offset: u8 = 0x34;
 
     pub const window = struct {
-        pub const start: u8 = 0x40;
-        pub const end: u8 = 0xFC;
+        pub const range = stdx.core.InclusiveRange(u8).of(0x40, 0xFC);
         pub const step: u8 = 4;
         pub const slot_count: usize = 48;
     };

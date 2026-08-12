@@ -27,12 +27,12 @@ const status = struct {
 test "layout: standard capability window covers conventional dword slots" {
     // Compare public list constants against the conventional PCI capability range.
     try std.testing.expectEqual(@as(u8, 0x34), standard.head_offset);
-    try std.testing.expectEqual(@as(u8, 0x40), standard.window.start);
-    try std.testing.expectEqual(@as(u8, 0xFC), standard.window.end);
+    try std.testing.expectEqual(@as(u8, 0x40), standard.window.range.start);
+    try std.testing.expectEqual(@as(u8, 0xFC), standard.window.range.end);
     try std.testing.expectEqual(@as(u8, 4), standard.window.step);
     try std.testing.expectEqual(@as(usize, 48), standard.window.slot_count);
 
-    const span: usize = @as(usize, standard.window.end) - @as(usize, standard.window.start);
+    const span: usize = @as(usize, standard.window.range.end) - @as(usize, standard.window.range.start);
     const step: usize = standard.window.step;
     try std.testing.expectEqual(standard.window.slot_count, @divExact(span, step) + 1);
 }
@@ -60,8 +60,8 @@ test "layout: standard capability Header maps ID and next bytes" {
 test "unit: validate returns empty traversal when status capability bit is clear" {
     // Seed a nonzero head and real node; the cleared status bit must make them unreachable.
     var bytes: [pcie_window_size]u8 = @splat(0);
-    bytes[standard.head_offset] = standard.window.start;
-    seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0);
+    bytes[standard.head_offset] = standard.window.range.start;
+    seedCapability(&bytes, standard.window.range.start, @intFromEnum(Id.pci_express), 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const function = uncheckedFunction(&backend);
 
@@ -75,7 +75,7 @@ test "unit: validate treats a masked zero head pointer as an empty list" {
     var bytes: [pcie_window_size]u8 = @splat(0);
     enableCapabilities(&bytes);
     bytes[standard.head_offset] = 0b11;
-    seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0);
+    seedCapability(&bytes, standard.window.range.start, @intFromEnum(Id.pci_express), 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const function = uncheckedFunction(&backend);
 
@@ -87,15 +87,15 @@ test "unit: validate treats a masked zero head pointer as an empty list" {
 test "unit: iterator yields one capability and then terminates on zero next" {
     // Seed one PCI Express capability and assert raw id, typed tag, and terminal next handling.
     var bytes: [pcie_window_size]u8 = @splat(0);
-    seedHead(&bytes, standard.window.start);
-    seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0);
+    seedHead(&bytes, standard.window.range.start);
+    seedCapability(&bytes, standard.window.range.start, @intFromEnum(Id.pci_express), 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const function = uncheckedFunction(&backend);
 
     var it = try Iterator.validate(function);
     const cap = (try it.next()).?;
 
-    try expectCapability(cap, @intFromEnum(Id.pci_express), standard.window.start);
+    try expectCapability(cap, @intFromEnum(Id.pci_express), standard.window.range.start);
     try std.testing.expectEqual(Id.pci_express, cap.idTag());
     try std.testing.expectEqual(@as(?Capability, null), try it.next());
 }
@@ -147,8 +147,8 @@ test "unit: find returns first matching capability and null when absent" {
 test "malformed: iterator rejects an initial head outside the capability window" {
     // A below-window head must fail before any capability is reported.
     var bytes: [pcie_window_size]u8 = @splat(0);
-    seedHead(&bytes, standard.window.start - standard.window.step);
-    seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0);
+    seedHead(&bytes, standard.window.range.start - standard.window.step);
+    seedCapability(&bytes, standard.window.range.start, @intFromEnum(Id.pci_express), 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const function = uncheckedFunction(&backend);
 
@@ -158,8 +158,8 @@ test "malformed: iterator rejects an initial head outside the capability window"
 test "malformed: iterator rejects reserved bits in a next pointer before yielding node" {
     // Reserved low bits in the current node's next byte make that node malformed.
     var bytes: [pcie_window_size]u8 = @splat(0);
-    seedHead(&bytes, standard.window.start);
-    seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0x42);
+    seedHead(&bytes, standard.window.range.start);
+    seedCapability(&bytes, standard.window.range.start, @intFromEnum(Id.pci_express), 0x42);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const function = uncheckedFunction(&backend);
 
@@ -171,15 +171,15 @@ test "malformed: iterator rejects reserved bits in a next pointer before yieldin
 test "malformed: iterator rejects next pointers outside the capability window" {
     // An aligned next pointer below the legal window is rejected when traversal reaches it.
     var bytes: [pcie_window_size]u8 = @splat(0);
-    seedHead(&bytes, standard.window.start);
-    seedCapability(&bytes, standard.window.start, @intFromEnum(Id.pci_express), 0x20);
+    seedHead(&bytes, standard.window.range.start);
+    seedCapability(&bytes, standard.window.range.start, @intFromEnum(Id.pci_express), 0x20);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const function = uncheckedFunction(&backend);
 
     var it = try Iterator.validate(function);
     const cap = (try it.next()).?;
 
-    try expectCapability(cap, @intFromEnum(Id.pci_express), standard.window.start);
+    try expectCapability(cap, @intFromEnum(Id.pci_express), standard.window.range.start);
     try std.testing.expectError(error.MalformedCapability, it.next());
 }
 
@@ -217,8 +217,8 @@ test "malformed: Cursor.from rejects bases outside aligned capability slots" {
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const function = uncheckedFunction(&backend);
 
-    try std.testing.expectError(error.MalformedCapability, Cursor.from(function, standard.window.start - 1));
-    try std.testing.expectError(error.MalformedCapability, Cursor.from(function, standard.window.start + 1));
+    try std.testing.expectError(error.MalformedCapability, Cursor.from(function, standard.window.range.start - 1));
+    try std.testing.expectError(error.MalformedCapability, Cursor.from(function, standard.window.range.start + 1));
 }
 
 test "unit: Cursor reads and writes relative to its capability base" {
@@ -265,7 +265,7 @@ test "malformed: Cursor propagates backend errors after its own validation passe
     // A dword access at an aligned, contained offset must expose the backend width failure unchanged.
     var backend = NoDwordConfig{};
     const function = Function.unchecked(backend.configSpace(), backend.sbdf);
-    const cursor = try Cursor.from(function, standard.window.start);
+    const cursor = try Cursor.from(function, standard.window.range.start);
 
     try std.testing.expectError(error.UnsupportedAccessWidth, cursor.read32(0x00));
     try std.testing.expectError(error.UnsupportedAccessWidth, cursor.write32(0x00, 0));

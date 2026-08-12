@@ -78,12 +78,12 @@ const NoDwordConfig = struct {
 
 test "layout: extended capability window covers PCIe extended dword slots" {
     // Compare public extended-window constants against the PCIe dword range and derived slot count.
-    try std.testing.expectEqual(@as(u16, 0x100), ext.window.start);
-    try std.testing.expectEqual(@as(u16, 0xFFC), ext.window.end);
+    try std.testing.expectEqual(@as(u16, 0x100), ext.window.range.start);
+    try std.testing.expectEqual(@as(u16, 0xFFC), ext.window.range.end);
     try std.testing.expectEqual(@as(u16, 4), ext.window.step);
     try std.testing.expectEqual(@as(usize, 960), ext.window.slot_count);
 
-    const span: usize = @as(usize, ext.window.end) - @as(usize, ext.window.start);
+    const span: usize = @as(usize, ext.window.range.end) - @as(usize, ext.window.range.start);
     const step: usize = ext.window.step;
     try std.testing.expectEqual(ext.window.slot_count, @divExact(span, step) + 1);
 }
@@ -97,7 +97,7 @@ test "unit: iterator treats absent extended config and zero head as empty" {
 
     for (heads) |head| {
         var bytes: [pcie_window_size]u8 = @splat(0xA5);
-        store32(&bytes, ext.window.start, head);
+        store32(&bytes, ext.window.range.start, head);
         const sbdf = Sbdf.of(0, 0, 0, 0);
         var backend = TestConfigSpace.initSingle(sbdf, &bytes);
         const function = Function.unchecked(backend.configSpace(), sbdf);
@@ -112,7 +112,7 @@ test "unit: iterator treats absent extended config and zero head as empty" {
 test "unit: iterator yields a single extended capability and terminates" {
     // Seed one root header and assert decoded id, version, offset, and terminal next handling.
     var bytes: [pcie_window_size]u8 = @splat(0);
-    storeHeader(&bytes, ext.window.start, 0x0001, 3, 0);
+    storeHeader(&bytes, ext.window.range.start, 0x0001, 3, 0);
     const sbdf = Sbdf.of(0, 0, 1, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);
@@ -120,7 +120,7 @@ test "unit: iterator yields a single extended capability and terminates" {
     var it = try Iterator.validate(function);
 
     const cap = (try it.next()).?;
-    try expectCapability(cap, .{ .id = 0x0001, .version = 3, .offset = ext.window.start });
+    try expectCapability(cap, .{ .id = 0x0001, .version = 3, .offset = ext.window.range.start });
     try std.testing.expectEqual(@as(Id, @enumFromInt(0x0001)), cap.idTag());
     try std.testing.expectEqual(@as(?ExtCapability, null), try it.next());
 }
@@ -128,25 +128,25 @@ test "unit: iterator yields a single extended capability and terminates" {
 test "unit: iterator traverses multiple extended capabilities through the end slot" {
     // Chain non-contiguous headers through the final slot to prove next-pointer order and end-boundary handling.
     var bytes: [pcie_window_size]u8 = @splat(0);
-    storeHeader(&bytes, ext.window.start, 0x0001, 1, 0x120);
-    storeHeader(&bytes, 0x120, 0x0002, 5, ext.window.end);
-    storeHeader(&bytes, ext.window.end, 0x0003, 15, 0);
+    storeHeader(&bytes, ext.window.range.start, 0x0001, 1, 0x120);
+    storeHeader(&bytes, 0x120, 0x0002, 5, ext.window.range.end);
+    storeHeader(&bytes, ext.window.range.end, 0x0003, 15, 0);
     const sbdf = Sbdf.of(0, 0, 2, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);
 
     var it = try Iterator.validate(function);
 
-    try expectCapability((try it.next()).?, .{ .id = 0x0001, .version = 1, .offset = ext.window.start });
+    try expectCapability((try it.next()).?, .{ .id = 0x0001, .version = 1, .offset = ext.window.range.start });
     try expectCapability((try it.next()).?, .{ .id = 0x0002, .version = 5, .offset = 0x120 });
-    try expectCapability((try it.next()).?, .{ .id = 0x0003, .version = 15, .offset = ext.window.end });
+    try expectCapability((try it.next()).?, .{ .id = 0x0003, .version = 15, .offset = ext.window.range.end });
     try std.testing.expectEqual(@as(?ExtCapability, null), try it.next());
 }
 
 test "unit: find returns the first matching capability and null for a terminated miss" {
     // Search a three-node chain to prove matching returns the node and terminated misses return null.
     var bytes: [pcie_window_size]u8 = @splat(0);
-    storeHeader(&bytes, ext.window.start, 0x000A, 1, 0x108);
+    storeHeader(&bytes, ext.window.range.start, 0x000A, 1, 0x108);
     storeHeader(&bytes, 0x108, 0x000B, 2, 0x110);
     storeHeader(&bytes, 0x110, 0x000C, 3, 0);
     const sbdf = Sbdf.of(0, 0, 3, 0);
@@ -168,14 +168,14 @@ test "malformed: iterator rejects next pointers outside extended capability slot
 
     for (next_offsets) |next| {
         var bytes: [pcie_window_size]u8 = @splat(0);
-        storeHeader(&bytes, ext.window.start, 0x000D, 1, next);
+        storeHeader(&bytes, ext.window.range.start, 0x000D, 1, next);
         const sbdf = Sbdf.of(0, 0, 4, 0);
         var backend = TestConfigSpace.initSingle(sbdf, &bytes);
         const function = Function.unchecked(backend.configSpace(), sbdf);
 
         var it = try Iterator.validate(function);
 
-        try expectCapability((try it.next()).?, .{ .id = 0x000D, .version = 1, .offset = ext.window.start });
+        try expectCapability((try it.next()).?, .{ .id = 0x000D, .version = 1, .offset = ext.window.range.start });
         try std.testing.expectError(error.MalformedCapability, it.next());
     }
 }
@@ -183,15 +183,15 @@ test "malformed: iterator rejects next pointers outside extended capability slot
 test "malformed: iterator detects cycles before yielding a repeated capability" {
     // Build a two-node loop and assert traversal rejects the repeated slot after yielding each unique node.
     var bytes: [pcie_window_size]u8 = @splat(0);
-    storeHeader(&bytes, ext.window.start, 0x0010, 1, 0x108);
-    storeHeader(&bytes, 0x108, 0x0011, 2, ext.window.start);
+    storeHeader(&bytes, ext.window.range.start, 0x0010, 1, 0x108);
+    storeHeader(&bytes, 0x108, 0x0011, 2, ext.window.range.start);
     const sbdf = Sbdf.of(0, 0, 5, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);
 
     var it = try Iterator.validate(function);
 
-    try expectCapability((try it.next()).?, .{ .id = 0x0010, .version = 1, .offset = ext.window.start });
+    try expectCapability((try it.next()).?, .{ .id = 0x0010, .version = 1, .offset = ext.window.range.start });
     try expectCapability((try it.next()).?, .{ .id = 0x0011, .version = 2, .offset = 0x108 });
     try std.testing.expectError(error.MalformedCapability, it.next());
 }
@@ -238,8 +238,8 @@ test "malformed: cursor maps containment and alignment failures to MalformedCapa
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const function = Function.unchecked(backend.configSpace(), sbdf);
 
-    const end = try Cursor.from(function, ext.window.end);
-    const start = try Cursor.from(function, ext.window.start);
+    const end = try Cursor.from(function, ext.window.range.end);
+    const start = try Cursor.from(function, ext.window.range.start);
 
     try std.testing.expectEqual(@as(u8, 0x5A), try end.read8(3));
     try std.testing.expectError(error.MalformedCapability, end.read8(4));
@@ -257,7 +257,7 @@ test "malformed: cursor propagates backend width failures after prevalidation su
     const sbdf = Sbdf.of(0, 0, 9, 0);
     const function = Function.unchecked(backend.configSpace(), sbdf);
 
-    const cursor = try Cursor.from(function, ext.window.start);
+    const cursor = try Cursor.from(function, ext.window.range.start);
 
     try std.testing.expectError(error.UnsupportedAccessWidth, cursor.read32(0));
     try std.testing.expectError(error.UnsupportedAccessWidth, cursor.write32(0, 0));

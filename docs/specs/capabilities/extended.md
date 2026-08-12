@@ -27,7 +27,7 @@ Owned:
   - Head dword at `0x100` of `0xFFFF_FFFF` (function does not implement extended config) or `0x0000_0000` (no extended capabilities) → empty list.
   - Next-offset of `0` → terminator.
 - Pointer-range and alignment validation: `0x100 <= p <= 0xFFC` and `p % 4 == 0`.
-- Cycle detection via inline `zstdx.bits.BitSet.Static(ext_window_slot_count)` keyed on `(p - 0x100) / 4`.
+- Cycle detection via inline `zstdx.bits.BitSet.Static(ext.window.slot_count)` keyed on `(p - ext.window.range.start) / ext.window.step`.
 - `capabilities.extended.Cursor` for typed byte access into a single extended capability's payload inside the extended window.
 - Mapping list/cursor failures to `MalformedCapability`.
 
@@ -46,15 +46,16 @@ This spec assumes a little-endian host, per `docs/specs/architecture.md` §Host 
 ## Public constants
 
 ```zig
-pub const ext_window_start: u16 = 0x100;
-pub const ext_window_end: u16 = 0xFFC;
-pub const ext_window_step: u16 = 4;
-
-pub const ext_window_slot_count: usize =
-    @intCast(((ext_window_end - ext_window_start) / ext_window_step) + 1); // 960
+pub const ext = struct {
+    pub const window = struct {
+        pub const range = stdx.core.InclusiveRange(u16).of(0x100, 0xFFC);
+        pub const step: u16 = 4;
+        pub const slot_count: usize = 960;
+    };
+};
 ```
 
-`ext_window_slot_count` is the number of legal node positions in the extended capability window. The list cannot have more nodes than positions; cycle detection therefore needs exactly `ext_window_slot_count` bits of state.
+`ext.window.slot_count` is the number of legal node positions in the extended capability window. The list cannot have more nodes than positions; cycle detection therefore needs exactly `ext.window.slot_count` bits of state.
 
 ## Extended capability header `[std]`
 
@@ -106,7 +107,7 @@ pub const Error = ConfigSpace.Error || error{MalformedCapability};
 pub const Iterator = struct {
     function: config.Function,
     head: ?u16,
-    visited: zstdx.bits.BitSet.Static(ext_window_slot_count),
+    visited: zstdx.bits.BitSet.Static(ext.window.slot_count),
 
     pub fn validate(function: config.Function) Error!Iterator;
     pub fn next(self: *Iterator) Error!?ExtCapability;
@@ -120,18 +121,18 @@ pub const Iterator = struct {
 
 `validate(function)` behavior:
 
-1. Read the head dword via `function.read32(ext_window_start)`.
+1. Read the head dword via `function.read32(ext.window.range.start)`.
 2. If the dword is `0xFFFF_FFFF` or `0x0000_0000`, return an iterator whose `head == null`.
-3. Otherwise set `head = ext_window_start` (the head dword is itself the first capability header) and start with `visited` empty.
+3. Otherwise, set `head = ext.window.range.start` and start with `visited` empty. The head dword is the first capability header.
 
 `next(self)` behavior:
 
 1. If `self.head == null`, return `null`.
 2. Let `p = self.head.?`.
-3. Validate `ext_window_start <= p <= ext_window_end` and `p % ext_window_step == 0`. Otherwise return `error.MalformedCapability`.
-4. Compute `slot = (p - ext_window_start) / ext_window_step`.
+3. Validate `ext.window.range.contains(p)` and `p % ext.window.step == 0`. Otherwise, return `error.MalformedCapability`.
+4. Compute `slot = (p - ext.window.range.start) / ext.window.step`.
 5. If `visited.isSet(slot)`, return `error.MalformedCapability`.
-6. `visited.set(slot)` — cannot error because `slot < ext_window_slot_count` is established by step 3.
+6. `visited.set(slot)` cannot return an error because step 3 establishes `slot < ext.window.slot_count`.
 7. Read `hdr = function.read32(p)`. `ConfigSpace.Error` propagates directly.
 8. Extract:
    - `id: u16 = @truncate(hdr)`
@@ -142,8 +143,8 @@ pub const Iterator = struct {
 
 Termination guarantee:
 
-- `visited` has exactly `ext_window_slot_count` bits.
-- Step 6 sets a new slot on every successful yield. After `ext_window_slot_count` successful yields, every legal slot is set, and any further step must either point to a revisited slot (caught at step 5) or an out-of-range/misaligned address (caught at step 3). No separate step counter is necessary.
+- `visited` has exactly `ext.window.slot_count` bits.
+- Step 6 sets a new slot on every successful yield. After `ext.window.slot_count` successful yields, every legal slot is set. A subsequent step must point to a visited slot, which step 5 detects, or to an invalid address, which step 3 detects. A separate step counter is not necessary.
 
 ## Free helpers `[zpci]`
 
@@ -175,7 +176,7 @@ pub const Cursor = struct {
 };
 ```
 
-`from(function, base)` validates that `ext_window_start <= base <= ext_window_end` and `base % ext_window_step == 0`. Otherwise `error.MalformedCapability`.
+`from(function, base)` validates `ext.window.range.contains(base)` and `base % ext.window.step == 0`. Otherwise, it returns `error.MalformedCapability`.
 
 `read*/write*(offset, ...)` behavior:
 
@@ -193,8 +194,8 @@ Notes:
 
 Returns `MalformedCapability` for:
 
-- Subsequent next pointer outside `[ext_window_start, ext_window_end]`.
-- Subsequent next pointer not multiple of `ext_window_step`.
+- Subsequent next pointer outside `ext.window.range`.
+- Subsequent next pointer not multiple of `ext.window.step`.
 - Cycle within one traversal.
 - Cursor: base outside extended window or misaligned.
 - Cursor: `offset` + width past `0x1000` or misaligned for the requested width.
@@ -206,7 +207,7 @@ Returns `MalformedCapability` for:
 ## Iterator and cursor borrowing
 
 - Both store `config.Function` and small inline state.
-- `BitSet.Static(ext_window_slot_count)` on the iterator is 120 bytes.
+- `BitSet.Static(ext.window.slot_count)` on the iterator is 120 bytes.
 - No allocation.
 - Lifetime follows the underlying `ConfigSpace` backend.
 
@@ -214,7 +215,7 @@ Returns `MalformedCapability` for:
 
 Direct:
 
-- `zstdx.bits.BitSet.Static(ext_window_slot_count)` for cycle detection.
+- `zstdx.bits.BitSet.Static(ext.window.slot_count)` for cycle detection.
 
 Not used:
 

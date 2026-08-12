@@ -666,7 +666,6 @@ pub const View = struct {
 };
 
 fn validateCapabilityOffset(offset: u8) Error!void {
-    if (offset < list.standard.window.start) return error.MalformedCapability;
-    if (offset > list.standard.window.end) return error.MalformedCapability;
+    if (!list.standard.window.range.contains(offset)) return error.MalformedCapability;
     if (offset % list.standard.window.step != 0) return error.MalformedCapability;
 }

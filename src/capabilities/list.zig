@@ -15,8 +15,7 @@ pub const standard = struct {
     pub const head_offset: u8 = 0x34;
 
     pub const window = struct {
-        pub const start: u8 = 0x40;
-        pub const end: u8 = 0xFC;
+        pub const range = stdx.core.InclusiveRange(u8).of(0x40, 0xFC);
         pub const step: u8 = 4;
         pub const slot_count: usize = 48;
     };
@@ -168,11 +167,10 @@ pub const Cursor = struct {
 };
 
 fn validateNodeOffset(offset: u8) Error!usize {
-    if (offset < standard.window.start) return error.MalformedCapability;
-    if (offset > standard.window.end) return error.MalformedCapability;
+    if (!standard.window.range.contains(offset)) return error.MalformedCapability;
     if (offset % standard.window.step != 0) return error.MalformedCapability;
 
-    return @intCast(@divExact(offset - standard.window.start, standard.window.step));
+    return @intCast(@divExact(offset - standard.window.range.start, standard.window.step));
 }
 
 fn validateAccess(offset: usize, width: usize, end: usize) Error!void {

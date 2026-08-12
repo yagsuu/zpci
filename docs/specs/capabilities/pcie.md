@@ -713,7 +713,7 @@ pub const View = struct {
 `validate(function, cap)` behavior:
 
 1. Assert `cap.idTag() == .pci_express`. Programmer-error precondition, not a runtime error.
-2. Validate `capabilities.list.standard.window.start <= cap.offset <= capabilities.list.standard.window.end` and `cap.offset % capabilities.list.standard.window.step == 0`. Otherwise return `error.MalformedCapability`.
+2. Validate `capabilities.list.standard.window.range.contains(cap.offset)` and `cap.offset % capabilities.list.standard.window.step == 0`. Otherwise, return `error.MalformedCapability`.
 3. Read `Capabilities` via `function.read16(cap.offset + register.capabilities)` and bit-cast to `Capabilities`. `ConfigSpace.Error` propagates directly.
 4. If `capabilities.version == 0`, return `error.UnsupportedRevision`.
 5. Return `View{ .function = function, .base = cap.offset, .version = capabilities.version }`.
