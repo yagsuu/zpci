@@ -1,33 +1,48 @@
 # zpci
 
-A Zig-native PCI/PCIe configuration-space and resource-programming library.
+`zpci` is a Zig-native library for PCI and PCI Express configuration-space
+access, topology discovery, resource planning, and interrupt programming.
 
-`zpci` owns PCI identifiers, config-space accessors, ECAM and PIO backends,
-config-function views, header decode/programming, BAR decode and sizing,
-capability traversal, topology enumeration, resource assignment/programming,
-bridge bus/window handling, and MSI/MSI-X programming. Callers provide platform
-facts: ECAM segments, root resource windows, interrupt routing inputs, and
-BAR-memory accessors.
+## Overview
 
-The public Zig module is `pci`. The package is explicit by design: enumeration
-is read-only, resource assignment produces a plan, and programming commits that
-plan through caller-supplied accessors. The default host suite uses byte-backed
-config-space and BAR-memory accessors over real layouts; no hardware is needed.
+`zpci` owns PCI identifiers, configuration-space accessors, ECAM and PIO
+backends, function views, header decode and programming, BAR decode and sizing,
+capability traversal, topology enumeration, resource assignment and programming,
+bridge bus and window handling, and MSI/MSI-X programming.
 
-## Requirements
+The public Zig module is `pci`. The library does not discover platform state or
+hide privileged access behind globals. It does not parse ACPI tables, discover
+root resource windows, allocate interrupt vectors, map BAR memory, bind device
+drivers, or define reset policy.
 
-| Field | Value |
+## Features
+
+- Typed PCI identifiers and BDF/SBDF values.
+- Explicit ECAM configuration-space access and an x86_64 PIO backend.
+- Common, type-0, and type-1 header views and programming helpers.
+- BAR decode and sizing probes.
+- Standard, extended, and PCIe capability traversal and decode.
+- Device and bridge topology enumeration over caller-provided scratch storage.
+- Explicit PCI resource assignment, bridge-window encoding, and commit.
+- MSI and MSI-X capability and table programming.
+- Byte-backed host-test accessors that exercise production accessor contracts.
+
+## Requirements and platform support
+
+| Item | Support |
 | --- | --- |
-| Minimum Zig | `0.16.0` |
-| Host target | host-selected target for `zig build test` |
-| Package name | `zpci` |
+| Zig | `0.16.0` or later |
+| Package | `zpci` |
 | Public module | `pci` |
-| Dependency | `zstdx` via `build.zig.zon` |
-| Transcription sources | PCI / PCI Express specifications |
+| Dependency | `zstdx`, declared in `build.zig.zon` |
+| Host endianness | Little-endian hosts |
+| Configuration access | ECAM through caller-provided segments; PIO on x86_64 through `stdx.arch.x86_64.Port` |
+| Default test suite | Host-selected target; no hardware, VM, or external tools required |
 
-## Install
+## Quick start
 
-Add `zpci` alongside its `zstdx` dependency, then import the module as `pci`:
+Add `zpci` and its `zstdx` dependency to the consuming project's build
+configuration. Import the package module as `pci`:
 
 ```zig
 const zpci = b.dependency("zpci", .{
@@ -38,16 +53,12 @@ const zpci = b.dependency("zpci", .{
 exe.root_module.addImport("pci", zpci.module("pci"));
 ```
 
-Public imports:
-
 ```zig
 const pci = @import("pci");
 const stdx = @import("stdx");
 ```
 
-## Usage
-
-Topology enumeration over caller-supplied ECAM segments:
+Enumerate a topology through caller-supplied ECAM segments and scratch storage:
 
 ```zig
 const segments = [_]pci.config.Segment{
@@ -77,9 +88,13 @@ while (it.next()) |item| {
 }
 ```
 
-Resource assignment and programming stay separate. Callers size BARs, aggregate
-bridge windows, and lower topology nodes into `pci.resources.assignment.Node`
-values, then commit the resulting explicit plan:
+## Common workflows
+
+### Plan and commit resources
+
+Resource assignment does not program hardware. Callers size BARs, aggregate
+bridge windows, and lower topology nodes into
+`pci.resources.assignment.Node` values. They then commit the explicit plan.
 
 ```zig
 var assignments: [128]pci.resources.model.Assignment = undefined;
@@ -92,8 +107,10 @@ const plan = try pci.resources.assignment.intoScratch(.{
 try pci.resources.programming.commit(plan);
 ```
 
-MSI and MSI-X consume caller-owned routing and memory inputs. `zpci` does not
-allocate vectors or map BAR memory:
+### Program MSI or MSI-X
+
+Callers provide interrupt-routing inputs and BAR memory. `zpci` does not
+allocate vectors or map BAR memory.
 
 ```zig
 const msi = (try pci.interrupts.msi.View.find(function)) orelse return error.NoMsi;
@@ -113,88 +130,61 @@ try msix.programEntry(table_memory, 0, .{
 
 ## Public API
 
-The facade is `src/pci.zig`. It re-exports ten namespaces.
+`src/pci.zig` is the public facade. It re-exports these namespaces:
 
-| Namespace | Owns |
+| Namespace | Purpose |
 | --- | --- |
-| `pci.core` | `SegmentId`, vendor/device/class IDs, `Bdf`, `Sbdf`, package error categories |
-| `pci.config` | `ConfigSpace`, `Function`, `HeaderKind`, ECAM `Segment` / `Ecam`, x86_64 `Pio` |
-| `pci.header` | common, type-0, and type-1 header views plus typed command/status/window words |
-| `pci.bar` | BAR decode, iteration, sizing probe, `BarRef` |
-| `pci.capabilities` | standard, extended, and PCIe capability traversal/decode |
+| `pci.core` | `SegmentId`, vendor/device/class IDs, `Bdf`, `Sbdf`, and package error categories |
+| `pci.config` | `ConfigSpace`, `Function`, `HeaderKind`, ECAM `Segment` / `Ecam`, and x86_64 `Pio` |
+| `pci.header` | Common, type-0, and type-1 header views; typed command, status, and window values |
+| `pci.bar` | BAR decode, iteration, sizing probes, and `BarRef` |
+| `pci.capabilities` | Standard, extended, and PCIe capability traversal and decode |
 | `pci.memory` | `BarMemory` accessor for BAR-mapped memory |
-| `pci.resources` | resource model, bridge-window aggregation, assignment, bus commit, programming commit |
-| `pci.interrupts` | MSI and MSI-X capability/table programming |
-| `pci.topology` | enumeration, tree construction, bridge bus/window traversal |
-| `pci.testing` | byte-backed host-test config and BAR-memory accessors |
+| `pci.resources` | Resource model, bridge-window aggregation, assignment, bus commit, and programming commit |
+| `pci.interrupts` | MSI and MSI-X capability and table programming |
+| `pci.topology` | Enumeration, tree construction, and bridge bus/window traversal |
+| `pci.testing` | Byte-backed host-test configuration and BAR-memory accessors |
 
-## Design constraints
+## Design
 
 - **No hidden allocation.** Enumeration, traversal, assignment, and programming
   use caller-provided storage or fixed internal frames.
-- **Explicit privileged access.** Config-space I/O goes through `ConfigSpace`;
-  MSI-X table/PBA I/O goes through `BarMemory`.
-- **Read-only enumeration.** Topology discovery never programs resource,
+- **Explicit privileged access.** Configuration-space I/O goes through
+  `ConfigSpace`; MSI-X table and PBA I/O go through `BarMemory`.
+- **Read-only enumeration.** Topology discovery does not program resource,
   interrupt, or command-register state.
-- **Plan then commit.** Resource assignment is pure; programming is an explicit
-  commit step with readback and rollback semantics.
+- **Plan, then commit.** Resource assignment is pure. Programming is an explicit
+  commit with readback and rollback semantics.
 - **Caller-owned platform policy.** ACPI MCFG parsing, root-window discovery,
   vector allocation, interrupt-controller routing, device binding, and reset
-  policy live outside `zpci`.
-- **Host-testable.** The default suite uses real byte buffers via test accessors,
-  not mocks.
-- **PIO is isolated.** The x86_64 PIO backend consumes `stdx.arch.x86_64.Port`;
-  the rest of the surface is pure over explicit accessors.
+  policy remain outside `zpci`.
+- **Host-testable contracts.** The default suite uses real byte buffers through
+  the same accessor contracts used in production.
 
-## Repository layout
+## Build and test
 
-```text
-src/
-  pci.zig             # public facade
-  core/               # IDs, BDF/SBDF, error set
-  config/             # accessors, Function, ECAM, PIO
-  header/             # common/type-0/type-1 config headers
-  capabilities/       # standard, extended, PCIe capability handling
-  resources/          # model, assignment, bridge, bus, programming
-  interrupts/         # MSI, MSI-X
-  topology/           # tree, enumerate, bridge traversal
-  memory/             # BAR-memory accessor
-  testing/            # host-test backends
-
-test/
-  all.zig             # host-side test aggregate
-  integration/        # cross-module workflow tests
-
-docs/
-  specs/              # normative per-module specs
-  guidelines/         # Zig, testing, spec-writing conventions
-  planning/           # spec queue and open questions
-```
-
-## Verification
+Run the default host-side suite:
 
 ```sh
 zig build test
+```
+
+Check the Zig source format:
+
+```sh
 zig fmt --check build.zig src test
 ```
 
-The host suite composes real byte-backed config-space and BAR-memory fixtures
-through the same accessor contracts production code uses.
+The default suite exercises decode, sizing, traversal, assignment, programming,
+and interrupt paths through byte-backed configuration-space and BAR-memory
+accessors. It requires no PCI hardware.
 
 ## Documentation
 
-Normative contracts live under `docs/specs/`. Planning documents are not public
-API authority.
-
-Start with:
+The normative contracts are under [`docs/specs/`](docs/specs/). Planning
+documents do not define the public API.
 
 - [`docs/specs/index.md`](docs/specs/index.md) — package scope and public facade
-- [`docs/specs/architecture.md`](docs/specs/architecture.md) — layering and dependency direction
+- [`docs/specs/architecture.md`](docs/specs/architecture.md) — layering, ownership, and dependency direction
 - [`docs/guidelines/testing.md`](docs/guidelines/testing.md) — host-test contract
-- [`docs/planning/spec-queue.md`](docs/planning/spec-queue.md) — future proposal flow
-
-## Status
-
-Version `0.1.0`. The initial approved surface is implemented and covered by the
-host-side unit and integration suite. Future examples and optional PCIe service
-surfaces enter through the spec queue.
+- [`docs/planning/spec-queue.md`](docs/planning/spec-queue.md) — proposal process for future work

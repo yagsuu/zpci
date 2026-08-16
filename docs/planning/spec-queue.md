@@ -81,14 +81,6 @@ Proposals must not include:
 
 Prioritized for implementation value across the PCI/PCIe surface. A proposal stays near the top only when it adds a distinct zpci contract beyond Zig language features or `std`/`zstdx` functionality.
 
-### Examples
-
-- `docs/specs/examples/enumerate-ecam.md`
-- `docs/specs/examples/size-bars.md`
-- `docs/specs/examples/assign-resources.md`
-- `docs/specs/examples/program-msi.md`
-- `docs/specs/examples/walk-capabilities.md`
-- `docs/specs/examples/bridge-traversal.md`
 
 ## Deferred pending distinct zpci contract
 
