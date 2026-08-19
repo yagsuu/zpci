@@ -12,9 +12,11 @@ package-level boundaries below. Domain specifications own representation, API
 signatures, and operation behavior. A domain specification prevails if it
 conflicts with this document.
 
-## Package boundaries
+## Package boundary
 
-zpci owns:
+`zpci` operates through caller-provided platform facts and explicit accessors.
+
+It owns these PCI mechanisms:
 
 - PCI identifiers and BDF/SBDF values.
 - Configuration-space access through `ConfigSpace`, ECAM, and x86_64 PIO.
@@ -24,23 +26,10 @@ zpci owns:
 - MSI and MSI-X capability and table programming.
 - Byte-backed configuration-space and BAR-memory accessors for host tests.
 
-zpci does not own:
-
-- ACPI MCFG or other platform-description parsing.
-- ECAM mapping or root resource-window discovery.
-- Platform interrupt-vector allocation, interrupt-controller routing, or interrupt remapping.
-- Driver binding, firmware integration, device reset, or OS handoff policy.
-- BAR-memory mapping.
-- SR-IOV lifecycle, VFIO policy, or PCIe service behavior not defined by an approved domain specification.
-
-Callers provide platform facts and privileged access: ECAM segments, root
-resource windows, interrupt-routing inputs, and BAR-memory accessors.
-
 ## Package product
 
-`build.zig` exposes the `pci` module. zpci is a library and does not produce a
-firmware artifact. `zig build test` runs the host-side suite without hardware,
-a VM, or external tools.
+`build.zig` exposes the `pci` module.
+`zig build test` runs the host-side suite without hardware, a VM, or external tools.
 
 The package depends on Zig `std` and `zstdx`. It does not import downstream
 consumers or platform-description libraries.

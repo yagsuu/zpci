@@ -2,10 +2,14 @@
 
 Status: Approved.
 
-This specification owns zpci layering, dependency direction, I/O seams, shared
+This specification defines zpci layering, dependency direction, I/O seams,
 representation boundaries, and cross-domain ownership. Domain specifications
-own behavior within their layer. This document does not define domain API
-signatures or operation sequences.
+define API signatures and operation sequences within their layers.
+
+## System boundary
+
+`zpci` reads and programs PCI state through explicit caller-provided
+`ConfigSpace` and `BarMemory` accessors.
 
 ## Layers
 
@@ -28,9 +32,6 @@ testing/      byte-backed host-test accessors
 pci.zig and namespace facades
   -> public re-exports only
 ```
-
-The caller constructs accessors and supplies platform policy. zpci reads and
-programs PCI state only through its explicit accessors.
 
 ## Layer ownership
 
@@ -125,8 +126,7 @@ zpci supports little-endian hosts. PCI configuration space and BAR memory are
 little-endian. `ConfigSpace` and `BarMemory` return native integer values under
 that host assumption.
 
-`Pio` consumes `stdx.arch.x86_64.Port`. zpci has no `src/arch/` layer and does
-not own port allocation or inline assembly. Platform-specific behavior outside
+`Pio` consumes `stdx.arch.x86_64.Port`. Platform-specific behavior outside
 configuration-access adapters is outside this specification.
 
 zpci does not own ACPI parsing, platform resource discovery, BAR-memory mapping,

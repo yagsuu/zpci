@@ -10,10 +10,9 @@ backends, function views, header decode and programming, BAR decode and sizing,
 capability traversal, topology enumeration, resource assignment and programming,
 bridge bus and window handling, and MSI/MSI-X programming.
 
-The public Zig module is `pci`. The library does not discover platform state or
-hide privileged access behind globals. It does not parse ACPI tables, discover
-root resource windows, allocate interrupt vectors, map BAR memory, bind device
-drivers, or define reset policy.
+The public Zig module is `pci`. `zpci` operates through caller-provided
+configuration-space and BAR-memory accessors; platform integration and driver
+policy remain with the caller.
 
 ## Features
 
@@ -58,37 +57,37 @@ const pci = @import("pci");
 const stdx = @import("stdx");
 ```
 
-Enumerate a topology through caller-supplied ECAM segments and scratch storage:
+## Common workflows
+
+### Enumerate topology through caller-supplied ECAM segments
 
 ```zig
 const segments = [_]pci.config.Segment{
     pci.config.Segment.whole(
-        pci.core.SegmentId.of(0),
-        stdx.addr.VirtAddr.fromInt(mapped_ecam_base),
-    ),
+            pci.core.SegmentId.of(0),
+            stdx.addr.VirtAddr.fromInt(mapped_ecam_base),
+            ),
 };
 var ecam = try pci.config.Ecam.from(&segments);
 
 var nodes: [256]pci.topology.tree.Node = undefined;
 var roots: [8]pci.topology.tree.NodeIndex = undefined;
 const tree = try pci.topology.enumerate.intoScratch(.{
-    .config = ecam.configSpace(),
-    .segments = &segments,
-    .nodes = &nodes,
-    .roots = &roots,
-});
+        .config = ecam.configSpace(),
+        .segments = &segments,
+        .nodes = &nodes,
+        .roots = &roots,
+        });
 
 var it = tree.preorder();
 while (it.next()) |item| {
     const function = item.node.function;
     switch (try function.headerKind()) {
         .type0 => {},
-        .type1 => {},
+            .type1 => {},
     }
 }
 ```
-
-## Common workflows
 
 ### Plan and commit resources
 
