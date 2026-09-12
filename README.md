@@ -63,10 +63,10 @@ const stdx = @import("stdx");
 
 ```zig
 const segments = [_]pci.config.Segment{
-    pci.config.Segment.whole(
-            pci.core.SegmentId.of(0),
-            stdx.addr.VirtAddr.fromInt(mapped_ecam_base),
-            ),
+    pci.config.Segment.init(
+        pci.core.SegmentId.of(0),
+        stdx.addr.VirtAddr.fromInt(mapped_ecam_base),
+    ),
 };
 var ecam = try pci.config.Ecam.from(&segments);
 

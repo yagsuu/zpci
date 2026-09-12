@@ -30,7 +30,8 @@ pub const Segment = struct {
             sbdf.bdf.bus <= self.bus_end;
     }
 
-    pub fn whole(segment: SegmentId, base: VirtAddr) Segment {
+    /// Creates a segment that covers buses 0x00 through 0xFF.
+    pub fn init(segment: SegmentId, base: VirtAddr) Segment {
         return .{
             .segment = segment,
             .base = base,

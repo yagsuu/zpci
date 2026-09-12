@@ -48,16 +48,15 @@ test "unit: Segment validates ranges and contains only matching SBDFs inside its
     try std.testing.expectError(error.InvalidBusRange, invalid.validate());
 }
 
-test "unit: Segment.whole covers every bus for the selected segment" {
-    // Segment.whole must construct the full inclusive PCI bus range for exactly the selected segment.
-    const whole = Segment.whole(SegmentId.from(7), VirtAddr.fromInt(0x2000));
+test "unit: Segment.init covers every bus for the selected segment" {
+    const segment = Segment.init(SegmentId.from(7), VirtAddr.fromInt(0x2000));
 
-    try std.testing.expect(whole.segment.eql(SegmentId.from(7)));
-    try std.testing.expectEqual(@as(u8, 0), whole.bus_start);
-    try std.testing.expectEqual(@as(u8, 0xFF), whole.bus_end);
-    try std.testing.expect(whole.contains(Sbdf.of(7, 0, 0, 0)));
-    try std.testing.expect(whole.contains(Sbdf.of(7, 0xFF, 31, 7)));
-    try std.testing.expect(!whole.contains(Sbdf.of(8, 0x80, 0, 0)));
+    try std.testing.expect(segment.segment.eql(SegmentId.from(7)));
+    try std.testing.expectEqual(@as(u8, 0), segment.bus_start);
+    try std.testing.expectEqual(@as(u8, 0xFF), segment.bus_end);
+    try std.testing.expect(segment.contains(Sbdf.of(7, 0, 0, 0)));
+    try std.testing.expect(segment.contains(Sbdf.of(7, 0xFF, 31, 7)));
+    try std.testing.expect(!segment.contains(Sbdf.of(8, 0x80, 0, 0)));
 }
 
 test "malformed: Ecam.from rejects empty invalid and duplicate segment tables" {

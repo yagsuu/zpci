@@ -64,9 +64,8 @@ pub const Segment = struct {
     pub fn validate(self: Segment) Error!void;
     pub fn contains(self: Segment, sbdf: core.Sbdf) bool;
 
-    /// Whole-bus-range segment: `bus_start = 0`, `bus_end = 0xFF`.
-    /// Matches the common MCFG shape for a single-segment machine.
-    pub fn whole(segment: core.SegmentId, base: zstdx.addr.VirtAddr) Segment;
+    /// Creates a segment that covers buses 0x00 through 0xFF.
+    pub fn init(segment: core.SegmentId, base: zstdx.addr.VirtAddr) Segment;
 };
 ```
 
