@@ -1,15 +1,10 @@
 # zpci
 
-`zpci` is a Zig library for PCI and PCI Express configuration-space access.
-
 ## Overview
 
-`zpci` provides typed access to PCI and PCI Express configuration space from
-Zig. It includes helpers for headers, BARs, capabilities, topology
-enumeration, resource assignment, and MSI/MSI-X programming.
-
-Applications provide the accessors that `zpci` uses for PCI configuration space
-and BAR memory.
+Implements typed views and helpers for PCI and PCI Express headers, BARs,
+capabilities, topology enumeration, resource assignment, and MSI/MSI-X
+programming.
 
 ## Features
 
@@ -87,7 +82,7 @@ while (it.next()) |item| {
 ### Plan and commit resources
 
 ```zig
-var assignments: [128]pci.resources.model.Assignment = undefined;
+var assignments: [128]pci.resources.Assignment = undefined;
 const plan = try pci.resources.assignment.intoScratch(.{
     .nodes = assignment_nodes,
     .roots = assignment_roots,
@@ -139,8 +134,8 @@ try msix.programEntry(table_memory, 0, .{
 
 - **No hidden allocation.** Enumeration, traversal, assignment, and programming
   use caller-provided storage or fixed-size internal storage.
-- **Explicit hardware access.** Configuration-space I/O uses `ConfigSpace`;
-  MSI-X table and PBA I/O use `BarMemory`.
+- **Explicit hardware access.** The caller provides a `ConfigSpace` accessor
+  for configuration space and a `BarMemory` accessor for BAR MMIO.
 - **Read-only enumeration.** Topology discovery does not program resource,
   interrupt, or command-register state.
 - **Plan, then commit.** Resource assignment builds a plan without
