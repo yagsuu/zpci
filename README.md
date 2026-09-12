@@ -1,30 +1,26 @@
 # zpci
 
-`zpci` is a Zig-native library for PCI and PCI Express configuration-space
-access, topology discovery, resource planning, and interrupt programming.
+`zpci` is a Zig library for PCI and PCI Express configuration-space access.
 
 ## Overview
 
-`zpci` owns PCI identifiers, configuration-space accessors, ECAM and PIO
-backends, function views, header decode and programming, BAR decode and sizing,
-capability traversal, topology enumeration, resource assignment and programming,
-bridge bus and window handling, and MSI/MSI-X programming.
+`zpci` provides typed access to PCI and PCI Express configuration space from
+Zig. It includes helpers for headers, BARs, capabilities, topology
+enumeration, resource assignment, and MSI/MSI-X programming.
 
-The public Zig module is `pci`. `zpci` operates through caller-provided
-configuration-space and BAR-memory accessors; platform integration and driver
-policy remain with the caller.
+Applications provide the accessors that `zpci` uses for PCI configuration space
+and BAR memory.
 
 ## Features
 
 - Typed PCI identifiers and BDF/SBDF values.
-- Explicit ECAM configuration-space access and an x86_64 PIO backend.
-- Common, type-0, and type-1 header views and programming helpers.
+- ECAM access through caller-provided segments and an x86_64 PIO backend.
+- Type-0 and Type-1 header views and programming helpers.
 - BAR decode and sizing probes.
 - Standard, extended, and PCIe capability traversal and decode.
-- Device and bridge topology enumeration over caller-provided scratch storage.
-- Explicit PCI resource assignment, bridge-window encoding, and commit.
+- Device and bridge topology enumeration using caller-provided scratch storage.
+- PCI resource assignment, bridge-window encoding, and commit.
 - MSI and MSI-X capability and table programming.
-- Byte-backed host-test accessors that exercise production accessor contracts.
 
 ## Requirements and platform support
 
@@ -34,14 +30,12 @@ policy remain with the caller.
 | Package | `zpci` |
 | Public module | `pci` |
 | Dependency | `zstdx`, declared in `build.zig.zon` |
-| Host endianness | Little-endian hosts |
-| Configuration access | ECAM through caller-provided segments; PIO on x86_64 through `stdx.arch.x86_64.Port` |
-| Default test suite | Host-selected target; no hardware, VM, or external tools required |
+| Configuration access | ECAM through caller-provided `Segment` values; PIO on x86_64 through `stdx.arch.x86_64.Port` |
+| Default test suite | Host target; no PCI hardware, VM, or external tools required |
 
 ## Quick start
 
-Add `zpci` and its `zstdx` dependency to the consuming project's build
-configuration. Import the package module as `pci`:
+Add `zpci` and `zstdx` to your project, then import `pci`:
 
 ```zig
 const zpci = b.dependency("zpci", .{
@@ -68,32 +62,29 @@ const segments = [_]pci.config.Segment{
         stdx.addr.VirtAddr.fromInt(mapped_ecam_base),
     ),
 };
+
 var ecam = try pci.config.Ecam.from(&segments);
 
 var nodes: [256]pci.topology.tree.Node = undefined;
 var roots: [8]pci.topology.tree.NodeIndex = undefined;
 const tree = try pci.topology.enumerate.intoScratch(.{
-        .config = ecam.configSpace(),
-        .segments = &segments,
-        .nodes = &nodes,
-        .roots = &roots,
-        });
+    .config = ecam.configSpace(),
+    .segments = &segments,
+    .nodes = &nodes,
+    .roots = &roots,
+});
 
 var it = tree.preorder();
 while (it.next()) |item| {
     const function = item.node.function;
     switch (try function.headerKind()) {
         .type0 => {},
-            .type1 => {},
+        .type1 => {},
     }
 }
 ```
 
 ### Plan and commit resources
-
-Resource assignment does not program hardware. Callers size BARs, aggregate
-bridge windows, and lower topology nodes into
-`pci.resources.assignment.Node` values. They then commit the explicit plan.
 
 ```zig
 var assignments: [128]pci.resources.model.Assignment = undefined;
@@ -108,8 +99,8 @@ try pci.resources.programming.commit(plan);
 
 ### Program MSI or MSI-X
 
-Callers provide interrupt-routing inputs and BAR memory. `zpci` does not
-allocate vectors or map BAR memory.
+Applications provide interrupt-routing data and BAR memory. `zpci` does not
+allocate interrupt vectors or map BARs.
 
 ```zig
 const msi = (try pci.interrupts.msi.View.find(function)) orelse return error.NoMsi;
@@ -147,18 +138,19 @@ try msix.programEntry(table_memory, 0, .{
 ## Design
 
 - **No hidden allocation.** Enumeration, traversal, assignment, and programming
-  use caller-provided storage or fixed internal frames.
-- **Explicit privileged access.** Configuration-space I/O goes through
-  `ConfigSpace`; MSI-X table and PBA I/O go through `BarMemory`.
+  use caller-provided storage or fixed-size internal storage.
+- **Explicit hardware access.** Configuration-space I/O uses `ConfigSpace`;
+  MSI-X table and PBA I/O use `BarMemory`.
 - **Read-only enumeration.** Topology discovery does not program resource,
   interrupt, or command-register state.
-- **Plan, then commit.** Resource assignment is pure. Programming is an explicit
-  commit with readback and rollback semantics.
-- **Caller-owned platform policy.** ACPI MCFG parsing, root-window discovery,
-  vector allocation, interrupt-controller routing, device binding, and reset
-  policy remain outside `zpci`.
-- **Host-testable contracts.** The default suite uses real byte buffers through
-  the same accessor contracts used in production.
+- **Plan, then commit.** Resource assignment builds a plan without
+  configuration-space I/O. Committing the plan programs hardware with readback
+  and rollback.
+- **Platform policy stays outside the library.** `zpci` does not parse ACPI MCFG
+  data, discover root windows, allocate interrupt vectors, route interrupts,
+  bind drivers, or control device reset.
+- **Host-testable accessors.** The default suite uses byte buffers through the
+  same accessor interfaces used in production.
 
 ## Build and test
 
@@ -174,16 +166,14 @@ Check the Zig source format:
 zig fmt --check build.zig src test
 ```
 
-The default suite exercises decode, sizing, traversal, assignment, programming,
-and interrupt paths through byte-backed configuration-space and BAR-memory
+The default suite tests decode, sizing, traversal, assignment, programming, and
+interrupt paths through byte-buffer configuration-space and BAR-memory
 accessors. It requires no PCI hardware.
 
 ## Documentation
 
-The normative contracts are under [`docs/specs/`](docs/specs/). Planning
-documents do not define the public API.
+The public API contracts are in [`docs/specs/`](docs/specs/).
 
 - [`docs/specs/index.md`](docs/specs/index.md) — package scope and public facade
 - [`docs/specs/architecture.md`](docs/specs/architecture.md) — layering, ownership, and dependency direction
 - [`docs/guidelines/testing.md`](docs/guidelines/testing.md) — host-test contract
-- [`docs/planning/spec-queue.md`](docs/planning/spec-queue.md) — proposal process for future work
