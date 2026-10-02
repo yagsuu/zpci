@@ -160,7 +160,7 @@ pub const Sbdf = packed struct(u32) {
         try writer.print(
             "{x:0>4}:{x:0>2}:{x:0>2}.{d}",
             .{
-                self.segment.value,
+                @intFromEnum(self.segment),
                 self.bdf.bus,
                 @as(u8, self.bdf.device),
                 @as(u8, self.bdf.function),

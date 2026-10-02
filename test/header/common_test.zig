@@ -188,9 +188,9 @@ test "unit: View reads every common-header field from seeded config bytes" {
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const view = View.init(try Function.validate(backend.configSpace(), sbdf));
 
-    try std.testing.expectEqual(@as(u16, 0x1234), (try view.vendorId()).value);
-    try std.testing.expectEqual(@as(u16, 0xABCD), (try view.deviceId()).value);
-    try std.testing.expectEqual(@as(u8, 0x42), (try view.revisionId()).value);
+    try std.testing.expectEqual(@as(u16, 0x1234), @intFromEnum(try view.vendorId()));
+    try std.testing.expectEqual(@as(u16, 0xABCD), @intFromEnum(try view.deviceId()));
+    try std.testing.expectEqual(@as(u8, 0x42), @intFromEnum(try view.revisionId()));
     try std.testing.expect((try view.classCode()).eql(pci.core.ClassCode.from(0x0C, 0x03, 0x30)));
     try std.testing.expectEqual(@as(u16, 0x0557), @as(u16, @bitCast(try view.command())));
     try std.testing.expectEqual(@as(u16, 0xFDB8), @as(u16, @bitCast(try view.status())));
@@ -244,7 +244,7 @@ test "malformed: missing function is rejected by validate and not translated by 
 
     const view = View.init(Function.unchecked(backend.configSpace(), missing));
     try std.testing.expect((try view.vendorId()).isAbsent());
-    try std.testing.expectEqual(@as(u16, 0xFFFF), (try view.deviceId()).value);
+    try std.testing.expectEqual(@as(u16, 0xFFFF), @intFromEnum(try view.deviceId()));
     try std.testing.expectEqual(@as(u8, 0xFF), try view.headerTypeByte());
 }
 

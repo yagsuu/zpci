@@ -30,12 +30,12 @@ Deferred:
 
 ## Conventions `[zpci]`
 
-- Every identifier is a single-field newtype: a `struct` wrapping the smallest integer or byte array required by the PCI spec. Distinct types prevent mixing at the type level — a `VendorId` cannot be passed where a `DeviceId` is expected, even though both are `u16`.
-- Integer newtypes carry the field name `value`.
+- Every identifier is a non-exhaustive integer enum with the smallest integer type required by the PCI spec. Distinct types prevent mixing at the type level — a `VendorId` cannot be passed where a `DeviceId` is expected, even though both use `u16`.
+- Callers extract raw integer values with `@intFromEnum`.
 - `extern struct` aggregates carry colocated `comptime` layout assertions per `docs/guidelines/conventions.md` §Compile-time assertions.
-- Constructors named `of` are `comptime`-only and reject out-of-range inputs at compile time. Constructors named `from` are runtime; they return `error.InvalidIdentifier` from `pci.core.Error` on out-of-range input.
-- `eql` compares value-by-value.
-- Named values exist only for closed, spec-defined vocabularies. They live as `pub const` declarations on the owning newtype.
+- Constructors named `of` accept only comptime input. Constructors named `from` accept runtime input.
+- `eql` compares enum tags.
+- Named values exist only for closed, spec-defined vocabularies. They live on the owning enum.
 
 ## Newtypes `[zpci wrappers over std layout]`
 
@@ -44,12 +44,12 @@ Deferred:
 PCI segment group number. The PCIe spec admits up to 65 536 segment groups; zpci treats segment-id values as opaque `u16` keys supplied by the caller.
 
 ```zig
-pub const SegmentId = packed struct(u16) {
-    value: u16,
+pub const SegmentId = enum(u16) {
+    _,
 
-    pub fn of(comptime n: u16) SegmentId { return .{ .value = n }; }
-    pub fn from(n: u16) SegmentId { return .{ .value = n }; }
-    pub fn eql(a: SegmentId, b: SegmentId) bool { return a.value == b.value; }
+    pub fn of(comptime n: u16) SegmentId { return @enumFromInt(n); }
+    pub fn from(n: u16) SegmentId { return @enumFromInt(n); }
+    pub fn eql(a: SegmentId, b: SegmentId) bool { return a == b; }
 
     comptime {
         std.debug.assert(@bitSizeOf(SegmentId) == 16);
@@ -64,17 +64,16 @@ pub const SegmentId = packed struct(u16) {
 PCI configuration-space `Vendor ID` at offset `0x00` (16 bits, little-endian).
 
 ```zig
-pub const VendorId = struct {
-    value: u16,
+pub const VendorId = enum(u16) {
+    _,
 
-    /// Spec-mandated absent-function marker. A vendor id of `0xFFFF`
-    /// reported by hardware means "no function present at this BDF".
-    pub const absent: VendorId = .{ .value = 0xFFFF };
+    /// PCI absent-function marker (0xFFFF).
+    pub const absent: VendorId = @enumFromInt(0xFFFF);
 
-    pub fn of(comptime n: u16) VendorId { return .{ .value = n }; }
-    pub fn from(n: u16) VendorId { return .{ .value = n }; }
-    pub fn eql(a: VendorId, b: VendorId) bool { return a.value == b.value; }
-    pub fn isAbsent(self: VendorId) bool { return self.value == 0xFFFF; }
+    pub fn of(comptime n: u16) VendorId { return @enumFromInt(n); }
+    pub fn from(n: u16) VendorId { return @enumFromInt(n); }
+    pub fn eql(a: VendorId, b: VendorId) bool { return a == b; }
+    pub fn isAbsent(self: VendorId) bool { return self == absent; }
 };
 ```
 
@@ -88,12 +87,12 @@ Rules:
 PCI configuration-space `Device ID` at offset `0x02` (16 bits, little-endian).
 
 ```zig
-pub const DeviceId = struct {
-    value: u16,
+pub const DeviceId = enum(u16) {
+    _,
 
-    pub fn of(comptime n: u16) DeviceId { return .{ .value = n }; }
-    pub fn from(n: u16) DeviceId { return .{ .value = n }; }
-    pub fn eql(a: DeviceId, b: DeviceId) bool { return a.value == b.value; }
+    pub fn of(comptime n: u16) DeviceId { return @enumFromInt(n); }
+    pub fn from(n: u16) DeviceId { return @enumFromInt(n); }
+    pub fn eql(a: DeviceId, b: DeviceId) bool { return a == b; }
 };
 ```
 
@@ -104,12 +103,12 @@ pub const DeviceId = struct {
 PCI configuration-space `Revision ID` at offset `0x08` (8 bits).
 
 ```zig
-pub const RevisionId = struct {
-    value: u8,
+pub const RevisionId = enum(u8) {
+    _,
 
-    pub fn of(comptime n: u8) RevisionId { return .{ .value = n }; }
-    pub fn from(n: u8) RevisionId { return .{ .value = n }; }
-    pub fn eql(a: RevisionId, b: RevisionId) bool { return a.value == b.value; }
+    pub fn of(comptime n: u8) RevisionId { return @enumFromInt(n); }
+    pub fn from(n: u8) RevisionId { return @enumFromInt(n); }
+    pub fn eql(a: RevisionId, b: RevisionId) bool { return a == b; }
 };
 ```
 
@@ -118,52 +117,50 @@ pub const RevisionId = struct {
 Byte components of the PCI class code. Distinct types prevent mixing.
 
 ```zig
-pub const BaseClass = struct {
-    value: u8,
+pub const BaseClass = enum(u8) {
+    unclassified = 0x00,
+    mass_storage = 0x01,
+    network_controller = 0x02,
+    display_controller = 0x03,
+    multimedia_controller = 0x04,
+    memory_controller = 0x05,
+    bridge = 0x06,
+    simple_comm_controller = 0x07,
+    base_system_peripheral = 0x08,
+    input_device = 0x09,
+    docking_station = 0x0A,
+    processor = 0x0B,
+    serial_bus_controller = 0x0C,
+    wireless_controller = 0x0D,
+    intelligent_controller = 0x0E,
+    satellite_comm = 0x0F,
+    encryption_controller = 0x10,
+    signal_processing = 0x11,
+    processing_accelerator = 0x12,
+    non_essential_instr = 0x13,
+    coprocessor = 0x40,
+    unassigned = 0xFF,
+    _,
 
-    // PCI-SIG Code and ID Assignment Specification, base class values.
-    pub const unclassified:           BaseClass = .of(0x00);
-    pub const mass_storage:           BaseClass = .of(0x01);
-    pub const network_controller:     BaseClass = .of(0x02);
-    pub const display_controller:     BaseClass = .of(0x03);
-    pub const multimedia_controller:  BaseClass = .of(0x04);
-    pub const memory_controller:      BaseClass = .of(0x05);
-    pub const bridge:                 BaseClass = .of(0x06);
-    pub const simple_comm_controller: BaseClass = .of(0x07);
-    pub const base_system_peripheral: BaseClass = .of(0x08);
-    pub const input_device:           BaseClass = .of(0x09);
-    pub const docking_station:        BaseClass = .of(0x0A);
-    pub const processor:              BaseClass = .of(0x0B);
-    pub const serial_bus_controller:  BaseClass = .of(0x0C);
-    pub const wireless_controller:    BaseClass = .of(0x0D);
-    pub const intelligent_controller: BaseClass = .of(0x0E);
-    pub const satellite_comm:         BaseClass = .of(0x0F);
-    pub const encryption_controller:  BaseClass = .of(0x10);
-    pub const signal_processing:      BaseClass = .of(0x11);
-    pub const processing_accelerator: BaseClass = .of(0x12);
-    pub const non_essential_instr:    BaseClass = .of(0x13);
-    pub const coprocessor:            BaseClass = .of(0x40);
-    pub const unassigned:             BaseClass = .of(0xFF);
-
-    pub fn of(comptime n: u8) BaseClass { return .{ .value = n }; }
-    pub fn from(n: u8) BaseClass { return .{ .value = n }; }
-    pub fn eql(a: BaseClass, b: BaseClass) bool { return a.value == b.value; }
+    pub fn of(comptime n: u8) BaseClass { return @enumFromInt(n); }
+    pub fn from(n: u8) BaseClass { return @enumFromInt(n); }
+    pub fn eql(a: BaseClass, b: BaseClass) bool { return a == b; }
 };
 
-pub const Subclass = struct {
-    value: u8,
+pub const Subclass = enum(u8) {
+    _,
 
-    pub fn of(comptime n: u8) Subclass { return .{ .value = n }; }
-    pub fn from(n: u8) Subclass { return .{ .value = n }; }
-    pub fn eql(a: Subclass, b: Subclass) bool { return a.value == b.value; }
+    pub fn of(comptime n: u8) Subclass { return @enumFromInt(n); }
+    pub fn from(n: u8) Subclass { return @enumFromInt(n); }
+    pub fn eql(a: Subclass, b: Subclass) bool { return a == b; }
 };
 
-pub const ProgIf = struct {
-    value: u8,
+pub const ProgIf = enum(u8) {
+    _,
 
-    pub fn of(comptime n: u8) ProgIf { return .{ .value = n }; }
-    pub fn from(n: u8) ProgIf { return .{ .value = n }; }
-    pub fn eql(a: ProgIf, b: ProgIf) bool { return a.value == b.value; }
+    pub fn of(comptime n: u8) ProgIf { return @enumFromInt(n); }
+    pub fn from(n: u8) ProgIf { return @enumFromInt(n); }
+    pub fn eql(a: ProgIf, b: ProgIf) bool { return a == b; }
 };
 ```
 

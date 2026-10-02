@@ -148,7 +148,7 @@ test "unit: common returns a common-header view over the same function" {
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
     const view = View.init(Function.unchecked(backend.configSpace(), sbdf));
 
-    try std.testing.expectEqual(@as(u16, 0x1234), (try view.common().vendorId()).value);
+    try std.testing.expectEqual(@as(u16, 0x1234), @intFromEnum(try view.common().vendorId()));
 }
 
 fn seedType0Header(bytes: *[pcie_window_size]u8, fields: struct {

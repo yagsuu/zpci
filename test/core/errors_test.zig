@@ -7,7 +7,6 @@ const pci = @import("pci");
 const Error = pci.core.Error;
 
 test "contract: pci.core.Error is the exact public category set" {
-    // Compare the public error-set names and count so missing variants or accidental extras fail.
     const expected = comptime .{
         "OutOfBounds",
         "AbsentFunction",

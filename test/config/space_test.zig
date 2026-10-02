@@ -151,9 +151,9 @@ test "unit: validate accepts present type0 and reads identifiers" {
 
     try std.testing.expectEqual(HeaderKind.type0, try function.headerKind());
     try std.testing.expect(!try function.isMultifunction());
-    try std.testing.expectEqual(@as(u16, 0x1234), (try function.vendorId()).value);
-    try std.testing.expectEqual(@as(u16, 0x5678), (try function.deviceId()).value);
-    try std.testing.expectEqual(@as(u8, 0x9A), (try function.revisionId()).value);
+    try std.testing.expectEqual(@as(u16, 0x1234), @intFromEnum(try function.vendorId()));
+    try std.testing.expectEqual(@as(u16, 0x5678), @intFromEnum(try function.deviceId()));
+    try std.testing.expectEqual(@as(u8, 0x9A), @intFromEnum(try function.revisionId()));
     try std.testing.expect((try function.classCode()).eql(pci.core.ClassCode.from(0x01, 0x08, 0x02)));
 }
 
