@@ -50,7 +50,6 @@ const status = struct {
 };
 
 test "integration: public facade exposes workflow namespaces" {
-    // Compile representative namespace references so facade drift fails at the package boundary.
     _ = pci.core.Bdf;
     _ = pci.config.Function;
     _ = pci.header.common;
@@ -68,7 +67,6 @@ test "integration: public facade exposes workflow namespaces" {
 }
 
 test "integration: capability traversal walks seeded config bytes" {
-    // Walk standard and extended capability chains from one byte-backed function.
     var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.pcie_capability });
     seedCapability(&bytes, .{
@@ -110,7 +108,6 @@ test "integration: capability traversal walks seeded config bytes" {
 }
 
 test "integration: enumerate assign program memory BAR" {
-    // Enumerate a function, lower one BAR requirement, then assert commit writes the assigned base.
     var endpoint: [pcie_window_size]u8 = undefined;
     seedFunction(&endpoint, .{ .command = 0x0003 });
     store32(&endpoint, offset.bar0, 0x0000_0000);
@@ -169,7 +166,6 @@ test "integration: enumerate assign program memory BAR" {
 }
 
 test "integration: bus commit enables bridge subtree enumeration" {
-    // Program bridge bus numbers and re-enumerate to prove the child bus becomes reachable.
     var bridge: [pcie_window_size]u8 = undefined;
     var endpoint: [pcie_window_size]u8 = undefined;
     seedFunction(&bridge, .{ .header = 0x01 });
@@ -226,7 +222,6 @@ test "integration: bus commit enables bridge subtree enumeration" {
 }
 
 test "integration: MSI routing programs discovered capability" {
-    // Discover an MSI capability and verify caller routing is reflected in config-space state.
     var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.msi_capability });
     seedCapability(&bytes, .{ .base = offset.msi_capability, .id = pci.interrupts.msi.cap_id, .next = 0 });
@@ -252,7 +247,6 @@ test "integration: MSI routing programs discovered capability" {
 }
 
 test "integration: MSI-X routing programs caller BAR memory" {
-    // Discover MSI-X metadata, program caller-owned table memory, and read pending state from PBA memory.
     var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.msix_capability });
     seedCapability(&bytes, .{ .base = offset.msix_capability, .id = pci.interrupts.msix.cap_id, .next = 0 });

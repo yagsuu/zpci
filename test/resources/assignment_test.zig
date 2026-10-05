@@ -21,7 +21,6 @@ const TestConfigSpace = pci.testing.config.TestConfigSpace;
 const pcie_window_size: usize = 0x1000;
 
 test "unit: sizeBound sums all nodes while empty roots emit no assignments" {
-    // Include an unreachable node so the sizing helper remains an upper bound, not a reachability walk.
     var fixture = FunctionFixture{};
     fixture.init(1);
     const function = fixture.function;
@@ -47,7 +46,6 @@ test "unit: sizeBound sums all nodes while empty roots emit no assignments" {
 }
 
 test "unit: intoScratch allows more assignments than nodes" {
-    // Build a valid plan whose assignment count exceeds the node-count bound.
     var fixture = FunctionFixture{};
     fixture.init(8);
     const function = fixture.function;
@@ -86,7 +84,6 @@ test "unit: intoScratch allows more assignments than nodes" {
 }
 
 test "unit: DFS preorder emits parent requirements before children in input order" {
-    // Give each requirement a distinct BAR index so the emitted sequence identifies the visited node.
     var fixture = FunctionFixture{};
     fixture.init(2);
     const function = fixture.function;
@@ -117,7 +114,6 @@ test "unit: DFS preorder emits parent requirements before children in input orde
 }
 
 test "unit: pool preference records natural pools" {
-    // Run isolated one-requirement cases so each natural pool decision is directly observable.
     var fixture = FunctionFixture{};
     fixture.init(3);
     const function = fixture.function;
@@ -163,7 +159,6 @@ test "unit: pool preference records natural pools" {
 }
 
 test "unit: pool preference records fallback pools" {
-    // Run isolated one-requirement cases so each fallback decision is directly observable.
     var fixture = FunctionFixture{};
     fixture.init(3);
     const function = fixture.function;
@@ -209,7 +204,6 @@ test "unit: pool preference records fallback pools" {
 }
 
 test "unit: alignment sort preserves caller requirements and placements stay contained" {
-    // Place larger alignments first from an unaligned window and verify the original borrowed slice order survives.
     var fixture = FunctionFixture{};
     fixture.init(4);
     const function = fixture.function;
@@ -249,7 +243,6 @@ test "unit: alignment sort preserves caller requirements and placements stay con
 }
 
 test "unit: ResourceExhausted reports the first requirement whose chain has no room" {
-    // Make the larger sorted requirement impossible while a later smaller request would fit if incorrectly skipped.
     var fixture = FunctionFixture{};
     fixture.init(5);
     const function = fixture.function;
@@ -269,7 +262,6 @@ test "unit: ResourceExhausted reports the first requirement whose chain has no r
 }
 
 test "unit: StorageExhausted is checked before scratch is modified" {
-    // Provide one slot for two reachable requirements and check the sentinel assignment is untouched.
     var fixture = FunctionFixture{};
     fixture.init(6);
     const function = fixture.function;
@@ -293,8 +285,6 @@ test "unit: StorageExhausted is checked before scratch is modified" {
 }
 
 test "unit: bridge sub-apertures come only from bridge-window assignments" {
-    // Force a prefetchable bridge window to fall back to the parent MMIO32 pool.
-    // Children still place by the bridge window's semantic kind.
     var fixture = FunctionFixture{};
     fixture.init(7);
     const function = fixture.function;

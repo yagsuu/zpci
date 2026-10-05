@@ -38,12 +38,10 @@ const offset = struct {
 const commit = pci.resources.programming.commit;
 
 test "unit: empty plan performs no config-space access" {
-    // Commit an empty assignment slice to cover the no-access fast path.
     try commit(.{ .assignments = &.{} });
 }
 
 test "unit: endpoint mixed BARs and ROM follow save disable write restore order" {
-    // Use a byte-backed endpoint to verify BAR/ROM ordering and readbacks.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedHeader(&bytes, .type0, command_all);
     store32(&bytes, offset.bar0, 0x0000_0000);
@@ -87,7 +85,6 @@ test "unit: endpoint mixed BARs and ROM follow save disable write restore order"
 }
 
 test "unit: 64-bit BAR writes high dword and preserves saved low type bits" {
-    // Program a 64-bit BAR through a 32-bit pool to verify wire width comes from the requirement.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedHeader(&bytes, .type0, command_all);
     store32(&bytes, offset.bar0, 0x0000_000C);
@@ -109,7 +106,6 @@ test "unit: 64-bit BAR writes high dword and preserves saved low type bits" {
 }
 
 test "unit: bridge BAR and windows write in fixed order and zero stale upper registers" {
-    // Shuffle bridge assignments and assert the full save/write/readback trace stays deterministic.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedHeader(&bytes, .type1, command_all);
     store32(&bytes, offset.bar0, 0x0000_0000);
@@ -162,7 +158,6 @@ test "unit: bridge BAR and windows write in fixed order and zero stale upper reg
 }
 
 test "unit: prefetchable 64-bit bridge window writes real upper dwords" {
-    // Program a 64-bit prefetchable window to verify non-zero upper dword writes.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedHeader(&bytes, .type1, command_all);
     var backend = LoggedConfig.init(&.{.{ .sbdf = sbdf(0), .bytes = &bytes }});
@@ -189,7 +184,6 @@ test "unit: prefetchable 64-bit bridge window writes real upper dwords" {
 }
 
 test "unit: save failure and disable mismatch stop before base writes" {
-    // Inject save and disable-readback failures to prove no base register is written.
     var save_bytes: [pcie_window_size]u8 = @splat(0);
     seedHeader(&save_bytes, .type0, command_all);
     var save_backend = LoggedConfig.init(&.{.{ .sbdf = sbdf(0), .bytes = &save_bytes }});
@@ -212,7 +206,6 @@ test "unit: save failure and disable mismatch stop before base writes" {
 }
 
 test "unit: BAR failure rolls back journaled writes and restores Command" {
-    // Fail the second BAR write and assert the first BAR plus Command are restored.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedHeader(&bytes, .type0, command_all);
     store32(&bytes, offset.bar0, 0x0000_0000);
@@ -247,7 +240,6 @@ test "unit: BAR failure rolls back journaled writes and restores Command" {
 }
 
 test "unit: restore-decode failure rolls back bases and returns original error" {
-    // Fail restore-decode write/readback after BAR success to verify rollback semantics.
     var write_bytes: [pcie_window_size]u8 = @splat(0);
     seedHeader(&write_bytes, .type0, command_all);
     store32(&write_bytes, offset.bar0, 0x0000_0000);
@@ -278,7 +270,6 @@ test "unit: restore-decode failure rolls back bases and returns original error" 
 }
 
 test "unit: rollback restore failure returns ProgrammingPartial and aborts further restores" {
-    // Corrupt rollback readback to prove partial restore aborts further rollback.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedHeader(&bytes, .type0, command_all);
     store32(&bytes, offset.bar0, 0x0000_0000);
@@ -294,7 +285,6 @@ test "unit: rollback restore failure returns ProgrammingPartial and aborts furth
 }
 
 test "unit: multi-function failure leaves prior committed and later untouched" {
-    // Fail the middle function to verify prior commit and later non-access boundaries.
     var bytes0: [pcie_window_size]u8 = @splat(0);
     var bytes1: [pcie_window_size]u8 = @splat(0);
     var bytes2: [pcie_window_size]u8 = @splat(0);

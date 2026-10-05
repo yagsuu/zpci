@@ -141,7 +141,6 @@ fn oneEntryConfig(bytes: *[pcie_window_size]u8, sbdf: Sbdf, entry: *[1]TestConfi
 }
 
 test "unit: validate accepts present type0 and reads identifiers" {
-    // A present type-0 function must validate and expose common identifier fields as typed values.
     var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .header = 0x00 });
     const sbdf = Sbdf.of(0, 0, 1, 0);
@@ -158,7 +157,6 @@ test "unit: validate accepts present type0 and reads identifiers" {
 }
 
 test "unit: validate accepts type1 while masking multifunction bit" {
-    // Header dispatch must ignore the multifunction bit while preserving isMultifunction().
     var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .header = 0x81 });
     const sbdf = Sbdf.of(0, 0, 2, 0);
@@ -171,7 +169,6 @@ test "unit: validate accepts type1 while masking multifunction bit" {
 }
 
 test "malformed: validate reports AbsentFunction for vendor id FFFF" {
-    // Vendor ID 0xFFFF must stop validation at AbsentFunction before reading header type.
     var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .vendor = 0xFFFF, .header = 0x00 });
     const sbdf = Sbdf.of(0, 0, 3, 0);
@@ -183,7 +180,6 @@ test "malformed: validate reports AbsentFunction for vendor id FFFF" {
 }
 
 test "malformed: validate reports BadHeaderType after masking multifunction bit" {
-    // Unsupported masked header layouts must map to BadHeaderType after presence succeeds.
     var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .header = 0x82 });
     const sbdf = Sbdf.of(0, 0, 4, 0);
@@ -195,7 +191,6 @@ test "malformed: validate reports BadHeaderType after masking multifunction bit"
 }
 
 test "unit: unchecked performs no validation I/O and reads live bytes" {
-    // The unchecked constructor must not validate and its methods must observe current backend bytes.
     var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .vendor = 0xFFFF, .header = 0x7F });
     const sbdf = Sbdf.of(0, 0, 5, 0);
@@ -210,7 +205,6 @@ test "unit: unchecked performs no validation I/O and reads live bytes" {
 }
 
 test "unit: Function eq compares backend identity and SBDF" {
-    // Compare handles over the same bytes, different functions, and different backends.
     var bytes_a: [pcie_window_size]u8 = undefined;
     var bytes_b: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes_a, .{});
@@ -228,7 +222,6 @@ test "unit: Function eq compares backend identity and SBDF" {
 }
 
 test "unit: scoped reads and writes use the stored Sbdf" {
-    // Function-scoped I/O must route through the stored SBDF rather than the caller restating it.
     var bytes_a: [pcie_window_size]u8 = undefined;
     var bytes_b: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes_a, .{ .vendor = 0x1111 });
@@ -249,7 +242,6 @@ test "unit: scoped reads and writes use the stored Sbdf" {
 }
 
 test "unit: identifier reads observe live bytes without absence translation" {
-    // Identifier reads after validation must return live wire values instead of cached presence state.
     var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{ .vendor = 0x1234 });
     const sbdf = Sbdf.of(0, 0, 8, 0);
@@ -262,7 +254,6 @@ test "unit: identifier reads observe live bytes without absence translation" {
 }
 
 test "malformed: ConfigSpace errors propagate through Function methods" {
-    // Function methods must propagate ConfigSpace validation and backend errors without remapping them.
     var bytes: [pcie_window_size]u8 = undefined;
     seedFunction(&bytes, .{});
     const sbdf = Sbdf.of(0, 0, 9, 0);

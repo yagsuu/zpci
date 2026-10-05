@@ -18,7 +18,6 @@ const eligiblePools = pci.resources.eligiblePools;
 const pcie_window_size: usize = 0x1000;
 
 test "unit: eligiblePools implements the resource-kind truth table" {
-    // Drive every requirement kind against every pool so one flipped eligibility bit is visible.
     const cases = [_]struct {
         name: []const u8,
         kind: Kind,
@@ -55,7 +54,6 @@ test "unit: eligiblePools implements the resource-kind truth table" {
 }
 
 test "unit: Aperture absent and range expose half-open containment" {
-    // Compare empty and non-empty apertures at their lower bound, exact end, and just outside.
     const absent = Aperture.absent(.io);
     try std.testing.expectEqual(Kind.io, absent.kind);
     try std.testing.expectEqual(@as(u64, 0), absent.base);
@@ -78,7 +76,6 @@ test "unit: Aperture absent and range expose half-open containment" {
 }
 
 test "unit: Aperture containment rejects overflowing requested ranges" {
-    // Place a request near maxInt(u64) so a missing overflow guard would wrap into the window.
     const max = std.math.maxInt(u64);
     const window = Aperture.range(.mmio64, max - 0x100, 0x100);
 
@@ -87,7 +84,6 @@ test "unit: Aperture containment rejects overflowing requested ranges" {
 }
 
 test "unit: Aperture allocate consumes alignment padding and consecutive ranges" {
-    // Start unaligned, then consume the exact remainder so both cursor movement and padding accounting are visible.
     var window = Aperture.range(.mmio32_pref, 0x1001, 0x2FFF);
 
     try std.testing.expectEqual(@as(?u64, 0x2000), window.allocate(0x800, 0x1000));
@@ -102,7 +98,6 @@ test "unit: Aperture allocate consumes alignment padding and consecutive ranges"
 }
 
 test "unit: Aperture allocate failure leaves the aperture unchanged" {
-    // Exercise each runtime failure path: empty, too small, alignment overflow, and allocation-end overflow.
     var empty = Aperture.absent(.io);
     try std.testing.expectEqual(@as(?u64, null), empty.allocate(1, 1));
     try std.testing.expectEqual(@as(u64, 0), empty.base);
@@ -126,7 +121,6 @@ test "unit: Aperture allocate failure leaves the aperture unchanged" {
 }
 
 test "unit: HostBridgeApertures.get selects the aperture for each resource kind" {
-    // Use distinct ranges in every field so a wrong switch arm returns observable wrong bounds.
     const apertures = HostBridgeApertures{
         .io = .range(.io, 0x0010, 0x10),
         .mmio32 = .range(.mmio32, 0x1000, 0x20),
@@ -156,7 +150,6 @@ test "unit: HostBridgeApertures.get selects the aperture for each resource kind"
 }
 
 test "unit: Requirement.fromBar drops absent and zero-sized BARs" {
-    // Feed the null-producing BAR shapes so unimplemented or pathological probe results do not allocate resources.
     var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 1, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -171,7 +164,6 @@ test "unit: Requirement.fromBar drops absent and zero-sized BARs" {
 }
 
 test "unit: Requirement.fromBar maps IO and memory BAR variants" {
-    // Table-drive non-null BAR kinds and assert kind, natural alignment, and BAR source identity.
     var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 2, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -215,7 +207,6 @@ test "unit: Requirement.fromBar maps IO and memory BAR variants" {
 }
 
 test "unit: Requirement.fromExpansionRom maps nonzero ROM size to MMIO32" {
-    // Convert zero and nonzero ROM probe sizes so only real ROM apertures become requirements.
     var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 3, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -235,7 +226,6 @@ test "unit: Requirement.fromExpansionRom maps nonzero ROM size to MMIO32" {
 }
 
 test "unit: Requirement.fromBarSlice preserves BAR order and rejects short output" {
-    // Mix skipped and kept entries to prove compaction is stable and capacity is checked up front.
     var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 4, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);
@@ -261,7 +251,6 @@ test "unit: Requirement.fromBarSlice preserves BAR order and rejects short outpu
 }
 
 test "unit: Assignment function returns the owner for every source kind" {
-    // Cover all requirement-source variants so grouping code can call the owning Assignment method.
     var bytes: [pcie_window_size]u8 = @splat(0);
     const sbdf = Sbdf.of(0, 0, 5, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);

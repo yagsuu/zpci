@@ -24,7 +24,6 @@ const offset = struct {
 };
 
 test "layout: public register constants match PCIe register map" {
-    // Compare the public offsets against the PCIe capability map, grouped by register block.
     try std.testing.expectEqual(@as(u8, 0x02), register.capabilities);
     try std.testing.expectEqual(@as(u8, 0x04), register.device.capabilities);
     try std.testing.expectEqual(@as(u8, 0x08), register.device.control);
@@ -51,7 +50,6 @@ test "layout: public register constants match PCIe register map" {
 }
 
 test "layout: packed registers have spec bit widths and discriminating bit offsets" {
-    // These checks pin the wire-order fields that would silently corrupt typed config I/O.
     try expectBitSize(pcie.Capabilities, 16);
     try expectBitSize(pcie.DeviceCapabilities, 32);
     try expectBitSize(pcie.DeviceControl, 16);
@@ -130,7 +128,6 @@ test "layout: packed registers have spec bit widths and discriminating bit offse
 }
 
 test "unit: enum helpers map named encodings and reject reserved encodings" {
-    // Table cases cover every helper boundary: lowest valid, highest valid, and reserved holes.
     try expectPayloadBytes(.bytes_128, 128);
     try expectPayloadBytes(.bytes_256, 256);
     try expectPayloadBytes(.bytes_512, 512);
@@ -177,7 +174,6 @@ test "unit: enum helpers map named encodings and reject reserved encodings" {
 }
 
 test "unit: validate accepts PCIe capabilities and rejects malformed offsets and revision zero" {
-    // Direct validation must cache version from the capability body and reject only offset/revision defects.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedPcieCapability(&bytes, 0x80, 1, 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
@@ -203,7 +199,6 @@ test "unit: validate accepts PCIe capabilities and rejects malformed offsets and
 }
 
 test "unit: find returns PCIe view, null for absence, and propagates malformed traversal" {
-    // The PCIe finder is responsible for preserving list walk errors instead of reporting absence.
     var found_bytes: [pcie_window_size]u8 = @splat(0);
     seedHead(&found_bytes, 0x40);
     seedCapabilityNode(&found_bytes, 0x40, @intFromEnum(Id.msi), 0x80);
@@ -236,7 +231,6 @@ test "unit: find returns PCIe view, null for absence, and propagates malformed t
 }
 
 test "unit: v1 accessors read exact base-relative whole registers" {
-    // Distinct raw values across device/link/slot/root registers expose wrong offsets and hidden RMW writes.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedPcieCapability(&bytes, 0x80, 1, 0);
     store32(&bytes, 0x80 + register.device.capabilities, 0xA39C_5A15);
@@ -262,7 +256,6 @@ test "unit: v1 accessors read exact base-relative whole registers" {
 }
 
 test "unit: v1 accessors write exact base-relative whole registers" {
-    // Distinct values across device/link/slot/root registers expose wrong offsets and hidden RMW writes.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedPcieCapability(&bytes, 0x80, 1, 0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
@@ -328,7 +321,6 @@ test "unit: v1 accessors write exact base-relative whole registers" {
 }
 
 test "unit: v2 accessors gate UnsupportedRevision before config access" {
-    // A backend that errors on every post-validation access proves v2 methods check version first.
     var backend = GateAfterValidateConfig{ .version = 1 };
     const view = try pcie.View.validate(Function.unchecked(backend.configSpace(), test_sbdf), capabilityAt(0x80));
 
@@ -353,7 +345,6 @@ test "unit: v2 accessors gate UnsupportedRevision before config access" {
 }
 
 test "unit: v2 accessors read and write exact whole registers on revision two or newer" {
-    // Revision two enables the extended range while still requiring exact whole-register access.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedPcieCapability(&bytes, 0x80, 2, 0);
     store32(&bytes, 0x80 + register.device.capabilities_2, 0xC5A3_7E1F);
@@ -408,7 +399,6 @@ test "unit: v2 accessors read and write exact whole registers on revision two or
 }
 
 test "unit: caller-side whole-register round trips preserve reserved bits" {
-    // Read-mutate-write through public structs must retain reserved fields visible in the raw register image.
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedPcieCapability(&bytes, 0x80, 2, 0);
     store16(&bytes, 0x80 + register.root.control, 0xFFE0);
@@ -429,7 +419,6 @@ test "unit: caller-side whole-register round trips preserve reserved bits" {
 }
 
 test "unit: backend errors propagate after view validation succeeds" {
-    // Version validation succeeds once; later legal v1 and v2 accesses must expose backend failures unchanged.
     var backend = GateAfterValidateConfig{ .version = 2 };
     const view = try pcie.View.validate(Function.unchecked(backend.configSpace(), test_sbdf), capabilityAt(0x80));
 

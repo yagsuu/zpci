@@ -40,7 +40,6 @@ const offset = struct {
 };
 
 test "layout: Type1Header covers bridge-specific PCI config bytes" {
-    // Pins the type-1 extern ABI by comparing public struct size and offsets with the bridge layout.
     try std.testing.expectEqual(@as(usize, 2), bridge_bar_count);
     try std.testing.expectEqual(@as(usize, 48), @sizeOf(Type1Header));
     try std.testing.expectEqual(@as(usize, 0x00), @offsetOf(Type1Header, "bars"));
@@ -96,7 +95,6 @@ test "layout: type-1 register constants expose absolute PCI offsets" {
 }
 
 test "layout: BridgeControl maps parity response and timer bits" {
-    // Pins bridge-control bit semantics by decoding a mixed raw word and round-tripping it.
     try std.testing.expectEqual(@as(comptime_int, 16), @bitSizeOf(BridgeControl));
     try std.testing.expectEqual(@as(comptime_int, 0), @bitOffsetOf(BridgeControl, "parity_response"));
     try std.testing.expectEqual(@as(comptime_int, 1), @bitOffsetOf(BridgeControl, "serr_enable"));
@@ -131,7 +129,6 @@ test "layout: BridgeControl maps parity response and timer bits" {
 }
 
 test "unit: View reads every type-1 bridge field from seeded config bytes" {
-    // Seeds config bytes at every bridge offset, then verifies the public view decodes them.
     const bars = [_]u32{ 0x1000_0004, 0x2000_0008 };
     var bytes: [pcie_window_size]u8 = @splat(0);
     seedType1Header(&bytes, .{
@@ -188,7 +185,6 @@ test "unit: View reads every type-1 bridge field from seeded config bytes" {
 }
 
 test "unit: View writes exact type-1 bridge bytes" {
-    // Writes through the public view, then checks the exact bridge bytes and little-endian order.
     var bytes: [pcie_window_size]u8 = @splat(0xA5);
     const sbdf = Sbdf.of(0, 0, 2, 0);
     var backend = TestConfigSpace.initSingle(sbdf, &bytes);

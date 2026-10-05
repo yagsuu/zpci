@@ -17,13 +17,11 @@ pub const mmio32_size_max: u64 = 1 << 32;
 /// Largest conventional PIO BAR aperture.
 pub const pio_size_max: u32 = 1 << 16;
 
-/// Header layout that determines how many BAR slots a function exposes.
 pub const Layout = enum {
     type0,
     type1,
 };
 
-/// Bit encodings in a BAR low dword.
 pub const raw = struct {
     pub const io_space: u32 = 1 << 0;
     pub const io_reserved: u32 = 1 << 1;
@@ -35,14 +33,12 @@ pub const raw = struct {
     pub const memory_address_mask: u32 = 0xFFFF_FFF0;
 };
 
-/// BAR decode and sizing errors.
 pub const Error = ConfigSpace.Error || error{
     MalformedBar,
     ProgrammingPartial,
     StorageExhausted,
 };
 
-/// Decoded BAR kind.
 pub const Kind = union(enum) {
     none,
     io: Io,
@@ -66,19 +62,16 @@ pub const Kind = union(enum) {
     };
 };
 
-/// One decoded BAR low slot.
 pub const Entry = struct {
     index: usize,
     slot_count: usize,
     kind: Kind,
 };
 
-/// Borrowed reference to a BAR low slot for downstream programming.
 pub const BarRef = struct {
     function: Function,
     index: usize,
 
-    /// Construct a pure BAR location handle; performs no config I/O.
     pub fn init(function: Function, index: usize) BarRef {
         std.debug.assert(index < max_entries);
         return .{ .function = function, .index = index };
@@ -163,6 +156,7 @@ pub const View = struct {
 
         const common = header.common.View.init(self.function);
         const command_before = try common.command();
+
         var command_disabled = command_before;
         command_disabled.io_space = false;
         command_disabled.memory_space = false;

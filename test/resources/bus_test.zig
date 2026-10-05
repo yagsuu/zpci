@@ -18,7 +18,6 @@ const offset_subordinate: usize = 0x1A;
 const offset_command: usize = 0x04;
 
 test "unit: commit accepts empty roots without config-space access" {
-    // Empty inputs exercise the smallest valid segment aperture and must not require a fake backend.
     try commit(.{
         .bridges = &.{},
         .roots = &.{},
@@ -28,7 +27,6 @@ test "unit: commit accepts empty roots without config-space access" {
 }
 
 test "unit: DFS numbering covers nested, sibling, and multiple root bridges" {
-    // Program a preorder forest and compare every bus-number byte so traversal order errors are visible.
     var fixture = try ForestFixture.init(.{ .count = 6 });
     seedBus(&fixture.bytes[0], 0xA0, 0xA1, 0xA2);
     seedBus(&fixture.bytes[1], 0xB0, 0xB1, 0xB2);
@@ -58,7 +56,6 @@ test "unit: DFS numbering covers nested, sibling, and multiple root bridges" {
 }
 
 test "unit: bus range exhaustion returns before hardware writes" {
-    // Exhaust the inclusive segment aperture before Phase 2 and prove the byte-backed config space is untouched.
     var fixture = try ForestFixture.init(.{ .count = 1 });
     seedBus(&fixture.bytes[0], 0x12, 0x34, 0x56);
     var before = fixture.bytes[0];
@@ -76,7 +73,6 @@ test "unit: bus range exhaustion returns before hardware writes" {
 }
 
 test "unit: single bridge save write and readback order is subordinate primary secondary" {
-    // Compare the complete access trace so save order, write order, readbacks, and Command silence are observable.
     var fixture = try ForestFixture.init(.{ .count = 1 });
     seedBus(&fixture.bytes[0], 0xAA, 0xBB, 0xCC);
     var backend = LoggedConfig.init(fixture.boundEntries());
@@ -102,7 +98,6 @@ test "unit: single bridge save write and readback order is subordinate primary s
 }
 
 test "unit: nested commit defers parent secondary until child writes complete" {
-    // Parent secondary changes can invalidate child handles, so children must finish before parents flip.
     var fixture = try ForestFixture.init(.{ .count = 2 });
     seedBus(&fixture.bytes[0], 0xA0, 0xA1, 0xA2);
     seedBus(&fixture.bytes[1], 0xB0, 0xB1, 0xB2);
@@ -140,7 +135,6 @@ test "unit: nested commit defers parent secondary until child writes complete" {
 }
 
 test "unit: readback mismatch rolls back the failing bridge" {
-    // Corrupt primary readback after subordinate committed and require reverse rollback of primary then subordinate.
     var fixture = try ForestFixture.init(.{ .count = 1 });
     seedBus(&fixture.bytes[0], 0xAA, 0xBB, 0xCC);
     var backend = LoggedConfig.init(fixture.boundEntries());
@@ -171,7 +165,6 @@ test "unit: readback mismatch rolls back the failing bridge" {
 }
 
 test "unit: injected write failure maps to ProgrammingWriteFailed after rollback" {
-    // Fail the secondary write after subordinate and primary commit, then require both earlier writes restored.
     var fixture = try ForestFixture.init(.{ .count = 1 });
     seedBus(&fixture.bytes[0], 0xAA, 0xBB, 0xCC);
     var backend = LoggedConfig.init(fixture.boundEntries());
@@ -203,7 +196,6 @@ test "unit: injected write failure maps to ProgrammingWriteFailed after rollback
 }
 
 test "unit: rollback restore failure returns ProgrammingPartial and aborts further restores" {
-    // Fail the first rollback write after a secondary readback mismatch so rollback must stop immediately.
     var fixture = try ForestFixture.init(.{ .count = 1 });
     seedBus(&fixture.bytes[0], 0xAA, 0xBB, 0xCC);
     var backend = LoggedConfig.init(fixture.boundEntries());
@@ -234,7 +226,6 @@ test "unit: rollback restore failure returns ProgrammingPartial and aborts furth
 }
 
 test "unit: bridge failure rolls back all journaled writes and skips later phases" {
-    // Fail during the subordinate phase and require every subordinate write restored before returning.
     var fixture = try ForestFixture.init(.{ .count = 3 });
     seedBus(&fixture.bytes[0], 0x10, 0x20, 0x30);
     seedBus(&fixture.bytes[1], 0x40, 0x50, 0x60);

@@ -17,14 +17,12 @@ const Tree = pci.topology.tree.Tree;
 const tree = pci.topology.tree;
 
 test "layout: public bounds match fixed-index and fixed-stack contracts" {
-    // Pin the caller-visible index width and iterator stack bound used for scratch sizing.
     try std.testing.expectEqual(@as(usize, 2), @sizeOf(NodeIndex));
     try std.testing.expectEqual(@as(usize, 65_535), tree.max_nodes);
     try std.testing.expectEqual(@as(u8, 32), tree.max_depth);
 }
 
 test "unit: empty tree has no roots and no traversal output" {
-    // Build over empty node storage to defend the zero-function topology boundary.
     var nodes = [_]Node{};
     var roots: [1]NodeIndex = .{0xBEEF};
 
@@ -39,7 +37,6 @@ test "unit: empty tree has no roots and no traversal output" {
 }
 
 test "unit: one root publishes stable borrowed node without config I/O" {
-    // Walk one unchecked function through the public tree API while a counting backend rejects hidden I/O.
     var backend = NoIoConfig{};
     var nodes = [_]Node{node(&backend, 0, 0, 0, 0, .type0, null)};
     var roots: [1]NodeIndex = undefined;
@@ -55,7 +52,6 @@ test "unit: one root publishes stable borrowed node without config I/O" {
 }
 
 test "topology: bridge children and preorder follow ascending sibling linkage" {
-    // Build a bridge with endpoint and bridge children so direct iteration and DFS order diverge at the grandchild.
     var backend = NoIoConfig{};
     var nodes = [_]Node{
         node(&backend, 0, 0, 0, 0, .type1, null),
@@ -73,7 +69,6 @@ test "topology: bridge children and preorder follow ascending sibling linkage" {
 }
 
 test "topology: nested preorder descends before siblings and later roots" {
-    // Arrange child, grandchild, sibling, and second root cases to catch stack push ordering mistakes.
     var backend = NoIoConfig{};
     var nodes = [_]Node{
         node(&backend, 0, 0, 0, 0, .type1, null),
@@ -90,7 +85,6 @@ test "topology: nested preorder descends before siblings and later roots" {
 }
 
 test "topology: direct children exclude grandchildren" {
-    // Compare children() against preorderFrom() so a child iterator cannot accidentally recurse.
     var backend = NoIoConfig{};
     var nodes = [_]Node{
         node(&backend, 0, 0, 0, 0, .type1, null),
@@ -107,7 +101,6 @@ test "topology: direct children exclude grandchildren" {
 }
 
 test "topology: preorderFrom is isolated to the requested subtree" {
-    // Start at an interior bridge and ensure its parent, sibling, and a later root remain unreachable.
     var backend = NoIoConfig{};
     var nodes = [_]Node{
         node(&backend, 0, 0, 0, 0, .type1, null),
@@ -124,7 +117,6 @@ test "topology: preorderFrom is isolated to the requested subtree" {
 }
 
 test "unit: rootOfSegment returns first sorted root for a segment" {
-    // Give one segment two roots and another no roots to pin first-match and absent-segment behavior.
     var backend = NoIoConfig{};
     var nodes = [_]Node{
         node(&backend, 1, 0, 0, 0, .type0, null),
@@ -142,7 +134,6 @@ test "unit: rootOfSegment returns first sorted root for a segment" {
 }
 
 test "topology: root ordering is ascending by full SBDF" {
-    // Supply roots out of segment and BDF order to ensure sorting uses the public address identity.
     var backend = NoIoConfig{};
     var nodes = [_]Node{
         node(&backend, 1, 0, 0, 0, .type0, null),
@@ -159,7 +150,6 @@ test "topology: root ordering is ascending by full SBDF" {
 }
 
 test "malformed: parent cannot be self or greater than child index" {
-    // Probe both topological-order boundary violations without relying on assertion-only checks.
     var backend = NoIoConfig{};
     const cases = [_]struct {
         name: []const u8,
@@ -186,7 +176,6 @@ test "malformed: parent cannot be self or greater than child index" {
 }
 
 test "failure: roots scratch exhaustion leaves nodes and roots untouched" {
-    // Force the upfront root-capacity guard while stale links and root sentinel values prove no mutation occurred.
     var backend = NoIoConfig{};
     var nodes = [_]Node{
         node(&backend, 0, 0, 0, 0, .type0, null),
@@ -208,7 +197,6 @@ test "failure: roots scratch exhaustion leaves nodes and roots untouched" {
 }
 
 test "unit: builder overwrites stale linkage on every node" {
-    // Seed impossible links before building to ensure computed child chains replace producer leftovers.
     var backend = NoIoConfig{};
     var nodes = [_]Node{
         node(&backend, 0, 0, 0, 0, .type1, null),
@@ -231,7 +219,6 @@ test "unit: builder overwrites stale linkage on every node" {
 }
 
 test "topology: multi-segment roots remain independent root subtrees" {
-    // Build two segment roots with one child each to defend the no-virtual-root multi-segment shape.
     var backend = NoIoConfig{};
     var nodes = [_]Node{
         node(&backend, 1, 0, 0, 0, .type1, null),

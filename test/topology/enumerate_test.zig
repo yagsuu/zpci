@@ -122,7 +122,6 @@ const TestConfigSpace = struct {
 const Entry = ConfigEntry;
 
 test "unit: empty segment list returns an empty tree" {
-    // Build with no segments to pin the zero-work boundary and roots scratch borrowing.
     var entries = [_]Entry{};
     var backend = TestConfigSpace.init(&entries);
     var segments = [_]Segment{};
@@ -142,7 +141,6 @@ test "unit: empty segment list returns an empty tree" {
 }
 
 test "topology: absent functions produce no nodes for a populated segment aperture" {
-    // Scan one empty bus through a sparse byte backend so absence comes from vendor id 0xffff.
     var entries = [_]Entry{};
     var backend = TestConfigSpace.init(&entries);
     var segments = [_]Segment{segment(0, 0, 0)};
@@ -161,7 +159,6 @@ test "topology: absent functions produce no nodes for a populated segment apertu
 }
 
 test "topology: single endpoint root is emitted as a root node" {
-    // Seed one type-0 function and verify the returned tree borrows only the populated node prefix.
     var endpoint = functionBytes(.{ .header = 0x00 });
     var entries = [_]Entry{.{ .sbdf = sbdf(0, 0, 0, 0), .bytes = &endpoint }};
     var backend = TestConfigSpace.init(&entries);
@@ -183,7 +180,6 @@ test "topology: single endpoint root is emitted as a root node" {
 }
 
 test "topology: multi-segment walk emits in input order before root sorting" {
-    // Reverse segment order to prove enumeration order and tree root sorting are distinct contracts.
     var seg1_endpoint = functionBytes(.{ .header = 0x00 });
     var seg0_endpoint = functionBytes(.{ .header = 0x00 });
     var entries = [_]Entry{
@@ -207,7 +203,6 @@ test "topology: multi-segment walk emits in input order before root sorting" {
 }
 
 test "topology: multifunction gate controls sibling function probing" {
-    // Function 1 is byte-backed and present; it must stay hidden when function 0 lacks the multifunction bit.
     var function0 = functionBytes(.{ .header = 0x00 });
     var function1 = functionBytes(.{ .header = 0x00 });
     var entries = [_]Entry{
@@ -230,7 +225,6 @@ test "topology: multifunction gate controls sibling function probing" {
 }
 
 test "topology: ARI forwarding maps flat function numbers through requester-id low byte" {
-    // A sibling above function 7 is reachable only when the parent bridge advertises ARI forwarding.
     var classic_bridge = functionBytes(.{ .header = 0x01, .secondary = 1, .subordinate = 1 });
     var ari_bridge = functionBytes(.{ .header = 0x01, .secondary = 1, .subordinate = 1, .ari = true });
     var ari_function9 = functionBytes(.{ .header = 0x00 });
@@ -269,7 +263,6 @@ test "topology: ARI forwarding maps flat function numbers through requester-id l
 }
 
 test "topology: malformed capability list falls back to classic ARI mode" {
-    // Malformed capability-list structure is not a config-space read error; it must only disable ARI.
     var bridge = functionBytes(.{ .header = 0x01, .secondary = 1, .subordinate = 1 });
     store16(&bridge, offset.status, status.capabilities_list);
     bridge[offset.capabilities_pointer] = cap_base;
@@ -296,7 +289,6 @@ test "topology: malformed capability list falls back to classic ARI mode" {
 }
 
 test "topology: ARI detection propagates config-space read failures" {
-    // Fail the DeviceControl2 read so ARI detection cannot silently fall back to classic mode.
     var bridge = functionBytes(.{ .header = 0x01, .secondary = 1, .subordinate = 1, .ari = true });
     var entries = [_]Entry{.{ .sbdf = sbdf(0, 0, 0, 0), .bytes = &bridge }};
     var backend = TestConfigSpace.init(&entries);
@@ -314,7 +306,6 @@ test "topology: ARI detection propagates config-space read failures" {
 }
 
 test "topology: valid bridge descent emits DFS preorder accepted by tree builder" {
-    // Put a child behind a bridge and a later root sibling to verify descendants stay contiguous before siblings.
     var bridge = functionBytes(.{ .header = 0x01, .secondary = 1, .subordinate = 1 });
     var child = functionBytes(.{ .header = 0x00 });
     var sibling = functionBytes(.{ .header = 0x00 });
@@ -342,7 +333,6 @@ test "topology: valid bridge descent emits DFS preorder accepted by tree builder
 }
 
 test "topology: invalid secondary subordinate bridge numbers short-circuit descent" {
-    // A bridge with subordinate < secondary is emitted but its otherwise-present downstream bus is not walked.
     var bridge = functionBytes(.{ .header = 0x01, .secondary = 2, .subordinate = 1 });
     var child = functionBytes(.{ .header = 0x00 });
     var entries = [_]Entry{
@@ -365,7 +355,6 @@ test "topology: invalid secondary subordinate bridge numbers short-circuit desce
 }
 
 test "topology: type-2 CardBus header is skipped without surfacing BadHeaderType" {
-    // Seed a present type-2 header so Function.validate rejects it and enumeration translates it to absent.
     var cardbus = functionBytes(.{ .header = 0x02 });
     var entries = [_]Entry{.{ .sbdf = sbdf(0, 0, 0, 0), .bytes = &cardbus }};
     var backend = TestConfigSpace.init(&entries);
@@ -385,7 +374,6 @@ test "topology: type-2 CardBus header is skipped without surfacing BadHeaderType
 }
 
 test "failure: node scratch exhaustion stops before tree assembly" {
-    // Supply zero node slots for a present endpoint to force StorageExhausted at the emission boundary.
     var endpoint = functionBytes(.{ .header = 0x00 });
     var entries = [_]Entry{.{ .sbdf = sbdf(0, 0, 0, 0), .bytes = &endpoint }};
     var backend = TestConfigSpace.init(&entries);
@@ -402,7 +390,6 @@ test "failure: node scratch exhaustion stops before tree assembly" {
 }
 
 test "unit: sizeBound caps per-bus function-space upper bound at max nodes" {
-    // Check zero, ordinary multi-bus, and full-aperture saturation cases without config I/O.
     var empty = [_]Segment{};
     var two_buses = [_]Segment{segment(0, 4, 5)};
     var full = [_]Segment{segment(0, 0, 0xFF)};

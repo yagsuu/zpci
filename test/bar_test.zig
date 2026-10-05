@@ -36,7 +36,6 @@ const offset = struct {
 };
 
 test "layout: pci.bar facade exposes BAR counts and header layouts" {
-    // Compare public constants and explicit layouts against header-owned counts.
     try std.testing.expectEqual(@as(usize, 6), pci.bar.max_entries);
     try std.testing.expectEqual(@as(u64, 0x1_0000_0000), pci.bar.mmio32_size_max);
     try std.testing.expectEqual(@as(u32, 0x0001_0000), pci.bar.pio_size_max);
@@ -62,7 +61,6 @@ test "layout: BAR raw constants encode the PCI low dword" {
 }
 
 test "unit: View.detect maps config header kind to BAR layout" {
-    // Seed type-0 and type-1 header bytes, then map them through `View.detect`.
     var endpoint = ProbeConfig.init(.type0);
     var bridge = ProbeConfig.init(.type1);
 
@@ -76,7 +74,6 @@ test "unit: View.detect maps config header kind to BAR layout" {
 }
 
 test "unit: get decodes none, IO, 32-bit memory, and 64-bit memory BARs" {
-    // Seed representative raw BAR dwords and assert each decoded entry shape.
     var backend = ProbeConfig.init(.type0);
     backend.setBar(0, 0x0000_0000);
     backend.setBar(1, 0x0000_C001);
@@ -106,7 +103,6 @@ test "unit: get decodes none, IO, 32-bit memory, and 64-bit memory BARs" {
 }
 
 test "unit: iterator advances past the high slot of a 64-bit BAR" {
-    // Seed a 64-bit pair followed by a 32-bit BAR and assert high-slot skipping.
     var backend = ProbeConfig.init(.type0);
     backend.setBar(0, 0x0000_1004);
     backend.setBar(1, 0x0000_0000);
@@ -137,7 +133,6 @@ test "unit: iterator advances past the high slot of a 64-bit BAR" {
 }
 
 test "malformed: reserved and incomplete BAR encodings are rejected" {
-    // Table-drive every malformed low/high-slot encoding owned by the BAR spec.
     const cases = [_]struct {
         name: []const u8,
         index: usize,
@@ -161,7 +156,6 @@ test "malformed: reserved and incomplete BAR encodings are rejected" {
 }
 
 test "unit: size probes IO BAR with IO decode disabled, then restores BAR and Command" {
-    // Probe an IO BAR and assert only IO decode is disabled before restoration.
     var backend = ProbeConfig.init(.type0);
     backend.setCommand(0x0557);
     backend.setBar(0, 0x0000_C001);
@@ -175,7 +169,6 @@ test "unit: size probes IO BAR with IO decode disabled, then restores BAR and Co
 }
 
 test "unit: size probes 32-bit memory BAR with memory decode disabled, then restores BAR and Command" {
-    // Probe a 32-bit memory BAR and assert memory decode is disabled before restoration.
     var backend = ProbeConfig.init(.type0);
     backend.setCommand(0x0557);
     backend.setBar(0, 0x8000_1008);
@@ -196,7 +189,6 @@ test "unit: size probes 32-bit memory BAR with memory decode disabled, then rest
 }
 
 test "unit: size probes 64-bit memory BAR with memory decode disabled and restores both slots" {
-    // Probe a 64-bit BAR and assert both low/high slots and Command are restored.
     var backend = ProbeConfig.init(.type0);
     backend.setCommand(0x0557);
     backend.setBar(0, 0x0000_2004);
@@ -220,7 +212,6 @@ test "unit: size probes 64-bit memory BAR with memory decode disabled and restor
 }
 
 test "unit: sizeAll probes every BAR under one decode-disable window and returns compact entries" {
-    // Probe mixed BARs in one batch and assert compact output plus full restoration.
     var backend = ProbeConfig.init(.type0);
     backend.setCommand(0x0557);
     backend.setBar(0, 0x0000_C001);
@@ -271,7 +262,6 @@ test "unit: sizeAll probes every BAR under one decode-disable window and returns
 }
 
 test "malformed: sizeAll rejects short scratch before touching config space" {
-    // Pass undersized scratch and assert the backend observes no config I/O.
     var backend = ProbeConfig.init(.type0);
     backend.setCommand(0x0557);
     backend.setBar(0, 0x0000_C001);
@@ -289,7 +279,6 @@ test "malformed: sizeAll rejects short scratch before touching config space" {
 }
 
 test "failure: size reports ProgrammingPartial when post-probe BAR restore fails" {
-    // Inject a restore failure after probing and assert `ProgrammingPartial`.
     var backend = ProbeConfig.init(.type0);
     backend.setCommand(0x0557);
     backend.setBar(0, 0x8000_1000);

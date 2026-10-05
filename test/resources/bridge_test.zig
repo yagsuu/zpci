@@ -18,7 +18,6 @@ const bridge_io_alignment: u64 = 0x1000;
 const bridge_memory_alignment: u64 = 0x10_0000;
 
 test "unit: aggregateWindows maps child kinds to ordered bridge requirements" {
-    // Mix all resource classes and assert the three bridge windows are emitted in fixed offset order.
     const function = testFunction(1);
     const children = [_]Requirement{
         childRequirement(function, .{ .kind = .mmio64_pref, .size = 0x20_0000, .alignment = 0x20_0000 }),
@@ -37,7 +36,6 @@ test "unit: aggregateWindows maps child kinds to ordered bridge requirements" {
 }
 
 test "unit: aggregateWindows keeps all-64-bit prefetchable bucket 64-bit" {
-    // Feed only 64-bit prefetchable descendants so a stray 32-bit downgrade is visible.
     const function = testFunction(2);
     const children = [_]Requirement{
         childRequirement(function, .{ .kind = .mmio64_pref, .size = 0x10_0000, .alignment = 0x10_0000 }),
@@ -52,7 +50,6 @@ test "unit: aggregateWindows keeps all-64-bit prefetchable bucket 64-bit" {
 }
 
 test "unit: aggregateWindows rejects short scratch without modifying it" {
-    // Require three output slots while providing two, then prove scratch is untouched.
     const function = testFunction(3);
     const children = [_]Requirement{
         childRequirement(function, .{ .kind = .io, .size = 0x1000, .alignment = 0x1000 }),
@@ -71,7 +68,6 @@ test "unit: aggregateWindows rejects short scratch without modifying it" {
 }
 
 test "unit: aggregateWindows sorts by descending alignment and skips zero-sized children" {
-    // Compare the packed size against the known optimum for the spec's descending-alignment greedy order.
     const function = testFunction(4);
     const children = [_]Requirement{
         childRequirement(function, .{ .kind = .io, .size = 0x1000, .alignment = 0x1000 }),
@@ -91,7 +87,6 @@ test "unit: aggregateWindows sorts by descending alignment and skips zero-sized 
 }
 
 test "unit: aggregateWindows raises bridge granularity above tiny child alignment" {
-    // Use a 512-byte IO child to verify the aggregate alignment and size are raised to 4 KiB.
     const function = testFunction(5);
     const children = [_]Requirement{childRequirement(function, .{ .kind = .io, .size = 0x200, .alignment = 0x200 })};
 
@@ -102,7 +97,6 @@ test "unit: aggregateWindows raises bridge granularity above tiny child alignmen
 }
 
 test "unit: aggregateWindows returns an empty borrowed prefix for no live children" {
-    // Include only a zero-sized child so the defensive skip path produces no bridge windows.
     const function = testFunction(6);
     const children = [_]Requirement{childRequirement(function, .{ .kind = .mmio32, .size = 0, .alignment = 0x1000 })};
 
@@ -113,7 +107,6 @@ test "unit: aggregateWindows returns an empty borrowed prefix for no live childr
 }
 
 test "unit: encodeWindow emits canonical disabled encodings for zero-sized windows" {
-    // Drive all three bridge-window kinds with zero size so base-minus-one underflow cannot masquerade as a range.
     const function = testFunction(7);
 
     try expectIoEncoding(
@@ -138,7 +131,6 @@ test "unit: encodeWindow emits canonical disabled encodings for zero-sized windo
 }
 
 test "unit: encodeWindow emits IO 16-bit and 32-bit wire fields" {
-    // Check both the low-register type nibble and the upper-register behavior around the 64 KiB boundary.
     const function = testFunction(8);
 
     try expectIoEncoding(
@@ -152,7 +144,6 @@ test "unit: encodeWindow emits IO 16-bit and 32-bit wire fields" {
 }
 
 test "unit: encodeWindow emits memory and prefetchable wire fields" {
-    // Cover 32-bit memory, 32-bit prefetchable, and 64-bit prefetchable encodings with nonzero ranges.
     const function = testFunction(9);
 
     try expectMemoryEncoding(
@@ -195,7 +186,6 @@ test "unit: encodeWindow emits memory and prefetchable wire fields" {
 }
 
 test "unit: encodeWindow selects prefetchable width at the 4 GiB boundary" {
-    // Keep one window ending exactly at 4 GiB and one crossing it so the comparison is off-by-one sensitive.
     const function = testFunction(10);
 
     try expectPrefetchable32Encoding(
@@ -227,7 +217,6 @@ test "unit: encodeWindow selects prefetchable width at the 4 GiB boundary" {
 }
 
 test "unit: encodeWindow reports BridgeWindowUnencodable for overflowing placements" {
-    // Exercise every typed failure branch: IO over 32 bits, memory over 32 bits, and u64 addition overflow.
     const function = testFunction(11);
 
     try std.testing.expectError(
@@ -261,7 +250,6 @@ test "unit: encodeWindow reports BridgeWindowUnencodable for overflowing placeme
 }
 
 test "layout: EncodedWindow payload structs match the spec sizes" {
-    // Assert the semantic payload sizes consumed by the future programming writer.
     try std.testing.expectEqual(@as(usize, 8), @sizeOf(EncodedWindow.IoEncoding));
     try std.testing.expectEqual(@as(usize, 4), @sizeOf(EncodedWindow.MemoryEncoding));
     try std.testing.expectEqual(@as(usize, 4), @sizeOf(EncodedWindow.Prefetchable32Encoding));

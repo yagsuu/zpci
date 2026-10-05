@@ -25,7 +25,6 @@ const pcie_window_size: usize = 0x1000;
 const test_sbdf = Sbdf.of(0, 0, 0, 0);
 
 test "unit: bridge semantic records expose expected field behavior" {
-    // Construct each public record so added or missing semantic fields become compile-visible.
     const range = BusRange{ .primary = 0, .secondary = 1, .subordinate = 2 };
     const window = Window{ .base = 0x1000, .limit = 0x1FFF, .enabled = true };
     const pref = PrefetchableWindow{ .base = 0x2000, .limit = 0x2FFF, .is_64bit = false, .enabled = true };
@@ -36,7 +35,6 @@ test "unit: bridge semantic records expose expected field behavior" {
 }
 
 test "unit: BusRange reports unprogrammed and forwarded buses" {
-    // Exercise reset, closed-interval boundaries, and buses adjacent to the forwarded span.
     const reset = BusRange{ .primary = 0x00, .secondary = 0x00, .subordinate = 0x00 };
     const programmed = BusRange{ .primary = 0x01, .secondary = 0x20, .subordinate = 0x2F };
 
@@ -50,7 +48,6 @@ test "unit: BusRange reports unprogrammed and forwarded buses" {
 }
 
 test "topology: busRangeOf reads exact type1 bus-number bytes" {
-    // Back a type-1 node with config bytes and decode the three bus registers without validation policy.
     var bytes: [pcie_window_size]u8 = @splat(0);
     bytes[0x18] = 0x11;
     bytes[0x19] = 0x22;
@@ -66,7 +63,6 @@ test "topology: busRangeOf reads exact type1 bus-number bytes" {
 }
 
 test "topology: windowStateOf preserves disabled IO memory and prefetchable encodings" {
-    // Use base-greater-than-limit encodings to ensure disabled windows still expose decoded raw bounds.
     var bytes: [pcie_window_size]u8 = @splat(0);
     bytes[0x1C] = 0x00;
     bytes[0x1D] = 0x00;
@@ -92,7 +88,6 @@ test "topology: windowStateOf preserves disabled IO memory and prefetchable enco
 }
 
 test "topology: windowStateOf decodes enabled 32-bit IO memory and prefetchable windows" {
-    // Populate every bridge-window register group and verify byte-range alignment and inclusivity.
     var bytes: [pcie_window_size]u8 = @splat(0);
     bytes[0x1C] = 0x20;
     bytes[0x1D] = 0x30;
@@ -122,7 +117,6 @@ test "topology: windowStateOf decodes enabled 32-bit IO memory and prefetchable 
 }
 
 test "unit: Window contains checks closed bounds zero size disabled and overflow" {
-    // Probe both exact edges plus invalid ranges that cannot be represented inside the window.
     const w = Window{ .base = 0x1000, .limit = 0x1FFF, .enabled = true };
     const disabled = Window{ .base = 0x1000, .limit = 0x1FFF, .enabled = false };
 
@@ -136,7 +130,6 @@ test "unit: Window contains checks closed bounds zero size disabled and overflow
 }
 
 test "unit: PrefetchableWindow contains checks closed bounds zero size disabled and overflow" {
-    // Mirror the generic window boundary contract on the prefetchable-memory semantic record.
     const w = PrefetchableWindow{
         .base = 0x1_0000_0000,
         .limit = 0x1_0000_FFFF,
@@ -160,7 +153,6 @@ test "unit: PrefetchableWindow contains checks closed bounds zero size disabled 
 }
 
 test "topology: windowStateOf reconstructs 64-bit prefetchable windows" {
-    // Set both low-register 64-bit indicators and verify upper dwords participate in decoded bounds.
     var bytes: [pcie_window_size]u8 = @splat(0);
     store16(&bytes, 0x24, 0x0011);
     store16(&bytes, 0x26, 0x0021);
@@ -182,7 +174,6 @@ test "topology: windowStateOf reconstructs 64-bit prefetchable windows" {
 }
 
 test "topology: pathTo returns root-first chain through parent links" {
-    // Build a borrowed tree view so the helper walks the same parent-link shape used by topology iterators.
     var bytes: [pcie_window_size]u8 = @splat(0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     const nodes = [_]Node{
@@ -201,7 +192,6 @@ test "topology: pathTo returns root-first chain through parent links" {
 }
 
 test "failure: pathTo reports StorageExhausted without touching scratch" {
-    // Make the ancestor chain longer than scratch and use sentinels to prove the upfront guard is non-mutating.
     var bytes: [pcie_window_size]u8 = @splat(0);
     var backend = TestConfigSpace.initSingle(test_sbdf, &bytes);
     var nodes = [_]Node{

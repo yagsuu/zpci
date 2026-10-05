@@ -25,7 +25,6 @@ const status = struct {
 };
 
 test "layout: MSI register constants and MessageControl bit fields match spec" {
-    // Pin the public MSI offsets and packed bit placement used by typed config reads and writes.
     try std.testing.expectEqual(@as(u8, 0x05), msi.cap_id);
     try std.testing.expectEqual(@as(u8, 0x02), register.message_control);
     try std.testing.expectEqual(@as(u8, 0x04), register.message_address_lo);
@@ -53,7 +52,6 @@ test "layout: MSI register constants and MessageControl bit fields match spec" {
 }
 
 test "unit: VectorCount helpers map valid encodings and reject reserved or invalid counts" {
-    // Table cases cover the PCI power-of-two domain plus reserved enum holes and non-power-of-two requests.
     try expectVectorCount(.one, 1);
     try expectVectorCount(.two, 2);
     try expectVectorCount(.four, 4);
@@ -70,7 +68,6 @@ test "unit: VectorCount helpers map valid encodings and reject reserved or inval
 }
 
 test "unit: find returns present MSI view, null for absence, and errors on malformed traversal" {
-    // Walk real capability-list bytes through present, steady-state absent, and corrupt-list cases.
     var present = MsiConfig.init();
     seedHead(&present.bytes, 0x40);
     seedCapabilityNode(&present.bytes, 0x40, @intFromEnum(pci.capabilities.list.Id.pci_express), test_base);
@@ -103,7 +100,6 @@ test "unit: find returns present MSI view, null for absence, and errors on malfo
 }
 
 test "malformed: validate rejects reserved multiple_message_capable encodings" {
-    // Direct validation must reject PCI-reserved vector-count encodings before handing out a usable view.
     for ([_]u3{ 6, 7 }) |reserved| {
         var backend = MsiConfig.init();
         store16(&backend.bytes, @as(usize, test_base) + register.message_control, controlRaw(.{
@@ -115,7 +111,6 @@ test "malformed: validate rejects reserved multiple_message_capable encodings" {
 }
 
 test "unit: live reads dispatch through 32-bit and 64-bit MSI layouts" {
-    // Distinct sentinels at every shape-selected offset catch wrong 32/64/PVM/extended dispatch.
     var msi32 = MsiConfig.init();
     seedMsiCapability(&msi32, test_base, controlRaw(.{
         .multiple_message_enable = @intFromEnum(VectorCount.two),
@@ -159,7 +154,6 @@ test "unit: live reads dispatch through 32-bit and 64-bit MSI layouts" {
 }
 
 test "unit: invalid routing is rejected before program performs config I/O" {
-    // Each invalid route is checked against the snapshot before the save phase can read or write config space.
     try expectInvalidRoutingNoIo(controlRaw(.{}), .{
         .address = 0xFEE0_0000,
         .data = 0x40,
@@ -190,7 +184,6 @@ test "unit: invalid routing is rejected before program performs config I/O" {
 }
 
 test "unit: disable clears enable while preserving reserved and writable MessageControl bits" {
-    // Disable performs a Message Control RMW and must leave every non-enable bit byte-for-byte intact.
     var backend = MsiConfig.init();
     seedMsiCapability(&backend, test_base, controlRaw(.{
         .msi_enable = true,
@@ -221,7 +214,6 @@ test "unit: disable clears enable while preserving reserved and writable Message
 }
 
 test "unit: setMask writes with readback and restores saved mask on mismatch" {
-    // A successful write proves readback commit, and a forced readback mismatch must rollback to the saved mask.
     var success = MsiConfig.init();
     seedMsiCapability(&success, test_base, controlRaw(.{ .pvm_capable = true }));
     store32(&success.bytes, @as(usize, test_base) + register.mask_bits_32, 0xAAAA_0000);
@@ -253,7 +245,6 @@ test "unit: setMask writes with readback and restores saved mask on mismatch" {
 }
 
 test "unit: program commits full routing and preserves reserved control bits" {
-    // A maximal MSI shape exercises deterministic disable-mask-address-data-ext-enable ordering.
     var backend = MsiConfig.init();
     seedMsiCapability(&backend, test_base, controlRaw(.{
         .msi_enable = true,
@@ -317,7 +308,6 @@ test "unit: program commits full routing and preserves reserved control bits" {
 }
 
 test "unit: program rolls back prior writes after a representative data readback failure" {
-    // A data-register readback mismatch must restore data, address, mask, and Message Control in reverse order.
     var backend = MsiConfig.init();
     seedMsiCapability(&backend, test_base, controlRaw(.{
         .msi_enable = true,
