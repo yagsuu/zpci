@@ -1,36 +1,16 @@
 # zpci
 
-## Overview
+`zpci` is a PCI and PCI Express library for Zig.
 
-Implements typed views and helpers for PCI and PCI Express headers, BARs,
-capabilities, topology enumeration, resource assignment, and MSI/MSI-X
-programming.
+## Requirements
 
-## Features
+Zig `0.16.0` and `zstdx`. Configuration access uses caller-mapped ECAM regions
+or PIO on x86_64.
 
-- Typed PCI identifiers and BDF/SBDF values.
-- ECAM access through caller-provided segments and an x86_64 PIO backend.
-- Type-0 and Type-1 header views and programming helpers.
-- BAR decode and sizing probes.
-- Standard, extended, and PCIe capability traversal and decode.
-- Device and bridge topology enumeration using caller-provided scratch storage.
-- PCI resource assignment, bridge-window encoding, and commit.
-- MSI and MSI-X capability and table programming.
+## Build integration
 
-## Requirements and platform support
-
-| Item | Support |
-| --- | --- |
-| Zig | `0.16.0` or later |
-| Package | `zpci` |
-| Public module | `pci` |
-| Dependency | `zstdx`, declared in `build.zig.zon` |
-| Configuration access | ECAM through caller-provided `Segment` values; PIO on x86_64 through `stdx.arch.x86_64.Port` |
-| Default test suite | Host target; no PCI hardware, VM, or external tools required |
-
-## Quick start
-
-Add `zpci` and `zstdx` to your project, then import `pci`:
+Add `zpci` and `zstdx` as package dependencies. Import their `pci` and `stdx`
+modules in `build.zig`:
 
 ```zig
 const zpci = b.dependency("zpci", .{
@@ -38,137 +18,216 @@ const zpci = b.dependency("zpci", .{
     .optimize = optimize,
 });
 
+const zstdx = b.dependency("zstdx", .{
+    .target = target,
+    .optimize = optimize,
+});
+
 exe.root_module.addImport("pci", zpci.module("pci"));
-```
-
-```zig
-const pci = @import("pci");
-const stdx = @import("stdx");
-```
-
-## Common workflows
-
-### Enumerate topology through caller-supplied ECAM segments
-
-```zig
-const segments = [_]pci.config.Segment{
-    pci.config.Segment.init(
-        pci.core.SegmentId.of(0),
-        stdx.addr.VirtAddr.fromInt(mapped_ecam_base),
-    ),
-};
-
-var ecam = try pci.config.Ecam.from(&segments);
-
-var nodes: [256]pci.topology.tree.Node = undefined;
-var roots: [8]pci.topology.tree.NodeIndex = undefined;
-const tree = try pci.topology.enumerate.intoScratch(.{
-    .config = ecam.configSpace(),
-    .segments = &segments,
-    .nodes = &nodes,
-    .roots = &roots,
-});
-
-var it = tree.preorder();
-while (it.next()) |item| {
-    const function = item.node.function;
-    switch (try function.headerKind()) {
-        .type0 => {},
-        .type1 => {},
-    }
-}
-```
-
-### Plan and commit resources
-
-```zig
-var assignments: [128]pci.resources.Assignment = undefined;
-const plan = try pci.resources.assignment.intoScratch(.{
-    .nodes = assignment_nodes,
-    .roots = assignment_roots,
-    .root_windows = root_windows,
-}, &assignments);
-
-try pci.resources.programming.commit(plan);
-```
-
-### Program MSI or MSI-X
-
-Applications provide interrupt-routing data and BAR memory. `zpci` does not
-allocate interrupt vectors or map BARs.
-
-```zig
-const msi = (try pci.interrupts.msi.View.find(function)) orelse return error.NoMsi;
-try msi.program(.{
-    .address = 0xFEE0_0000,
-    .data = vector_data,
-    .vector_count = .one,
-});
-
-const msix = (try pci.interrupts.msix.View.find(function)) orelse return error.NoMsix;
-try msix.programEntry(table_memory, 0, .{
-    .address = 0xFEE0_0000,
-    .data = vector_data,
-    .masked = false,
-});
+exe.root_module.addImport("stdx", zstdx.module("stdx"));
 ```
 
 ## Public API
 
-`src/pci.zig` is the public facade. It re-exports these namespaces:
-
 | Namespace | Purpose |
 | --- | --- |
-| `pci.core` | `SegmentId`, vendor/device/class IDs, `Bdf`, `Sbdf`, and package error categories |
-| `pci.config` | `ConfigSpace`, `Function`, `HeaderKind`, ECAM `Segment` / `Ecam`, and x86_64 `Pio` |
-| `pci.header` | Common, type-0, and type-1 header views; typed command, status, and window values |
-| `pci.bar` | BAR decode, iteration, sizing probes, and `BarRef` |
-| `pci.capabilities` | Standard, extended, and PCIe capability traversal and decode |
-| `pci.memory` | `BarMemory` accessor for BAR-mapped memory |
-| `pci.resources` | Resource model, bridge-window aggregation, assignment, bus commit, and programming commit |
+| `pci.core` | PCI identifiers, wire types, offsets, and register masks |
+| `pci.config` | Configuration access through ECAM or PIO |
+| `pci.header` | Type 0/1 header access and bridge windows |
+| `pci.bar` | BAR decoding, iteration, and sizing |
+| `pci.capabilities` | Standard, extended, and PCIe capability traversal and decoding |
+| `pci.memory` | BAR-mapped memory access |
+| `pci.resources` | Resource assignment, bridge windows, bus numbering, and programming |
 | `pci.interrupts` | MSI and MSI-X capability and table programming |
-| `pci.topology` | Enumeration, tree construction, and bridge bus/window traversal |
-| `pci.testing` | Byte-backed host-test configuration and BAR-memory accessors |
+| `pci.topology` | Enumeration, traversal, and paths |
+| `pci.testing` | Byte-backed configuration and BAR-memory test backends |
 
-## Design
+## Device enumeration
 
-- **No hidden allocation.** Enumeration, traversal, assignment, and programming
-  use caller-provided storage or fixed-size internal storage.
-- **Explicit hardware access.** The caller provides a `ConfigSpace` accessor
-  for configuration space and a `BarMemory` accessor for BAR MMIO.
-- **Read-only enumeration.** Topology discovery does not program resource,
-  interrupt, or command-register state.
-- **Plan, then commit.** Resource assignment builds a plan without
-  configuration-space I/O. Committing the plan programs hardware with readback
-  and rollback.
-- **Platform policy stays outside the library.** `zpci` does not parse ACPI MCFG
-  data, discover root windows, allocate interrupt vectors, route interrupts,
-  bind drivers, or control device reset.
-- **Host-testable accessors.** The default suite uses byte buffers through the
-  same accessor interfaces used in production.
+```zig
+const std = @import("std");
+const pci = @import("pci");
+
+const Ecam = pci.config.Ecam;
+const Segment = pci.config.Segment;
+
+const segments = [_]Segment{
+    .{ .segment = .from(0), .buses = .{ .start = first_bus, .end = last_bus } },
+};
+
+const regions = [_]Ecam.Region{
+    .{ .segment = segments[0], .base = .from(mapped_ecam_base) },
+};
+
+var ecam = try Ecam.tryFrom(&regions);
+
+const tree = try pci.topology.enumerate(allocator, .{
+    .config = ecam.config(),
+    .segments = &segments,
+});
+defer tree.deinit(allocator);
+
+var it = tree.preorder();
+while (it.next()) |item| {
+    std.debug.print("{f}: {s}\n", .{ item.node.function.sbdf, @tagName(item.node.format) });
+}
+```
+
+## Resource allocation
+
+- `requirements`: measured BAR or ROM requirements for one endpoint.
+- `mmio_base` / `mmio_size`: an available 32-bit memory aperture.
+
+`ProgrammingPartial` means rollback failed; hardware may remain partially programmed.
+
+```zig
+const stdx = @import("stdx");
+const pci = @import("pci");
+
+const Node = pci.resources.assignment.Node;
+const Apertures = pci.resources.Apertures;
+const Range = stdx.ranges.Range(u64);
+
+const nodes = [_]Node{
+    .{ .parent = null, .type = .endpoint, .requirements = requirements },
+};
+
+const apertures: Apertures = .{
+    .mmio32 = .{
+        .type = .mmio32,
+        .bounds = try Range.fromStartLen(mmio_base, mmio_size),
+    },
+};
+
+const assignments = try pci.resources.assign(allocator, .{
+    .nodes = &nodes,
+    .roots = &.{0},
+    .apertures = apertures,
+});
+defer allocator.free(assignments);
+
+try pci.resources.commit(assignments);
+```
+
+## Interrupts
+
+Use message data `vector_data` for a caller-allocated interrupt vector.
+`ProgrammingPartial` means rollback failed; hardware may remain partially programmed.
+
+### MSI
+
+```zig
+const pci = @import("pci");
+
+const Msi = pci.interrupts.msi.Capability;
+
+const msi = (try Msi.find(function)) orelse return error.NoMsi;
+
+try msi.program(.{
+    .address = 0xFEE0_0000, // x86 local APIC, destination 0.
+    .data = vector_data,
+    .num_vectors = .one,
+});
+```
+
+### MSI-X
+
+Stop device interrupt generation and install the handler for `vector_data` before setup.
+Enable device interrupt generation only after setup succeeds.
+The setup sequence is not atomic; on error, keep device interrupt generation stopped.
+
+`table_memory` starts at the offset returned by `msix.tableLocation()` within
+the indicated BAR.
+
+```zig
+const pci = @import("pci");
+
+const Msi = pci.interrupts.msi.Capability;
+const Msix = pci.interrupts.msix.Capability;
+const Table = pci.interrupts.msix.Table;
+
+const msix = (try Msix.find(function)) orelse return error.NoMsix;
+const control = try msix.control();
+
+try msix.setFunctionMask(true);
+try msix.disable();
+
+if (try Msi.find(function)) |msi| {
+    try msi.disable();
+}
+
+const num_vectors = @as(u16, control.table_size_minus_one) + 1;
+const table = Table.from(table_memory, num_vectors);
+
+// Keep unused entries masked.
+for (0..num_vectors) |index| {
+    try table.setMasked(@intCast(index), true);
+}
+
+try table.program(0, .{
+    .address = 0xFEE0_0000, // x86 local APIC, destination 0.
+    .data = vector_data,
+    .masked = true,
+});
+
+try msix.enable();
+try table.setMasked(0, false);
+try msix.setFunctionMask(false);
+```
+
+Stop device interrupt generation before teardown:
+
+```zig
+try msix.setFunctionMask(true);
+try table.setMasked(0, true);
+try msix.disable();
+```
+
+After successful teardown, drain in-flight handlers, remove the handler, and release
+the interrupt vector.
+
+## Configuration registers
+
+### Typed read
+
+```zig
+const pci = @import("pci");
+
+const Function = pci.config.Function;
+
+const command = try function.read(Function.offsets.command);
+```
+
+### Masked command update
+
+```zig
+const pci = @import("pci");
+
+const Command = pci.core.header.Command;
+
+const selected = Command.mask(.{ .mem_enable, .bus_master });
+const ordinary = selected & Command.masks.assign;
+
+const observed = Command.raw(try function.command());
+const desired = Command.encode(.{ .mem_enable = false, .bus_master = true });
+
+try function.setCommand(Command.from((observed & ~ordinary) | (desired & ordinary)));
+```
 
 ## Build and test
 
-Run the default host-side suite:
+| Command | Purpose |
+| --- | --- |
+| `zig build check` | Compile host tests without running them |
+| `zig build test-host` | Run host tests |
+| `zig build test-<category>` | Run one host category |
+| `zig build test-compile` | Check valid and invalid API compile fixtures |
+| `zig build test` | Run host tests and compile fixtures |
+| `zig fmt --check build.zig build.zig.zon build src test` | Check formatting |
 
-```sh
-zig build test
-```
+Host categories: `core`, `config`, `header`, `bar`, `capabilities`, `interrupts`,
+`memory`, `resources`, `topology`, `testing`, and `integration`.
 
-Check the Zig source format:
+Tests: `src/` (unit), `test/integration/` (workflows), `test/compile/` (API fixtures).
 
-```sh
-zig fmt --check build.zig src test
-```
-
-The default suite tests decode, sizing, traversal, assignment, programming, and
-interrupt paths through byte-buffer configuration-space and BAR-memory
-accessors. It requires no PCI hardware.
-
-## Documentation
-
-The public API contracts are in [`docs/specs/`](docs/specs/).
-
-- [`docs/specs/index.md`](docs/specs/index.md) — package scope and public facade
-- [`docs/specs/architecture.md`](docs/specs/architecture.md) — layering, ownership, and dependency direction
-- [`docs/guidelines/testing.md`](docs/guidelines/testing.md) — host-test contract
+Host tests require no PCI hardware.
