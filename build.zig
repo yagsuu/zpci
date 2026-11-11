@@ -1,34 +1,21 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+const module = @import("build/modules.zig");
+const testing = @import("build/testing.zig");
+
+const Build = std.Build;
+const Modules = module.Modules;
+
+pub fn build(b: *Build) void {
+    const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const host_target = b.standardTargetOptions(.{});
+    const modules = Modules.init(b, target, optimize);
 
-    const stdx_dep = b.dependency("zstdx", .{
-        .target = host_target,
-        .optimize = optimize,
-    });
-    const stdx = stdx_dep.module("stdx");
+    const check = b.step("check", "Compile all host test suites");
+    const host = testing.addHostTests(b, &modules, target, optimize, check);
+    const compile = testing.addCompileFixtureTests(b, &modules);
 
-    const pci = b.addModule("pci", .{
-        .root_source_file = b.path("src/pci.zig"),
-        .target = host_target,
-        .optimize = optimize,
-        .imports = &.{.{ .name = "stdx", .module = stdx }},
-    });
-
-    const tests_root = b.createModule(.{
-        .root_source_file = b.path("test/all.zig"),
-        .target = host_target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "stdx", .module = stdx },
-            .{ .name = "pci", .module = pci },
-        },
-    });
-    const tests = b.addTest(.{ .root_module = tests_root });
-    const run_tests = b.addRunArtifact(tests);
-
-    const test_step = b.step("test", "Run host-side tests");
-    test_step.dependOn(&run_tests.step);
+    const tests = b.step("test", "Run all tests");
+    tests.dependOn(host);
+    tests.dependOn(compile);
 }

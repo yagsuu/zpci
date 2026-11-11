@@ -1,4 +1,4 @@
-//! Interrupt programming transactions. Specs: docs/specs/interrupts/msi.md and docs/specs/interrupts/msix.md.
+//! Interrupt programming transactions.
 
 const std = @import("std");
 
@@ -9,113 +9,88 @@ pub const Error = error{
 };
 
 pub const Options = struct {
-    max_entries: usize,
+    capacity: usize,
     word16: bool = false,
     word32: bool = false,
 };
 
-/// Builds a bounded write/read/restore transaction over a target-defined access API.
-///
-/// Requirements: enabled widths require matching `readN` and `writeN` target methods.
-/// Capacity: `opts.max_entries` is the maximum number of writes that can be restored.
-/// Effects: failed writes/readbacks restore prior writes in reverse order.
+/// Enabled widths require target offset types `Offset16` or `Offset32` and matching `readN` and `writeN` methods.
+/// Restores recorded writes in reverse order; a restore failure leaves partial state.
 pub fn Transaction(comptime Target: type, comptime opts: Options) type {
     comptime {
-        std.debug.assert(opts.max_entries > 0);
+        std.debug.assert(opts.capacity > 0);
         std.debug.assert(opts.word16 or opts.word32);
     }
 
     return struct {
         target: Target,
-        entries: [opts.max_entries]Entry = undefined,
+        entries: [opts.capacity]Entry = undefined,
         len: usize = 0,
 
         const Self = @This();
 
-        const Entry = if (opts.word16 and opts.word32)
-            union(enum) {
-                word16: struct {
-                    offset: usize,
-                    value: u16,
-                },
-                word32: struct {
-                    offset: usize,
-                    value: u32,
-                },
-            }
-        else if (opts.word16)
-            union(enum) {
-                word16: struct {
-                    offset: usize,
-                    value: u16,
-                },
-            }
-        else
-            union(enum) {
-                word32: struct {
-                    offset: usize,
-                    value: u32,
-                },
-            };
-
-        pub fn init(target: Target) Self {
+        pub fn from(target: Target) Self {
             return .{ .target = target };
         }
 
-        pub fn read16(self: *Self, offset: usize) Error!u16 {
-            comptime if (!opts.word16) @compileError("Transaction does not support 16-bit accesses");
-            return self.target.read16(offset) catch error.ProgrammingWriteFailed;
+        pub fn read(self: *Self, comptime T: type, offset: Offset(T)) Error!T {
+            return self.readTarget(T, offset) catch error.ProgrammingWriteFailed;
         }
 
-        pub fn read32(self: *Self, offset: usize) Error!u32 {
-            comptime if (!opts.word32) @compileError("Transaction does not support 32-bit accesses");
-            return self.target.read32(offset) catch error.ProgrammingWriteFailed;
-        }
+        pub fn writeReadback(
+            self: *Self,
+            comptime T: type,
+            offset: Offset(T),
+            value: T,
+            saved: T,
+        ) Error!void {
+            self.writeTarget(T, offset, value) catch return self.fail(error.ProgrammingWriteFailed);
 
-        pub fn writeReadback16(self: *Self, offset: usize, value: u16, saved: u16) Error!void {
-            comptime if (!opts.word16) @compileError("Transaction does not support 16-bit accesses");
-            self.target.write16(offset, value) catch return self.fail(error.ProgrammingWriteFailed);
-            self.record16(offset, saved);
-
-            const readback = self.target.read16(offset) catch return self.fail(error.ProgrammingWriteFailed);
-            if (readback != value) return self.fail(error.ProgrammingReadbackMismatch);
-        }
-
-        pub fn writeReadback32(self: *Self, offset: usize, value: u32, saved: u32) Error!void {
-            comptime if (!opts.word32) @compileError("Transaction does not support 32-bit accesses");
-            self.target.write32(offset, value) catch return self.fail(error.ProgrammingWriteFailed);
-            self.record32(offset, saved);
-
-            const readback = self.target.read32(offset) catch return self.fail(error.ProgrammingWriteFailed);
-            if (readback != value) return self.fail(error.ProgrammingReadbackMismatch);
-        }
-
-        fn record16(self: *Self, offset: usize, value: u16) void {
-            comptime if (!opts.word16) @compileError("Transaction does not support 16-bit accesses");
             std.debug.assert(self.len < self.entries.len);
-            self.entries[self.len] = .{ .word16 = .{ .offset = offset, .value = value } };
+            self.entries[self.len] = switch (T) {
+                u16 => .{ .word16 = .{ .offset = offset, .value = saved } },
+                u32 => .{ .word32 = .{ .offset = offset, .value = saved } },
+                else => unreachable,
+            };
             self.len += 1;
+
+            const readback = self.readTarget(T, offset) catch return self.fail(error.ProgrammingWriteFailed);
+            if (readback != value) {
+                return self.fail(error.ProgrammingReadbackMismatch);
+            }
         }
 
-        fn record32(self: *Self, offset: usize, value: u32) void {
-            comptime if (!opts.word32) @compileError("Transaction does not support 32-bit accesses");
-            std.debug.assert(self.len < self.entries.len);
-            self.entries[self.len] = .{ .word32 = .{ .offset = offset, .value = value } };
-            self.len += 1;
+        fn Offset(comptime T: type) type {
+            return switch (T) {
+                u16 => if (opts.word16) Offset16 else @compileError("Transaction does not support 16-bit accesses"),
+                u32 => if (opts.word32) Offset32 else @compileError("Transaction does not support 32-bit accesses"),
+                else => @compileError("Transaction supports only u16 and u32"),
+            };
         }
 
-        fn restore16(self: *Self, offset: usize, value: u16) Error!void {
-            comptime if (!opts.word16) @compileError("Transaction does not support 16-bit accesses");
-            self.target.write16(offset, value) catch return error.ProgrammingPartial;
-            const readback = self.target.read16(offset) catch return error.ProgrammingPartial;
-            if (readback != value) return error.ProgrammingPartial;
+        fn readTarget(self: *Self, comptime T: type, offset: Offset(T)) !T {
+            return switch (T) {
+                u16 => self.target.read16(offset),
+                u32 => self.target.read32(offset),
+                else => unreachable,
+            };
         }
 
-        fn restore32(self: *Self, offset: usize, value: u32) Error!void {
-            comptime if (!opts.word32) @compileError("Transaction does not support 32-bit accesses");
-            self.target.write32(offset, value) catch return error.ProgrammingPartial;
-            const readback = self.target.read32(offset) catch return error.ProgrammingPartial;
-            if (readback != value) return error.ProgrammingPartial;
+        fn writeTarget(self: *Self, comptime T: type, offset: Offset(T), value: T) !void {
+            return switch (T) {
+                u16 => self.target.write16(offset, value),
+                u32 => self.target.write32(offset, value),
+                else => unreachable,
+            };
+        }
+
+        fn restore(self: *Self, comptime T: type, offset: Offset(T), value: T) Error!void {
+            self.writeTarget(T, offset, value) catch return error.ProgrammingPartial;
+
+            const readback = self.readTarget(T, offset) catch return error.ProgrammingPartial;
+            if (readback != value) {
+                return error.ProgrammingPartial;
+            }
         }
 
         fn fail(self: *Self, err: Error) Error {
@@ -133,18 +108,47 @@ pub fn Transaction(comptime Target: type, comptime opts: Options) type {
         fn restoreEntry(self: *Self, record: Entry) Error!void {
             if (opts.word16 and opts.word32) {
                 switch (record) {
-                    .word16 => |entry| try self.restore16(entry.offset, entry.value),
-                    .word32 => |entry| try self.restore32(entry.offset, entry.value),
+                    .word16 => |entry| try self.restore(u16, entry.offset, entry.value),
+                    .word32 => |entry| try self.restore(u32, entry.offset, entry.value),
                 }
             } else if (opts.word16) {
                 switch (record) {
-                    .word16 => |entry| try self.restore16(entry.offset, entry.value),
+                    .word16 => |entry| try self.restore(u16, entry.offset, entry.value),
                 }
             } else {
                 switch (record) {
-                    .word32 => |entry| try self.restore32(entry.offset, entry.value),
+                    .word32 => |entry| try self.restore(u32, entry.offset, entry.value),
                 }
             }
         }
+
+        const Offset16 = if (opts.word16) Target.Offset16 else void;
+        const Offset32 = if (opts.word32) Target.Offset32 else void;
+
+        const Entry = if (opts.word16 and opts.word32)
+            union(enum) {
+                word16: struct {
+                    offset: Offset16,
+                    value: u16,
+                },
+                word32: struct {
+                    offset: Offset32,
+                    value: u32,
+                },
+            }
+        else if (opts.word16)
+            union(enum) {
+                word16: struct {
+                    offset: Offset16,
+                    value: u16,
+                },
+            }
+        else
+            union(enum) {
+                word32: struct {
+                    offset: Offset32,
+                    value: u32,
+                },
+            };
     };
 }

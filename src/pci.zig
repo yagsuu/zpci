@@ -1,12 +1,12 @@
-//! Public zpci package facade. Spec: docs/specs/index.md §Facade structure.
+//! PCI configuration, discovery and resource programming.
 
-pub const bar = @import("bar.zig");
-pub const capabilities = @import("capabilities.zig");
-pub const config = @import("config.zig");
-pub const core = @import("core.zig");
-pub const header = @import("header.zig");
-pub const interrupts = @import("interrupts.zig");
-pub const memory = @import("memory.zig");
-pub const resources = @import("resources.zig");
-pub const topology = @import("topology.zig");
-pub const testing = @import("testing.zig");
+pub const bar = @import("bar");
+pub const capabilities = @import("capabilities");
+pub const config = @import("config");
+pub const core = @import("core");
+pub const header = @import("header");
+pub const interrupts = @import("interrupts");
+pub const memory = @import("memory");
+pub const resources = @import("resources");
+pub const topology = @import("topology");
+pub const testing = @import("testing");

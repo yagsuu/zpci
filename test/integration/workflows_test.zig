@@ -1,44 +1,59 @@
-//! Public-facade workflow tests. Spec: docs/guidelines/testing.md.
+//! Public API workflows.
 
 const std = @import("std");
+
 const stdx = @import("stdx");
 
 const pci = @import("pci");
 
-const Aperture = pci.resources.Aperture;
-const Assignment = pci.resources.Assignment;
 const AssignmentNode = pci.resources.assignment.Node;
-const BarEntry = pci.bar.Entry;
+const Bar = pci.bar.Bar;
 const BusBridge = pci.resources.bus.Bridge;
-const Capability = pci.capabilities.list.Capability;
-const CapabilityId = pci.capabilities.list.Id;
-const ExtCapability = pci.capabilities.extended.ExtCapability;
+const StandardEntry = pci.capabilities.standard.Entry;
+const StandardId = pci.core.capabilities.standard.Id;
+const ExtendedEntry = pci.capabilities.extended.Entry;
 const Function = pci.config.Function;
-const Kind = pci.resources.Kind;
-const MsiVectorCount = pci.interrupts.msi.VectorCount;
-const Node = pci.topology.enumerate.Node;
-const NodeIndex = pci.topology.tree.NodeIndex;
+const ResourceType = pci.resources.Type;
+const MsiVectorCount = pci.core.capabilities.msi.VectorCount;
+const NodeId = pci.topology.NodeId;
 const Requirement = pci.resources.Requirement;
 const Sbdf = pci.core.Sbdf;
 const Segment = pci.config.Segment;
 const SegmentId = pci.core.SegmentId;
+const TableEntry = pci.core.capabilities.msix.TableEntry;
 const TestBarMemory = pci.testing.memory.TestBarMemory;
 const TestConfigSpace = pci.testing.config.TestConfigSpace;
-const VirtAddr = stdx.addr.VirtAddr;
+const Type1 = pci.header.Type1;
+const BusRange = stdx.ranges.InclusiveRange(pci.core.bus.Index);
+const Range = stdx.ranges.Range(u64);
+const ConfigEntry = TestConfigSpace.Entry;
+const StandardIterator = pci.capabilities.standard.Iterator;
+const ExtendedIterator = pci.capabilities.extended.Iterator;
+const MsiCapability = pci.interrupts.msi.Capability;
+const MsixCapability = pci.interrupts.msix.Capability;
+const MsixTable = pci.interrupts.msix.Table;
+const MsixPba = pci.interrupts.msix.Pba;
+const MsiControl = pci.core.capabilities.msi.Control;
+const MsixControl = pci.core.capabilities.msix.Control;
 
-const pcie_window_size: usize = 0x1000;
+const msi = pci.core.capabilities.msi;
+const msix = pci.core.capabilities.msix;
+
+const testing = std.testing;
+
+const pcie_window_size = pci.core.config.extended_size;
 
 const offset = struct {
     const vendor_id: usize = 0x00;
     const device_id: usize = 0x02;
     const command: usize = 0x04;
     const status: usize = 0x06;
-    const header_type: usize = 0x0E;
+    const @"type": usize = 0x0E;
     const bar0: usize = 0x10;
     const primary_bus: usize = 0x18;
     const secondary_bus: usize = 0x19;
     const subordinate_bus: usize = 0x1A;
-    const capabilities_pointer: usize = 0x34;
+    const cap_ptr: usize = 0x34;
     const pcie_capability: u8 = 0x40;
     const msi_capability: u8 = 0x60;
     const msix_capability: u8 = 0x70;
@@ -46,65 +61,50 @@ const offset = struct {
 };
 
 const status = struct {
-    const capabilities_list: u16 = 1 << 4;
+    const cap_list: u16 = 1 << 4;
 };
-
-test "integration: public facade exposes workflow namespaces" {
-    _ = pci.core.Bdf;
-    _ = pci.config.Function;
-    _ = pci.header.common;
-    _ = pci.bar.View;
-    _ = pci.capabilities.list.Iterator;
-    _ = pci.capabilities.extended.Iterator;
-    _ = pci.resources.assignment;
-    _ = pci.resources.programming;
-    _ = pci.resources.bus;
-    _ = pci.interrupts.msi;
-    _ = pci.interrupts.msix;
-    _ = pci.topology.enumerate;
-    _ = pci.testing.config.TestConfigSpace;
-    _ = pci.testing.memory.TestBarMemory;
-}
 
 test "integration: capability traversal walks seeded config bytes" {
     var bytes: [pcie_window_size]u8 = undefined;
-    seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.pcie_capability });
+    seedFunction(&bytes, .{ .status = status.cap_list, .cap_head = offset.pcie_capability });
     seedCapability(&bytes, .{
         .base = offset.pcie_capability,
-        .id = @intFromEnum(CapabilityId.pci_express),
+        .id = @intFromEnum(StandardId.pcie),
         .next = offset.msi_chain_capability,
     });
     seedCapability(&bytes, .{
         .base = offset.msi_chain_capability,
-        .id = @intFromEnum(CapabilityId.msi),
+        .id = @intFromEnum(StandardId.msi),
         .next = 0,
     });
     storeExtHeader(&bytes, .{ .byte_offset = 0x100, .id = 0x0001, .version = 1, .next = 0x120 });
     storeExtHeader(&bytes, .{ .byte_offset = 0x120, .id = 0x0002, .version = 2, .next = 0 });
 
     const address = sbdf(.{ .bus = 0 });
-    var backend = TestConfigSpace.initSingle(address, &bytes);
-    const function = try Function.validate(backend.configSpace(), address);
+    var backend = TestConfigSpace.fromSingle(address, &bytes);
+    const function = try Function.tryFrom(backend.config(), address);
 
-    var standard = try pci.capabilities.list.Iterator.validate(function);
+    var standard = try StandardIterator.tryFrom(function);
     const first = (try standard.next()).?;
     const second = (try standard.next()).?;
-    try std.testing.expectEqual(@intFromEnum(CapabilityId.pci_express), first.id);
-    try std.testing.expectEqual(offset.pcie_capability, first.offset);
-    try std.testing.expectEqual(@intFromEnum(CapabilityId.msi), second.id);
-    try std.testing.expectEqual(offset.msi_chain_capability, second.offset);
-    try std.testing.expectEqual(@as(?Capability, null), try standard.next());
 
-    var extended = try pci.capabilities.extended.Iterator.validate(function);
+    try testing.expectEqual(@intFromEnum(StandardId.pcie), @intFromEnum(first.id));
+    try testing.expectEqual(offset.pcie_capability, first.offset);
+    try testing.expectEqual(@intFromEnum(StandardId.msi), @intFromEnum(second.id));
+    try testing.expectEqual(offset.msi_chain_capability, second.offset);
+    try testing.expectEqual(@as(?StandardEntry, null), try standard.next());
+
+    var extended = try ExtendedIterator.tryFrom(function);
     const ext_first = (try extended.next()).?;
     const ext_second = (try extended.next()).?;
-    try std.testing.expectEqual(@as(u16, 0x0001), ext_first.id);
-    try std.testing.expectEqual(@as(u4, 1), ext_first.version);
-    try std.testing.expectEqual(@as(u16, 0x100), ext_first.offset);
-    try std.testing.expectEqual(@as(u16, 0x0002), ext_second.id);
-    try std.testing.expectEqual(@as(u4, 2), ext_second.version);
-    try std.testing.expectEqual(@as(u16, 0x120), ext_second.offset);
-    try std.testing.expectEqual(@as(?ExtCapability, null), try extended.next());
+
+    try testing.expectEqual(@as(u16, 0x0001), @intFromEnum(ext_first.id));
+    try testing.expectEqual(@as(u4, 1), ext_first.version);
+    try testing.expectEqual(@as(u16, 0x100), ext_first.offset);
+    try testing.expectEqual(@as(u16, 0x0002), @intFromEnum(ext_second.id));
+    try testing.expectEqual(@as(u4, 2), ext_second.version);
+    try testing.expectEqual(@as(u16, 0x120), ext_second.offset);
+    try testing.expectEqual(@as(?ExtendedEntry, null), try extended.next());
 }
 
 test "integration: enumerate assign program memory BAR" {
@@ -113,59 +113,60 @@ test "integration: enumerate assign program memory BAR" {
     store32(&endpoint, offset.bar0, 0x0000_0000);
 
     const endpoint_address = sbdf(.{ .bus = 0 });
-    var entries = [_]TestConfigSpace.Entry{.{ .sbdf = endpoint_address, .bytes = &endpoint }};
-    var backend = TestConfigSpace.init(&entries);
-    var segments = [_]Segment{segment(.{ .bus_start = 0, .bus_end = 0 })};
-    var topology_nodes: [4]Node = undefined;
-    var roots: [4]NodeIndex = undefined;
+    var entries = [_]ConfigEntry{.{ .sbdf = endpoint_address, .bytes = &endpoint }};
+    var backend = TestConfigSpace.from(&entries);
+    var segments = [_]Segment{segment(.of(0, 0))};
 
-    const tree = try pci.topology.enumerate.intoScratch(.{
-        .config = backend.configSpace(),
+    const tree = try pci.topology.enumerate(testing.allocator, .{
+        .config = backend.config(),
         .segments = &segments,
-        .nodes = &topology_nodes,
-        .roots = &roots,
     });
-    try std.testing.expectEqual(@as(usize, 1), tree.nodes.len);
-    try std.testing.expect(tree.node(0).sbdf.eql(endpoint_address));
+    defer tree.deinit(testing.allocator);
 
-    const function = tree.node(0).function;
-    const bar_entry: BarEntry = .{
+    try testing.expectEqual(@as(usize, 1), tree.nodes().len);
+    try testing.expect(tree.node(NodeId.from(0)).function.sbdf.eql(endpoint_address));
+
+    const function = tree.node(NodeId.from(0)).function;
+    const bar_entry: Bar = .{
         .index = 0,
-        .slot_count = 1,
-        .kind = .{ .memory = .{
+        .type = .{ .memory = .{
             .base = 0,
             .size = 0x1000,
             .width = .bits_32,
             .prefetchable = false,
         } },
     };
-    var requirements_buf: [pci.bar.max_entries]Requirement = undefined;
-    const requirements = try Requirement.fromBarSlice(function, &.{bar_entry}, &requirements_buf);
+    const requirements = try Requirement.fromBars(testing.allocator, function, &.{bar_entry});
+    defer testing.allocator.free(requirements);
+
     var assignment_nodes = [_]AssignmentNode{.{
         .parent = null,
-        .kind = .endpoint,
+        .type = .endpoint,
         .requirements = requirements,
     }};
-    var assignment_scratch: [4]Assignment = undefined;
-    const plan = try pci.resources.assignment.intoScratch(.{
+    const assignments = try pci.resources.assign(testing.allocator, .{
         .nodes = &assignment_nodes,
         .roots = &.{0},
         .apertures = .{
-            .mmio32 = Aperture.range(.mmio32, 0x8000_0000, 0x1000),
+            .mmio32 = .{
+                .type = .mmio32,
+                .bounds = try Range.fromStartLen(0x8000_0000, 0x1000),
+            },
         },
-    }, &assignment_scratch);
+    });
+    defer testing.allocator.free(assignments);
 
-    try std.testing.expectEqual(@as(usize, 1), plan.assignments.len);
-    try std.testing.expectEqual(Kind.mmio32, plan.assignments[0].pool);
-    try std.testing.expectEqual(@as(u64, 0x8000_0000), plan.assignments[0].base);
+    try testing.expectEqual(@as(usize, 1), assignments.len);
+    try testing.expectEqual(ResourceType.mmio32, assignments[0].pool);
+    try testing.expectEqual(@as(u64, 0x8000_0000), assignments[0].base);
 
-    try pci.resources.programming.commit(plan);
+    try pci.resources.commit(assignments);
 
-    try std.testing.expectEqual(@as(u32, 0x8000_0000), load32(&endpoint, offset.bar0));
-    try std.testing.expectEqual(@as(u16, 0x0003), load16(&endpoint, offset.command));
+    try testing.expectEqual(@as(u32, 0x8000_0000), load32(&endpoint, offset.bar0));
+    try testing.expectEqual(@as(u16, 0x0003), load16(&endpoint, offset.command));
 }
 
-test "integration: bus commit enables bridge subtree enumeration" {
+test "integration: bridge bus and window programming preserves the discovered subtree" {
     var bridge: [pcie_window_size]u8 = undefined;
     var endpoint: [pcie_window_size]u8 = undefined;
     seedFunction(&bridge, .{ .header = 0x01 });
@@ -173,27 +174,25 @@ test "integration: bus commit enables bridge subtree enumeration" {
 
     const bridge_address = sbdf(.{ .bus = 0 });
     const endpoint_address = sbdf(.{ .bus = 1 });
-    var entries = [_]TestConfigSpace.Entry{
+    var entries = [_]ConfigEntry{
         .{ .sbdf = bridge_address, .bytes = &bridge },
         .{ .sbdf = endpoint_address, .bytes = &endpoint },
     };
-    var backend = TestConfigSpace.init(&entries);
-    var segments = [_]Segment{segment(.{ .bus_start = 0, .bus_end = 1 })};
-    var before_nodes: [4]Node = undefined;
-    var before_roots: [4]NodeIndex = undefined;
+    var backend = TestConfigSpace.from(&entries);
+    var segments = [_]Segment{segment(.of(0, 1))};
 
-    const before = try pci.topology.enumerate.intoScratch(.{
-        .config = backend.configSpace(),
+    const before = try pci.topology.enumerate(testing.allocator, .{
+        .config = backend.config(),
         .segments = &segments,
-        .nodes = &before_nodes,
-        .roots = &before_roots,
     });
-    try std.testing.expectEqual(@as(usize, 1), before.nodes.len);
-    try std.testing.expect(before.node(0).sbdf.eql(bridge_address));
+    defer before.deinit(testing.allocator);
+
+    try testing.expectEqual(@as(usize, 1), before.nodes().len);
+    try testing.expect(before.node(NodeId.from(0)).function.sbdf.eql(bridge_address));
 
     const bridges = [_]BusBridge{.{
         .parent = null,
-        .function = before.node(0).function,
+        .function = before.node(NodeId.from(0)).function,
     }};
     try pci.resources.bus.commit(.{
         .bridges = &bridges,
@@ -202,54 +201,109 @@ test "integration: bus commit enables bridge subtree enumeration" {
         .bus_end = 1,
     });
 
-    try std.testing.expectEqual(@as(u8, 0), bridge[offset.primary_bus]);
-    try std.testing.expectEqual(@as(u8, 1), bridge[offset.secondary_bus]);
-    try std.testing.expectEqual(@as(u8, 1), bridge[offset.subordinate_bus]);
+    try testing.expectEqual(@as(u8, 0), bridge[offset.primary_bus]);
+    try testing.expectEqual(@as(u8, 1), bridge[offset.secondary_bus]);
+    try testing.expectEqual(@as(u8, 1), bridge[offset.subordinate_bus]);
 
-    var after_nodes: [4]Node = undefined;
-    var after_roots: [4]NodeIndex = undefined;
-    const after = try pci.topology.enumerate.intoScratch(.{
-        .config = backend.configSpace(),
+    const after = try pci.topology.enumerate(testing.allocator, .{
+        .config = backend.config(),
         .segments = &segments,
-        .nodes = &after_nodes,
-        .roots = &after_roots,
     });
+    defer after.deinit(testing.allocator);
 
-    try std.testing.expectEqual(@as(usize, 2), after.nodes.len);
-    try std.testing.expect(after.node(0).sbdf.eql(bridge_address));
-    try std.testing.expect(after.node(1).sbdf.eql(endpoint_address));
-    try std.testing.expectEqual(@as(?NodeIndex, 0), after.node(1).parent);
+    try testing.expectEqual(@as(usize, 2), after.nodes().len);
+    try testing.expect(after.node(NodeId.from(0)).function.sbdf.eql(bridge_address));
+    try testing.expect(after.node(NodeId.from(1)).function.sbdf.eql(endpoint_address));
+    try testing.expectEqual(@as(?NodeId, NodeId.from(0)), after.node(NodeId.from(1)).parent);
+
+    const live_bridge = Type1.from(after.node(NodeId.from(0)).function);
+    const buses = try live_bridge.busRange();
+    try testing.expect(buses.forwards(1));
+
+    const endpoint_function = after.node(NodeId.from(1)).function;
+    const requirement = (try Requirement.fromBar(endpoint_function, .{
+        .index = 0,
+        .type = .{ .memory = .{
+            .base = 0,
+            .size = 0x1000,
+            .width = .bits_32,
+            .prefetchable = false,
+        } },
+    })).?;
+    const bridge_requirements = try pci.resources.bridge.aggregate(
+        testing.allocator,
+        live_bridge.function,
+        &.{requirement},
+    );
+    const nodes = [_]AssignmentNode{
+        .{ .parent = null, .type = .bridge, .requirements = bridge_requirements.asSlice() },
+        .{ .parent = 0, .type = .endpoint, .requirements = &.{requirement} },
+    };
+    const assignments = try pci.resources.assign(testing.allocator, .{
+        .nodes = &nodes,
+        .roots = &.{0},
+        .apertures = .{
+            .mmio32 = .{
+                .type = .mmio32,
+                .bounds = try Range.fromStartLen(0x8000_0000, 0x10_0000),
+            },
+        },
+    });
+    defer testing.allocator.free(assignments);
+
+    try pci.resources.commit(assignments);
+
+    const windows = try live_bridge.windows();
+    const endpoint_base = load32(&endpoint, offset.bar0) & 0xFFFF_FFF0;
+    try testing.expectEqual(@as(u32, 0x8000_0000), endpoint_base);
+    try testing.expectEqual(@as(u64, 0x8000_0000), windows.mem.range.?.start);
+    try testing.expectEqual(@as(u64, 0x800F_FFFF), windows.mem.range.?.end);
+    try testing.expect(windows.mem.contains(endpoint_base, requirement.size));
+    try testing.expect(!windows.mem.contains(0x8010_0000, 1));
+
+    const path = try after.pathTo(testing.allocator, NodeId.from(1));
+    defer testing.allocator.free(path);
+    try testing.expectEqualSlices(NodeId, &.{ NodeId.from(0), NodeId.from(1) }, path);
 }
 
 test "integration: MSI routing programs discovered capability" {
     var bytes: [pcie_window_size]u8 = undefined;
-    seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.msi_capability });
-    seedCapability(&bytes, .{ .base = offset.msi_capability, .id = pci.interrupts.msi.cap_id, .next = 0 });
-    store16(&bytes, offset.msi_capability + pci.interrupts.msi.register.message_control, msiControlRaw(.{
-        .multiple_message_capable = @intFromEnum(MsiVectorCount.two),
+    seedFunction(&bytes, .{ .status = status.cap_list, .cap_head = offset.msi_capability });
+    seedCapability(&bytes, .{
+        .base = offset.msi_capability,
+        .id = @intFromEnum(msi.id),
+        .next = 0,
+    });
+    store16(&bytes, offset.msi_capability + msi.addr32.offsets.control, msiControlRaw(.{
+        .multiple_msg_capable = @intFromEnum(MsiVectorCount.two),
     }));
 
     const address = sbdf(.{ .bus = 0 });
-    var backend = TestConfigSpace.initSingle(address, &bytes);
-    const function = try Function.validate(backend.configSpace(), address);
-    const view = (try pci.interrupts.msi.View.find(function)).?;
+    var backend = TestConfigSpace.fromSingle(address, &bytes);
+    const function = try Function.tryFrom(backend.config(), address);
+    const capability = (try MsiCapability.find(function)).?;
 
-    try view.program(.{
+    try capability.program(.{
         .address = 0xFEE0_0000,
         .data = 0x0040,
-        .vector_count = .two,
+        .num_vectors = .two,
     });
 
-    try std.testing.expectEqual(@as(u64, 0xFEE0_0000), try view.messageAddress());
-    try std.testing.expectEqual(@as(u16, 0x0040), try view.messageData());
-    try std.testing.expectEqual(MsiVectorCount.two, try view.multipleMessageEnable());
-    try std.testing.expect((try view.messageControl()).msi_enable);
+    try testing.expectEqual(@as(u64, 0xFEE0_0000), try capability.address());
+    try testing.expectEqual(@as(u16, 0x0040), try capability.data());
+    const control = try capability.control();
+    try testing.expectEqual(MsiVectorCount.two, MsiVectorCount.from(control.multiple_msg_enable));
+    try testing.expect(control.enable);
 }
 
 test "integration: MSI-X routing programs caller BAR memory" {
     var bytes: [pcie_window_size]u8 = undefined;
-    seedFunction(&bytes, .{ .status = status.capabilities_list, .cap_head = offset.msix_capability });
-    seedCapability(&bytes, .{ .base = offset.msix_capability, .id = pci.interrupts.msix.cap_id, .next = 0 });
+    seedFunction(&bytes, .{ .status = status.cap_list, .cap_head = offset.msix_capability });
+    seedCapability(&bytes, .{
+        .base = offset.msix_capability,
+        .id = @intFromEnum(msix.id),
+        .next = 0,
+    });
     seedMsixPayload(&bytes, offset.msix_capability, .{
         .table_size_minus_one = 1,
         .table_bir = 0,
@@ -259,33 +313,60 @@ test "integration: MSI-X routing programs caller BAR memory" {
     });
 
     const address = sbdf(.{ .bus = 0 });
-    var config_backend = TestConfigSpace.initSingle(address, &bytes);
-    const function = try Function.validate(config_backend.configSpace(), address);
-    const view = (try pci.interrupts.msix.View.find(function)).?;
-    try std.testing.expectEqual(@as(u16, 2), view.tableSize());
-    try std.testing.expectEqual(@as(u3, 0), view.tableLocation().bir);
-    try std.testing.expectEqual(@as(u3, 1), view.pbaLocation().bir);
+    var config_backend = TestConfigSpace.fromSingle(address, &bytes);
+    const function = try Function.tryFrom(config_backend.config(), address);
+    const capability = (try MsixCapability.find(function)).?;
 
-    var table_bytes: [2 * pci.interrupts.msix.table_entry_size]u8 = @splat(0);
+    const control = try capability.control();
+    const num_vectors = @as(u16, control.table_size_minus_one) + 1;
+    const table_location = try capability.tableLocation();
+    const pba_location = try capability.pbaLocation();
+
+    try testing.expectEqual(@as(u16, 2), num_vectors);
+    try testing.expectEqual(@as(u3, 0), table_location.bir);
+    try testing.expectEqual(@as(u3, 1), pba_location.bir);
+
+    var table_bytes: [2 * @sizeOf(TableEntry)]u8 = @splat(0);
     var table_backend: TestBarMemory = .{ .bytes = &table_bytes };
     var pba_bytes: [4]u8 = @splat(0);
     store32(&pba_bytes, 0, @as(u32, 1) << 1);
     var pba_backend: TestBarMemory = .{ .bytes = &pba_bytes };
 
-    try view.programEntry(table_backend.accessor(), 1, .{
+    const table = MsixTable.from(table_backend.accessor(), num_vectors);
+    const pba = MsixPba.from(pba_backend.accessor(), num_vectors);
+
+    try table.program(1, .{
         .address = 0xFEE0_0000,
         .data = 0x0045,
         .masked = false,
     });
 
-    const entry = try view.readEntry(table_backend.accessor(), 1);
-    try std.testing.expectEqual(@as(u64, 0xFEE0_0000), entry.address);
-    try std.testing.expectEqual(@as(u32, 0x0045), entry.data);
-    try std.testing.expect(!entry.masked);
-    try std.testing.expect(try view.vectorPending(pba_backend.accessor(), 1));
+    const entry = try table.read(1);
+    try testing.expectEqual(@as(u64, 0xFEE0_0000), entry.address);
+    try testing.expectEqual(@as(u32, 0x0045), entry.data);
+    try testing.expect(!entry.masked);
+    try testing.expect(try pba.pending(1));
 
-    try view.enable();
-    try std.testing.expect(try view.enabled());
+    try capability.enable();
+
+    try testing.expect((try capability.control()).enable);
+}
+
+test "integration: command field masks preserve unrelated live control bits" {
+    const Command = pci.core.header.Command;
+    var bytes: [pcie_window_size]u8 = @splat(0);
+    const address = Sbdf.from(.from(0), 0, 1, 0);
+    var backend = TestConfigSpace.fromSingle(address, &bytes);
+    const function = Function.from(backend.config(), address);
+    store16(&bytes, 0x04, 0x0547);
+
+    const selected = Command.mask(.{ .mem_enable, .bus_master });
+    const desired = Command.encode(.{ .mem_enable = false, .bus_master = true });
+    const observed = Command.raw(try function.command());
+
+    try function.setCommand(Command.from((observed & ~selected) | (desired & selected)));
+
+    try testing.expectEqual(@as(u16, 0x0545), try function.config.read(address, Function.offsets.command));
 }
 
 fn seedFunction(bytes: *[pcie_window_size]u8, fields: struct {
@@ -301,28 +382,23 @@ fn seedFunction(bytes: *[pcie_window_size]u8, fields: struct {
     store16(bytes, offset.device_id, fields.device);
     store16(bytes, offset.command, fields.command);
     store16(bytes, offset.status, fields.status);
-    bytes[offset.header_type] = fields.header;
-    bytes[offset.capabilities_pointer] = fields.cap_head;
+    bytes[offset.type] = fields.header;
+    bytes[offset.cap_ptr] = fields.cap_head;
 }
 
-fn segment(fields: struct {
-    bus_start: u8,
-    bus_end: u8,
-}) Segment {
+fn segment(buses: BusRange) Segment {
     return .{
         .segment = SegmentId.from(0),
-        .base = VirtAddr.fromInt(0x1000),
-        .bus_start = fields.bus_start,
-        .bus_end = fields.bus_end,
+        .buses = buses,
     };
 }
 
 fn sbdf(fields: struct {
     bus: u8,
-    device: u8 = 0,
-    function: u8 = 0,
+    device: u5 = 0,
+    function: u3 = 0,
 }) Sbdf {
-    return Sbdf.from(0, fields.bus, fields.device, fields.function) catch unreachable;
+    return Sbdf.from(.from(0), fields.bus, fields.device, fields.function);
 }
 
 fn seedCapability(bytes: []u8, fields: struct {
@@ -330,8 +406,10 @@ fn seedCapability(bytes: []u8, fields: struct {
     id: u8,
     next: u8,
 }) void {
-    bytes[fields.base] = fields.id;
-    bytes[@as(usize, fields.base) + 1] = fields.next;
+    store16(bytes, fields.base, pci.core.capabilities.standard.Header.encode(.{
+        .id = @as(StandardId, @enumFromInt(fields.id)),
+        .next = fields.next,
+    }));
 }
 
 fn storeExtHeader(bytes: []u8, fields: struct {
@@ -341,9 +419,11 @@ fn storeExtHeader(bytes: []u8, fields: struct {
     next: u16,
 }) void {
     std.debug.assert(fields.next & 0xF000 == 0);
-    const raw = @as(u32, fields.id) |
-        (@as(u32, fields.version) << 16) |
-        (@as(u32, fields.next) << 20);
+    const raw = pci.core.capabilities.extended.Header.encode(.{
+        .id = @as(pci.core.capabilities.extended.Id, @enumFromInt(fields.id)),
+        .version = fields.version,
+        .next = @as(u12, @intCast(fields.next)),
+    });
     store32(bytes, fields.byte_offset, raw);
 }
 
@@ -354,60 +434,61 @@ fn seedMsixPayload(bytes: []u8, base: u8, fields: struct {
     pba_bir: u3 = 0,
     pba_offset: u32 = 0,
 }) void {
-    store16(bytes, @as(usize, base) + pci.interrupts.msix.register.message_control, msixControlRaw(.{
+    store16(bytes, @as(usize, base) + msix.offsets.control, msixControlRaw(.{
         .table_size_minus_one = fields.table_size_minus_one,
     }));
-    store32(bytes, @as(usize, base) + pci.interrupts.msix.register.table_offset_bir, locationRaw(
+    store32(bytes, @as(usize, base) + msix.offsets.table, locationRaw(
         fields.table_bir,
         fields.table_offset,
     ));
-    store32(bytes, @as(usize, base) + pci.interrupts.msix.register.pba_offset_bir, locationRaw(
+    store32(bytes, @as(usize, base) + msix.offsets.pba, locationRaw(
         fields.pba_bir,
         fields.pba_offset,
     ));
 }
 
 fn msiControlRaw(fields: struct {
-    msi_enable: bool = false,
-    multiple_message_capable: u3 = 0,
-    multiple_message_enable: u3 = 0,
-    addr_64_capable: bool = false,
+    enable: bool = false,
+    multiple_msg_capable: u3 = 0,
+    multiple_msg_enable: u3 = 0,
+    addr64_capable: bool = false,
     pvm_capable: bool = false,
-    ext_msg_data_capable: bool = false,
-    ext_msg_data_enable: bool = false,
+    ext_data_capable: bool = false,
+    ext_data_enable: bool = false,
     reserved11: u5 = 0,
 }) u16 {
-    const control = pci.interrupts.msi.MessageControl{
-        .msi_enable = fields.msi_enable,
-        .multiple_message_capable = fields.multiple_message_capable,
-        .multiple_message_enable = fields.multiple_message_enable,
-        .addr_64_capable = fields.addr_64_capable,
+    return MsiControl.raw(.{
+        .enable = fields.enable,
+        .multiple_msg_capable = fields.multiple_msg_capable,
+        .multiple_msg_enable = fields.multiple_msg_enable,
+        .addr64_capable = fields.addr64_capable,
         .pvm_capable = fields.pvm_capable,
-        .ext_msg_data_capable = fields.ext_msg_data_capable,
-        .ext_msg_data_enable = fields.ext_msg_data_enable,
-        ._reserved11 = fields.reserved11,
-    };
-    return @bitCast(control);
+        .ext_data_capable = fields.ext_data_capable,
+        .ext_data_enable = fields.ext_data_enable,
+        ._rsvd_11 = fields.reserved11,
+    });
 }
 
 fn msixControlRaw(fields: struct {
     table_size_minus_one: u11 = 0,
     reserved11: u3 = 0,
     function_mask: bool = false,
-    msix_enable: bool = false,
+    enable: bool = false,
 }) u16 {
-    const control = pci.interrupts.msix.MessageControl{
+    return MsixControl.raw(.{
         .table_size_minus_one = fields.table_size_minus_one,
-        ._reserved11 = fields.reserved11,
+        ._rsvd_11 = fields.reserved11,
         .function_mask = fields.function_mask,
-        .msix_enable = fields.msix_enable,
-    };
-    return @bitCast(control);
+        .enable = fields.enable,
+    });
 }
 
 fn locationRaw(bir: u3, byte_offset: u32) u32 {
     std.debug.assert(byte_offset & 0b111 == 0);
-    return byte_offset | bir;
+    return msix.Location.encode(.{
+        .bir = bir,
+        .offset_shifted = @as(u29, @intCast(byte_offset >> 3)),
+    });
 }
 
 fn load16(bytes: []const u8, byte_offset: usize) u16 {

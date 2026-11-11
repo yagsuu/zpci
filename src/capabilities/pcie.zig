@@ -1,472 +1,65 @@
-//! PCI Express capability view. Spec: docs/specs/capabilities/pcie.md.
+//! PCI Express capability registers.
 
 const std = @import("std");
 
-const config = @import("../config.zig");
-const list = @import("list.zig");
+const pci_config = @import("config");
+const core = @import("core");
+const canonical = core.capabilities.pcie;
 
-const ConfigSpace = config.ConfigSpace;
-const Function = config.Function;
+const standard = @import("standard.zig");
 
-pub const register = struct {
-    pub const capabilities: u8 = 0x02;
+const Function = pci_config.Function;
+const Entry = standard.Entry;
+const CapabilityError = standard.Error;
+const Registers = standard.Registers;
+const RelativeOffset = core.RelativeOffset;
 
-    pub const device = struct {
-        pub const capabilities: u8 = 0x04;
-        pub const control: u8 = 0x08;
-        pub const status: u8 = 0x0A;
-        pub const capabilities_2: u8 = 0x24;
-        pub const control_2: u8 = 0x28;
-        pub const status_2: u8 = 0x2A;
-    };
+const Capabilities = canonical.Capabilities.Word;
 
-    pub const link = struct {
-        pub const capabilities: u8 = 0x0C;
-        pub const control: u8 = 0x10;
-        pub const status: u8 = 0x12;
-        pub const capabilities_2: u8 = 0x2C;
-        pub const control_2: u8 = 0x30;
-        pub const status_2: u8 = 0x32;
-    };
+const DeviceCapabilities = canonical.device.Capabilities.Word;
+const DeviceControl = canonical.device.Control.Word;
+const DeviceStatus = canonical.device.Status.Word;
+const DeviceCapabilities2 = canonical.device.Capabilities2.Word;
+const DeviceControl2 = canonical.device.Control2.Word;
+const DeviceStatus2 = canonical.device.Status2.Word;
 
-    pub const slot = struct {
-        pub const capabilities: u8 = 0x14;
-        pub const control: u8 = 0x18;
-        pub const status: u8 = 0x1A;
-        pub const capabilities_2: u8 = 0x34;
-        pub const control_2: u8 = 0x38;
-        pub const status_2: u8 = 0x3A;
-    };
+const LinkCapabilities = canonical.link.Capabilities.Word;
+const LinkControl = canonical.link.Control.Word;
+const LinkStatus = canonical.link.Status.Word;
+const LinkCapabilities2 = canonical.link.Capabilities2.Word;
+const LinkControl2 = canonical.link.Control2.Word;
+const LinkStatus2 = canonical.link.Status2.Word;
 
-    pub const root = struct {
-        pub const control: u8 = 0x1C;
-        pub const capabilities: u8 = 0x1E;
-        pub const status: u8 = 0x20;
-    };
-};
+const SlotCapabilities = canonical.slot.Capabilities.Word;
+const SlotControl = canonical.slot.Control.Word;
+const SlotStatus = canonical.slot.Status.Word;
+const SlotCapabilities2 = canonical.slot.Capabilities2.Word;
+const SlotControl2 = canonical.slot.Control2.Word;
+const SlotStatus2 = canonical.slot.Status2.Word;
 
-pub const total_size: u8 = 0x3C;
+const RootControl = canonical.root.Control.Word;
+const RootCapabilities = canonical.root.Capabilities.Word;
+const RootStatus = canonical.root.Status.Word;
 
-pub const Error = ConfigSpace.Error || error{
-    MalformedCapability,
-    MalformedField,
+pub const Error = CapabilityError || error{
     UnsupportedRevision,
 };
 
-pub const DevicePortType = enum(u4) {
-    endpoint = 0x0,
-    legacy_endpoint = 0x1,
-    root_port = 0x4,
-    upstream_port = 0x5,
-    downstream_port = 0x6,
-    pcie_to_pci_bridge = 0x7,
-    pci_to_pcie_bridge = 0x8,
-    root_complex_integrated_endpoint = 0x9,
-    root_complex_event_collector = 0xA,
-    _,
-};
-
-pub const MaxPayloadSize = enum(u3) {
-    bytes_128 = 0,
-    bytes_256 = 1,
-    bytes_512 = 2,
-    bytes_1024 = 3,
-    bytes_2048 = 4,
-    bytes_4096 = 5,
-    _,
-
-    pub fn bytes(self: MaxPayloadSize) error{MalformedField}!u32 {
-        return switch (@intFromEnum(self)) {
-            0...5 => @as(u32, 128) << @as(u5, @intCast(@intFromEnum(self))),
-            else => error.MalformedField,
-        };
-    }
-};
-
-pub const MaxReadRequestSize = enum(u3) {
-    bytes_128 = 0,
-    bytes_256 = 1,
-    bytes_512 = 2,
-    bytes_1024 = 3,
-    bytes_2048 = 4,
-    bytes_4096 = 5,
-    _,
-
-    pub fn bytes(self: MaxReadRequestSize) error{MalformedField}!u32 {
-        return switch (@intFromEnum(self)) {
-            0...5 => @as(u32, 128) << @as(u5, @intCast(@intFromEnum(self))),
-            else => error.MalformedField,
-        };
-    }
-};
-
-pub const MaxLinkSpeed = enum(u4) {
-    gen1 = 0x1,
-    gen2 = 0x2,
-    gen3 = 0x3,
-    gen4 = 0x4,
-    gen5 = 0x5,
-    gen6 = 0x6,
-    _,
-
-    pub fn megaTransfersPerSecond(self: MaxLinkSpeed) error{MalformedField}!u32 {
-        return switch (self) {
-            .gen1 => 2500,
-            .gen2 => 5000,
-            .gen3 => 8000,
-            .gen4 => 16000,
-            .gen5 => 32000,
-            .gen6 => 64000,
-            _ => error.MalformedField,
-        };
-    }
-};
-
-pub const MaxLinkWidth = enum(u6) {
-    x1 = 1,
-    x2 = 2,
-    x4 = 4,
-    x8 = 8,
-    x12 = 12,
-    x16 = 16,
-    x32 = 32,
-    _,
-
-    pub fn lanes(self: MaxLinkWidth) error{MalformedField}!u6 {
-        return switch (self) {
-            .x1 => 1,
-            .x2 => 2,
-            .x4 => 4,
-            .x8 => 8,
-            .x12 => 12,
-            .x16 => 16,
-            .x32 => 32,
-            _ => error.MalformedField,
-        };
-    }
-};
-
-pub const AspmSupport = enum(u2) {
-    disabled = 0,
-    l0s = 1,
-    l1 = 2,
-    l0s_l1 = 3,
-};
-
-pub const AspmControl = enum(u2) {
-    disabled = 0,
-    l0s = 1,
-    l1 = 2,
-    l0s_l1 = 3,
-};
-
-pub const CompletionTimeoutValue = enum(u4) {
-    default = 0x0,
-    range_a_50us_100us = 0x1,
-    range_a_1ms_10ms = 0x2,
-    range_b_16ms_55ms = 0x5,
-    range_b_65ms_210ms = 0x6,
-    range_c_260ms_900ms = 0x9,
-    range_c_1s_3_5s = 0xA,
-    range_d_4s_13s = 0xD,
-    range_d_17s_64s = 0xE,
-    _,
-};
-
-pub const Capabilities = packed struct(u16) {
-    version: u4 = 0,
-    device_port_type: DevicePortType = .endpoint,
-    slot_implemented: bool = false,
-    interrupt_message_number: u5 = 0,
-    _reserved_14: u2 = 0,
-};
-
-pub const DeviceCapabilities = packed struct(u32) {
-    max_payload_size_supported: MaxPayloadSize = .bytes_128,
-    phantom_functions_supported: u2 = 0,
-    extended_tag_field_supported: bool = false,
-    endpoint_l0s_acceptable_latency: u3 = 0,
-    endpoint_l1_acceptable_latency: u3 = 0,
-    _reserved_12: u3 = 0,
-    role_based_error_reporting: bool = false,
-    _reserved_16: u2 = 0,
-    captured_slot_power_limit_value: u8 = 0,
-    captured_slot_power_limit_scale: u2 = 0,
-    function_level_reset_capability: bool = false,
-    _reserved_29: u3 = 0,
-};
-
-pub const DeviceControl = packed struct(u16) {
-    correctable_error_reporting_enable: bool = false,
-    non_fatal_error_reporting_enable: bool = false,
-    fatal_error_reporting_enable: bool = false,
-    unsupported_request_reporting_enable: bool = false,
-    enable_relaxed_ordering: bool = false,
-    max_payload_size: MaxPayloadSize = .bytes_128,
-    extended_tag_field_enable: bool = false,
-    phantom_functions_enable: bool = false,
-    aux_power_pm_enable: bool = false,
-    enable_no_snoop: bool = false,
-    max_read_request_size: MaxReadRequestSize = .bytes_128,
-    bcre_initiate_flr: bool = false,
-};
-
-pub const DeviceStatus = packed struct(u16) {
-    correctable_error_detected: bool = false,
-    non_fatal_error_detected: bool = false,
-    fatal_error_detected: bool = false,
-    unsupported_request_detected: bool = false,
-    aux_power_detected: bool = false,
-    transactions_pending: bool = false,
-    emergency_power_reduction_detected: bool = false,
-    _reserved_7: u9 = 0,
-};
-
-pub const LinkCapabilities = packed struct(u32) {
-    max_link_speed: MaxLinkSpeed = @enumFromInt(0),
-    max_link_width: MaxLinkWidth = @enumFromInt(0),
-    aspm_support: AspmSupport = .disabled,
-    l0s_exit_latency: u3 = 0,
-    l1_exit_latency: u3 = 0,
-    clock_power_management: bool = false,
-    surprise_down_error_reporting_capable: bool = false,
-    data_link_layer_link_active_reporting_capable: bool = false,
-    link_bandwidth_notification_capability: bool = false,
-    aspm_optionality_compliance: bool = false,
-    _reserved_23: u1 = 0,
-    port_number: u8 = 0,
-};
-
-pub const LinkControl = packed struct(u16) {
-    aspm_control: AspmControl = .disabled,
-    _reserved_2: u1 = 0,
-    read_completion_boundary: bool = false,
-    link_disable: bool = false,
-    retrain_link: bool = false,
-    common_clock_configuration: bool = false,
-    extended_synch: bool = false,
-    enable_clock_power_management: bool = false,
-    hardware_autonomous_width_disable: bool = false,
-    link_bandwidth_management_interrupt_enable: bool = false,
-    link_autonomous_bandwidth_interrupt_enable: bool = false,
-    _reserved_12: u2 = 0,
-    drs_signaling_control: bool = false,
-    _reserved_15: u1 = 0,
-};
-
-pub const LinkStatus = packed struct(u16) {
-    current_link_speed: MaxLinkSpeed = @enumFromInt(0),
-    negotiated_link_width: MaxLinkWidth = @enumFromInt(0),
-    _undefined_10: u1 = 0,
-    link_training: bool = false,
-    slot_clock_configuration: bool = false,
-    data_link_layer_link_active: bool = false,
-    link_bandwidth_management_status: bool = false,
-    link_autonomous_bandwidth_status: bool = false,
-};
-
-pub const SlotCapabilities = packed struct(u32) {
-    attention_button_present: bool = false,
-    power_controller_present: bool = false,
-    mrl_sensor_present: bool = false,
-    attention_indicator_present: bool = false,
-    power_indicator_present: bool = false,
-    hot_plug_surprise: bool = false,
-    hot_plug_capable: bool = false,
-    slot_power_limit_value: u8 = 0,
-    slot_power_limit_scale: u2 = 0,
-    electromechanical_interlock_present: bool = false,
-    no_command_completed_support: bool = false,
-    physical_slot_number: u13 = 0,
-};
-
-pub const SlotControl = packed struct(u16) {
-    attention_button_pressed_enable: bool = false,
-    power_fault_detected_enable: bool = false,
-    mrl_sensor_changed_enable: bool = false,
-    presence_detect_changed_enable: bool = false,
-    command_completed_interrupt_enable: bool = false,
-    hot_plug_interrupt_enable: bool = false,
-    attention_indicator_control: u2 = 0,
-    power_indicator_control: u2 = 0,
-    power_controller_control: bool = false,
-    electromechanical_interlock_control: bool = false,
-    data_link_layer_state_changed_enable: bool = false,
-    auto_slot_power_limit_disable: bool = false,
-    in_band_pd_disable: bool = false,
-    _reserved_15: u1 = 0,
-};
-
-pub const SlotStatus = packed struct(u16) {
-    attention_button_pressed: bool = false,
-    power_fault_detected: bool = false,
-    mrl_sensor_changed: bool = false,
-    presence_detect_changed: bool = false,
-    command_completed: bool = false,
-    mrl_sensor_state: bool = false,
-    presence_detect_state: bool = false,
-    electromechanical_interlock_status: bool = false,
-    data_link_layer_state_changed: bool = false,
-    _reserved_9: u7 = 0,
-};
-
-pub const RootControl = packed struct(u16) {
-    system_error_on_correctable_error_enable: bool = false,
-    system_error_on_non_fatal_error_enable: bool = false,
-    system_error_on_fatal_error_enable: bool = false,
-    pme_interrupt_enable: bool = false,
-    crs_software_visibility_enable: bool = false,
-    _reserved_5: u11 = 0,
-};
-
-pub const RootCapabilities = packed struct(u16) {
-    crs_software_visibility: bool = false,
-    _reserved_1: u15 = 0,
-};
-
-pub const RootStatus = packed struct(u32) {
-    pme_requester_id: u16 = 0,
-    pme_status: bool = false,
-    pme_pending: bool = false,
-    _reserved_18: u14 = 0,
-};
-
-pub const DeviceCapabilities2 = packed struct(u32) {
-    completion_timeout_ranges_supported: u4 = 0,
-    completion_timeout_disable_supported: bool = false,
-    ari_forwarding_supported: bool = false,
-    atomic_op_routing_supported: bool = false,
-    atomic_op_completer_32_supported: bool = false,
-    atomic_op_completer_64_supported: bool = false,
-    cas_completer_128_supported: bool = false,
-    no_ro_enabled_pr_pr_passing: bool = false,
-    ltr_mechanism_supported: bool = false,
-    tph_completer_supported: u2 = 0,
-    ln_system_cls: u2 = 0,
-    tag_completer_10bit_supported: bool = false,
-    tag_requester_10bit_supported: bool = false,
-    obff_supported: u2 = 0,
-    extended_fmt_field_supported: bool = false,
-    end_end_tlp_prefix_supported: bool = false,
-    max_end_end_tlp_prefixes: u2 = 0,
-    emergency_power_reduction_supported: u2 = 0,
-    emergency_power_reduction_init_required: bool = false,
-    _reserved_27: u3 = 0,
-    frs_supported: bool = false,
-    _reserved_31: u1 = 0,
-};
-
-pub const DeviceControl2 = packed struct(u16) {
-    completion_timeout_value: CompletionTimeoutValue = .default,
-    completion_timeout_disable: bool = false,
-    ari_forwarding_enable: bool = false,
-    atomic_op_requester_enable: bool = false,
-    atomic_op_egress_blocking: bool = false,
-    ido_request_enable: bool = false,
-    ido_completion_enable: bool = false,
-    ltr_mechanism_enable: bool = false,
-    emergency_power_reduction_request: bool = false,
-    tag_requester_10bit_enable: bool = false,
-    obff_enable: u2 = 0,
-    end_end_tlp_prefix_blocking: bool = false,
-};
-
-pub const DeviceStatus2 = packed struct(u16) {
-    _reserved_0: u16 = 0,
-};
-
-pub const LinkCapabilities2 = packed struct(u32) {
-    _reserved_0: u1 = 0,
-    supported_link_speeds_vector: u7 = 0,
-    crosslink_supported: bool = false,
-    lower_skp_os_generation_supported: u7 = 0,
-    lower_skp_os_reception_supported: u7 = 0,
-    retimer_presence_detect_supported: bool = false,
-    two_retimers_presence_detect_supported: bool = false,
-    _reserved_25: u6 = 0,
-    drs_supported: bool = false,
-};
-
-pub const LinkControl2 = packed struct(u16) {
-    target_link_speed: MaxLinkSpeed = @enumFromInt(0),
-    enter_compliance: bool = false,
-    hardware_autonomous_speed_disable: bool = false,
-    selectable_deemphasis: bool = false,
-    transmit_margin: u3 = 0,
-    enter_modified_compliance: bool = false,
-    compliance_sos: bool = false,
-    compliance_preset_or_deemphasis: u4 = 0,
-};
-
-pub const LinkStatus2 = packed struct(u16) {
-    current_deemphasis_level: bool = false,
-    equalization_8gt_complete: bool = false,
-    equalization_8gt_phase1_successful: bool = false,
-    equalization_8gt_phase2_successful: bool = false,
-    equalization_8gt_phase3_successful: bool = false,
-    link_equalization_request_8gt: bool = false,
-    retimer_presence_detected: bool = false,
-    two_retimers_presence_detected: bool = false,
-    crosslink_resolution: u2 = 0,
-    _reserved_10: u2 = 0,
-    downstream_component_presence: u3 = 0,
-    drs_message_received: bool = false,
-};
-
-pub const SlotCapabilities2 = packed struct(u32) {
-    _reserved_0: u1 = 0,
-    in_band_pd_disable_supported: bool = false,
-    _reserved_2: u30 = 0,
-};
-
-pub const SlotControl2 = packed struct(u16) {
-    _reserved_0: u16 = 0,
-};
-
-pub const SlotStatus2 = packed struct(u16) {
-    _reserved_0: u16 = 0,
-};
-
-comptime {
-    std.debug.assert(@bitSizeOf(Capabilities) == 16);
-    std.debug.assert(@bitSizeOf(DeviceCapabilities) == 32);
-    std.debug.assert(@bitSizeOf(DeviceControl) == 16);
-    std.debug.assert(@bitSizeOf(DeviceStatus) == 16);
-    std.debug.assert(@bitSizeOf(LinkCapabilities) == 32);
-    std.debug.assert(@bitSizeOf(LinkControl) == 16);
-    std.debug.assert(@bitSizeOf(LinkStatus) == 16);
-    std.debug.assert(@bitSizeOf(SlotCapabilities) == 32);
-    std.debug.assert(@bitSizeOf(SlotControl) == 16);
-    std.debug.assert(@bitSizeOf(SlotStatus) == 16);
-    std.debug.assert(@bitSizeOf(RootControl) == 16);
-    std.debug.assert(@bitSizeOf(RootCapabilities) == 16);
-    std.debug.assert(@bitSizeOf(RootStatus) == 32);
-    std.debug.assert(@bitSizeOf(DeviceCapabilities2) == 32);
-    std.debug.assert(@bitSizeOf(DeviceControl2) == 16);
-    std.debug.assert(@bitSizeOf(DeviceStatus2) == 16);
-    std.debug.assert(@bitSizeOf(LinkCapabilities2) == 32);
-    std.debug.assert(@bitSizeOf(LinkControl2) == 16);
-    std.debug.assert(@bitSizeOf(LinkStatus2) == 16);
-    std.debug.assert(@bitSizeOf(SlotCapabilities2) == 32);
-    std.debug.assert(@bitSizeOf(SlotControl2) == 16);
-    std.debug.assert(@bitSizeOf(SlotStatus2) == 16);
-}
-
-pub const View = struct {
+pub const Capability = struct {
     function: Function,
     base: u8,
+    /// Version accepted at construction; capabilities() reads the live register.
     version: u4,
 
-    /// Validates a standard PCIe capability node and caches its major revision.
-    /// Effects: one 16-bit config read at the capability's `Capabilities` register.
-    /// Errors: `MalformedCapability` for bad node placement; `UnsupportedRevision` for version zero.
-    pub fn validate(function: Function, cap: list.Capability) Error!View {
-        std.debug.assert(cap.idTag() == .pci_express);
-        try validateCapabilityOffset(cap.offset);
+    pub fn tryFrom(function: Function, cap: Entry) Error!Capability {
+        std.debug.assert(cap.id == canonical.id);
 
-        const raw = try function.read16(@as(usize, cap.offset) + register.capabilities);
-        const caps: Capabilities = @bitCast(raw);
-        if (caps.version == 0) return error.UnsupportedRevision;
+        const registers = try Registers.tryFrom(function, cap.offset);
+        const caps = canonical.Capabilities.from(try registers.read(offsets.capabilities));
+
+        if (caps.version == 0) {
+            return error.UnsupportedRevision;
+        }
 
         return .{
             .function = function,
@@ -475,197 +68,625 @@ pub const View = struct {
         };
     }
 
-    /// Finds the first PCIe capability in the standard list and validates it.
-    /// Returns: `null` when the standard list terminates without a PCIe capability.
-    /// Errors: propagates malformed standard-list traversal and `validate` failures.
-    pub fn find(function: Function) Error!?View {
-        const cap = (try list.find(function, .pci_express)) orelse return null;
-        return try View.validate(function, cap);
+    pub fn find(function: Function) Error!?Capability {
+        const cap = (try standard.find(function, canonical.id)) orelse return null;
+        return try Capability.tryFrom(function, cap);
     }
 
-    pub fn capabilities(self: View) ConfigSpace.Error!Capabilities {
-        return self.readPacked(Capabilities, register.capabilities);
+    pub fn capabilities(self: Capability) CapabilityError!Capabilities {
+        return self.readPacked(Capabilities, offsets.capabilities);
     }
 
-    pub fn deviceCapabilities(self: View) ConfigSpace.Error!DeviceCapabilities {
-        return self.readPacked(DeviceCapabilities, register.device.capabilities);
+    pub fn deviceCapabilities(self: Capability) CapabilityError!DeviceCapabilities {
+        return self.readPacked(DeviceCapabilities, offsets.device.capabilities);
     }
 
-    pub fn deviceControl(self: View) ConfigSpace.Error!DeviceControl {
-        return self.readPacked(DeviceControl, register.device.control);
+    pub fn deviceControl(self: Capability) CapabilityError!DeviceControl {
+        return self.readPacked(DeviceControl, offsets.device.control);
     }
 
-    pub fn setDeviceControl(self: View, value: DeviceControl) ConfigSpace.Error!void {
-        return self.writePacked(DeviceControl, register.device.control, value);
+    pub fn setDeviceControl(self: Capability, value: DeviceControl) CapabilityError!void {
+        return self.writePacked(DeviceControl, offsets.device.control, value);
     }
 
-    pub fn deviceStatus(self: View) ConfigSpace.Error!DeviceStatus {
-        return self.readPacked(DeviceStatus, register.device.status);
+    pub fn deviceStatus(self: Capability) CapabilityError!DeviceStatus {
+        return self.readPacked(DeviceStatus, offsets.device.status);
     }
 
-    pub fn clearDeviceStatusBits(self: View, bits: DeviceStatus) ConfigSpace.Error!void {
-        return self.writePacked(DeviceStatus, register.device.status, bits);
+    pub fn clearDeviceStatusBits(self: Capability, bits: u16) CapabilityError!void {
+        const registers = try Registers.tryFrom(self.function, self.base);
+        return registers.write(offsets.device.status, bits);
     }
 
-    pub fn linkCapabilities(self: View) ConfigSpace.Error!LinkCapabilities {
-        return self.readPacked(LinkCapabilities, register.link.capabilities);
+    pub fn linkCapabilities(self: Capability) CapabilityError!LinkCapabilities {
+        return self.readPacked(LinkCapabilities, offsets.link.capabilities);
     }
 
-    pub fn linkControl(self: View) ConfigSpace.Error!LinkControl {
-        return self.readPacked(LinkControl, register.link.control);
+    pub fn linkControl(self: Capability) CapabilityError!LinkControl {
+        return self.readPacked(LinkControl, offsets.link.control);
     }
 
-    pub fn setLinkControl(self: View, value: LinkControl) ConfigSpace.Error!void {
-        return self.writePacked(LinkControl, register.link.control, value);
+    pub fn setLinkControl(self: Capability, value: LinkControl) CapabilityError!void {
+        return self.writePacked(LinkControl, offsets.link.control, value);
     }
 
-    pub fn linkStatus(self: View) ConfigSpace.Error!LinkStatus {
-        return self.readPacked(LinkStatus, register.link.status);
+    pub fn linkStatus(self: Capability) CapabilityError!LinkStatus {
+        return self.readPacked(LinkStatus, offsets.link.status);
     }
 
-    pub fn clearLinkStatusBits(self: View, bits: LinkStatus) ConfigSpace.Error!void {
-        return self.writePacked(LinkStatus, register.link.status, bits);
+    pub fn clearLinkStatusBits(self: Capability, bits: u16) CapabilityError!void {
+        const registers = try Registers.tryFrom(self.function, self.base);
+        return registers.write(offsets.link.status, bits);
     }
 
-    pub fn slotCapabilities(self: View) ConfigSpace.Error!SlotCapabilities {
-        return self.readPacked(SlotCapabilities, register.slot.capabilities);
+    pub fn slotCapabilities(self: Capability) CapabilityError!SlotCapabilities {
+        return self.readPacked(SlotCapabilities, offsets.slot.capabilities);
     }
 
-    pub fn slotControl(self: View) ConfigSpace.Error!SlotControl {
-        return self.readPacked(SlotControl, register.slot.control);
+    pub fn slotControl(self: Capability) CapabilityError!SlotControl {
+        return self.readPacked(SlotControl, offsets.slot.control);
     }
 
-    pub fn setSlotControl(self: View, value: SlotControl) ConfigSpace.Error!void {
-        return self.writePacked(SlotControl, register.slot.control, value);
+    pub fn setSlotControl(self: Capability, value: SlotControl) CapabilityError!void {
+        return self.writePacked(SlotControl, offsets.slot.control, value);
     }
 
-    pub fn slotStatus(self: View) ConfigSpace.Error!SlotStatus {
-        return self.readPacked(SlotStatus, register.slot.status);
+    pub fn slotStatus(self: Capability) CapabilityError!SlotStatus {
+        return self.readPacked(SlotStatus, offsets.slot.status);
     }
 
-    pub fn clearSlotStatusBits(self: View, bits: SlotStatus) ConfigSpace.Error!void {
-        return self.writePacked(SlotStatus, register.slot.status, bits);
+    pub fn clearSlotStatusBits(self: Capability, bits: u16) CapabilityError!void {
+        const registers = try Registers.tryFrom(self.function, self.base);
+        return registers.write(offsets.slot.status, bits);
     }
 
-    pub fn rootControl(self: View) ConfigSpace.Error!RootControl {
-        return self.readPacked(RootControl, register.root.control);
+    pub fn rootControl(self: Capability) CapabilityError!RootControl {
+        return self.readPacked(RootControl, offsets.root.control);
     }
 
-    pub fn setRootControl(self: View, value: RootControl) ConfigSpace.Error!void {
-        return self.writePacked(RootControl, register.root.control, value);
+    pub fn setRootControl(self: Capability, value: RootControl) CapabilityError!void {
+        return self.writePacked(RootControl, offsets.root.control, value);
     }
 
-    pub fn rootCapabilities(self: View) ConfigSpace.Error!RootCapabilities {
-        return self.readPacked(RootCapabilities, register.root.capabilities);
+    pub fn rootCapabilities(self: Capability) CapabilityError!RootCapabilities {
+        return self.readPacked(RootCapabilities, offsets.root.capabilities);
     }
 
-    pub fn rootStatus(self: View) ConfigSpace.Error!RootStatus {
-        return self.readPacked(RootStatus, register.root.status);
+    pub fn rootStatus(self: Capability) CapabilityError!RootStatus {
+        return self.readPacked(RootStatus, offsets.root.status);
     }
 
-    pub fn clearRootStatusBits(self: View, bits: RootStatus) ConfigSpace.Error!void {
-        return self.writePacked(RootStatus, register.root.status, bits);
+    pub fn clearRootStatusBits(self: Capability, bits: u32) CapabilityError!void {
+        const registers = try Registers.tryFrom(self.function, self.base);
+        return registers.write(offsets.root.status, bits);
     }
 
-    pub fn deviceCapabilities2(self: View) Error!DeviceCapabilities2 {
+    pub fn deviceCapabilities2(self: Capability) Error!DeviceCapabilities2 {
         try self.requireV2();
-        return self.readPacked(DeviceCapabilities2, register.device.capabilities_2);
+        return self.readPacked(DeviceCapabilities2, offsets.device.capabilities_2);
     }
 
-    pub fn deviceControl2(self: View) Error!DeviceControl2 {
+    pub fn deviceControl2(self: Capability) Error!DeviceControl2 {
         try self.requireV2();
-        return self.readPacked(DeviceControl2, register.device.control_2);
+        return self.readPacked(DeviceControl2, offsets.device.control_2);
     }
 
-    pub fn setDeviceControl2(self: View, value: DeviceControl2) Error!void {
+    pub fn setDeviceControl2(self: Capability, value: DeviceControl2) Error!void {
         try self.requireV2();
-        return self.writePacked(DeviceControl2, register.device.control_2, value);
+        return self.writePacked(DeviceControl2, offsets.device.control_2, value);
     }
 
-    pub fn deviceStatus2(self: View) Error!DeviceStatus2 {
+    pub fn deviceStatus2(self: Capability) Error!DeviceStatus2 {
         try self.requireV2();
-        return self.readPacked(DeviceStatus2, register.device.status_2);
+        return self.readPacked(DeviceStatus2, offsets.device.status_2);
     }
 
-    pub fn linkCapabilities2(self: View) Error!LinkCapabilities2 {
+    pub fn linkCapabilities2(self: Capability) Error!LinkCapabilities2 {
         try self.requireV2();
-        return self.readPacked(LinkCapabilities2, register.link.capabilities_2);
+        return self.readPacked(LinkCapabilities2, offsets.link.capabilities_2);
     }
 
-    pub fn linkControl2(self: View) Error!LinkControl2 {
+    pub fn linkControl2(self: Capability) Error!LinkControl2 {
         try self.requireV2();
-        return self.readPacked(LinkControl2, register.link.control_2);
+        return self.readPacked(LinkControl2, offsets.link.control_2);
     }
 
-    pub fn setLinkControl2(self: View, value: LinkControl2) Error!void {
+    pub fn setLinkControl2(self: Capability, value: LinkControl2) Error!void {
         try self.requireV2();
-        return self.writePacked(LinkControl2, register.link.control_2, value);
+        return self.writePacked(LinkControl2, offsets.link.control_2, value);
     }
 
-    pub fn linkStatus2(self: View) Error!LinkStatus2 {
+    pub fn linkStatus2(self: Capability) Error!LinkStatus2 {
         try self.requireV2();
-        return self.readPacked(LinkStatus2, register.link.status_2);
+        return self.readPacked(LinkStatus2, offsets.link.status_2);
     }
 
-    pub fn clearLinkStatus2Bits(self: View, bits: LinkStatus2) Error!void {
+    pub fn clearLinkStatus2Bits(self: Capability, bits: u16) Error!void {
         try self.requireV2();
-        return self.writePacked(LinkStatus2, register.link.status_2, bits);
+        const registers = try Registers.tryFrom(self.function, self.base);
+        return registers.write(offsets.link.status_2, bits);
     }
 
-    pub fn slotCapabilities2(self: View) Error!SlotCapabilities2 {
+    pub fn slotCapabilities2(self: Capability) Error!SlotCapabilities2 {
         try self.requireV2();
-        return self.readPacked(SlotCapabilities2, register.slot.capabilities_2);
+        return self.readPacked(SlotCapabilities2, offsets.slot.capabilities_2);
     }
 
-    pub fn slotControl2(self: View) Error!SlotControl2 {
+    pub fn slotControl2(self: Capability) Error!SlotControl2 {
         try self.requireV2();
-        return self.readPacked(SlotControl2, register.slot.control_2);
+        return self.readPacked(SlotControl2, offsets.slot.control_2);
     }
 
-    pub fn setSlotControl2(self: View, value: SlotControl2) Error!void {
+    pub fn setSlotControl2(self: Capability, value: SlotControl2) Error!void {
         try self.requireV2();
-        return self.writePacked(SlotControl2, register.slot.control_2, value);
+        return self.writePacked(SlotControl2, offsets.slot.control_2, value);
     }
 
-    pub fn slotStatus2(self: View) Error!SlotStatus2 {
+    pub fn slotStatus2(self: Capability) Error!SlotStatus2 {
         try self.requireV2();
-        return self.readPacked(SlotStatus2, register.slot.status_2);
+        return self.readPacked(SlotStatus2, offsets.slot.status_2);
     }
 
-    fn requireV2(self: View) error{UnsupportedRevision}!void {
-        if (self.version < 2) return error.UnsupportedRevision;
+    fn requireV2(self: Capability) error{UnsupportedRevision}!void {
+        if (self.version < 2) {
+            return error.UnsupportedRevision;
+        }
     }
 
-    fn readPacked(self: View, comptime T: type, offset: u8) ConfigSpace.Error!T {
+    fn readPacked(self: Capability, comptime T: type, offset: anytype) CapabilityError!T {
         comptime std.debug.assert(@bitSizeOf(T) == 16 or @bitSizeOf(T) == 32);
 
-        if (@bitSizeOf(T) == 16) {
-            const raw = try self.function.read16(self.byteOffset(offset));
-            return @bitCast(raw);
-        }
-
-        const raw = try self.function.read32(self.byteOffset(offset));
+        const registers = try Registers.tryFrom(self.function, self.base);
+        const raw = try registers.read(offset);
         return @bitCast(raw);
     }
 
-    fn writePacked(self: View, comptime T: type, offset: u8, value: T) ConfigSpace.Error!void {
+    fn writePacked(self: Capability, comptime T: type, offset: anytype, value: T) CapabilityError!void {
         comptime std.debug.assert(@bitSizeOf(T) == 16 or @bitSizeOf(T) == 32);
 
-        if (@bitSizeOf(T) == 16) {
-            const raw: u16 = @bitCast(value);
-            return self.function.write16(self.byteOffset(offset), raw);
-        }
-
-        const raw: u32 = @bitCast(value);
-        return self.function.write32(self.byteOffset(offset), raw);
-    }
-
-    fn byteOffset(self: View, offset: u8) usize {
-        return @as(usize, self.base) + @as(usize, offset);
+        const Raw = @TypeOf(offset).Int;
+        const raw: Raw = @bitCast(value);
+        const registers = try Registers.tryFrom(self.function, self.base);
+        return registers.write(offset, raw);
     }
 };
 
-fn validateCapabilityOffset(offset: u8) Error!void {
-    if (!list.standard.window.range.contains(offset)) return error.MalformedCapability;
-    if (offset % list.standard.window.step != 0) return error.MalformedCapability;
-}
+pub const offsets = struct {
+    pub const capabilities = RelativeOffset(u16).from(canonical.offsets.capabilities);
+
+    pub const device = struct {
+        pub const capabilities = RelativeOffset(u32).from(canonical.device.offsets.capabilities);
+        pub const control = RelativeOffset(u16).from(canonical.device.offsets.control);
+        pub const status = RelativeOffset(u16).from(canonical.device.offsets.status);
+        pub const capabilities_2 = RelativeOffset(u32).from(canonical.device.offsets.capabilities_2);
+        pub const control_2 = RelativeOffset(u16).from(canonical.device.offsets.control_2);
+        pub const status_2 = RelativeOffset(u16).from(canonical.device.offsets.status_2);
+    };
+
+    pub const link = struct {
+        pub const capabilities = RelativeOffset(u32).from(canonical.link.offsets.capabilities);
+        pub const control = RelativeOffset(u16).from(canonical.link.offsets.control);
+        pub const status = RelativeOffset(u16).from(canonical.link.offsets.status);
+        pub const capabilities_2 = RelativeOffset(u32).from(canonical.link.offsets.capabilities_2);
+        pub const control_2 = RelativeOffset(u16).from(canonical.link.offsets.control_2);
+        pub const status_2 = RelativeOffset(u16).from(canonical.link.offsets.status_2);
+    };
+
+    pub const slot = struct {
+        pub const capabilities = RelativeOffset(u32).from(canonical.slot.offsets.capabilities);
+        pub const control = RelativeOffset(u16).from(canonical.slot.offsets.control);
+        pub const status = RelativeOffset(u16).from(canonical.slot.offsets.status);
+        pub const capabilities_2 = RelativeOffset(u32).from(canonical.slot.offsets.capabilities_2);
+        pub const control_2 = RelativeOffset(u16).from(canonical.slot.offsets.control_2);
+        pub const status_2 = RelativeOffset(u16).from(canonical.slot.offsets.status_2);
+    };
+
+    pub const root = struct {
+        pub const control = RelativeOffset(u16).from(canonical.root.offsets.control);
+        pub const capabilities = RelativeOffset(u16).from(canonical.root.offsets.capabilities);
+        pub const status = RelativeOffset(u32).from(canonical.root.offsets.status);
+    };
+};
+
+pub const unit = struct {
+    const support = @import("testing");
+    const pcie = core.capabilities.pcie;
+    const device = pcie.device;
+    const link = pcie.link;
+    const slot = pcie.slot;
+    const root = pcie.root;
+    const window = core.capabilities.standard.window;
+    const testing = std.testing;
+
+    const head_offset = core.header.type0.offsets.cap_ptr;
+    const pcie_window_size: usize = core.config.extended_size;
+    const test_sbdf = Sbdf.from(.from(0), 0, 0, 0);
+
+    const ConfigSpace = pci_config.ConfigSpace;
+    const ConfigError = ConfigSpace.Error;
+    const Offset = core.Offset;
+    const Sbdf = core.Sbdf;
+    const Id = core.capabilities.standard.Id;
+    const Pcie = Capability;
+    const DevicePortType = pcie.DevicePortType;
+
+    const TestConfigSpace = support.config.TestConfigSpace;
+
+    const GateAfterTryFromConfig = struct {
+        version: u4,
+        access_count: usize = 0,
+
+        fn config(self: *GateAfterTryFromConfig) ConfigSpace {
+            return ConfigSpace.from(@ptrCast(self), &vtable);
+        }
+
+        const vtable: ConfigSpace.VTable = .{
+            .read8 = read8Unsupported,
+            .read16 = read16,
+            .read32 = read32Unsupported,
+            .write8 = write8Unsupported,
+            .write16 = write16Unsupported,
+            .write32 = write32Unsupported,
+        };
+
+        fn read8Unsupported(_: *anyopaque, _: Sbdf, _: usize) ConfigError!u8 {
+            return error.UnsupportedAccessWidth;
+        }
+
+        fn read16(context: *anyopaque, _: Sbdf, byte_offset: usize) ConfigError!u16 {
+            const self: *GateAfterTryFromConfig = @ptrCast(@alignCast(context));
+            self.access_count += 1;
+
+            if (byte_offset == 0x80 + pcie.offsets.capabilities) {
+                return makeCapabilities(self.version);
+            }
+
+            return error.UnsupportedAccessWidth;
+        }
+
+        fn read32Unsupported(_: *anyopaque, _: Sbdf, _: usize) ConfigError!u32 {
+            return error.UnsupportedAccessWidth;
+        }
+
+        fn write8Unsupported(_: *anyopaque, _: Sbdf, _: usize, _: u8) ConfigError!void {
+            return error.UnsupportedAccessWidth;
+        }
+
+        fn write16Unsupported(_: *anyopaque, _: Sbdf, _: usize, _: u16) ConfigError!void {
+            return error.UnsupportedAccessWidth;
+        }
+
+        fn write32Unsupported(_: *anyopaque, _: Sbdf, _: usize, _: u32) ConfigError!void {
+            return error.UnsupportedAccessWidth;
+        }
+    };
+
+    const status = struct {
+        const cap_list: u16 = 1 << 4;
+    };
+    const offset = struct {
+        const status: usize = 0x06;
+    };
+
+    test "tryFrom accepts PCIe capabilities and rejects malformed offsets and revision zero" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        seedPcieCapability(&bytes, 0x80, 1, 0);
+        var backend = TestConfigSpace.fromSingle(test_sbdf, &bytes);
+        const function = makeFunction(&backend);
+
+        const view = try Pcie.tryFrom(function, capabilityAt(0x80));
+
+        try testing.expectEqual(@as(u8, 0x80), view.base);
+        try testing.expectEqual(@as(u4, 1), view.version);
+        try testing.expectEqual(@as(u16, makeCapabilities(1)), @as(u16, @bitCast(try view.capabilities())));
+
+        try testing.expectError(
+            error.MalformedCapability,
+            Pcie.tryFrom(function, capabilityAt(window.range.start - 4)),
+        );
+        try testing.expectError(
+            error.MalformedCapability,
+            Pcie.tryFrom(function, capabilityAt(window.range.start + 1)),
+        );
+
+        store16(&bytes, 0x80 + pcie.offsets.capabilities, makeCapabilities(0));
+        try testing.expectError(error.UnsupportedRevision, Pcie.tryFrom(function, capabilityAt(0x80)));
+    }
+
+    test "find returns PCIe capability, null for absence, and propagates malformed traversal" {
+        var found_bytes: [pcie_window_size]u8 = @splat(0);
+        seedHead(&found_bytes, 0x40);
+        seedCapabilityNode(&found_bytes, 0x40, @intFromEnum(Id.msi), 0x80);
+        seedPcieCapability(&found_bytes, 0x80, 2, 0);
+        var found_backend = TestConfigSpace.fromSingle(test_sbdf, &found_bytes);
+        const found_function = makeFunction(&found_backend);
+
+        const view = (try Pcie.find(found_function)).?;
+
+        try testing.expectEqual(@as(u8, 0x80), view.base);
+        try testing.expectEqual(@as(u4, 2), view.version);
+
+        var absent_bytes: [pcie_window_size]u8 = @splat(0);
+        seedHead(&absent_bytes, 0x40);
+        seedCapabilityNode(&absent_bytes, 0x40, @intFromEnum(Id.msi), 0);
+        var absent_backend = TestConfigSpace.fromSingle(test_sbdf, &absent_bytes);
+
+        try testing.expectEqual(@as(?Pcie, null), try Pcie.find(makeFunction(&absent_backend)));
+
+        var cycle_bytes: [pcie_window_size]u8 = @splat(0);
+        seedHead(&cycle_bytes, 0x40);
+        seedCapabilityNode(&cycle_bytes, 0x40, @intFromEnum(Id.msi), 0x44);
+        seedCapabilityNode(&cycle_bytes, 0x44, @intFromEnum(Id.msix), 0x40);
+        var cycle_backend = TestConfigSpace.fromSingle(test_sbdf, &cycle_bytes);
+
+        try testing.expectError(error.MalformedCapability, Pcie.find(makeFunction(&cycle_backend)));
+
+        var malformed_bytes: [pcie_window_size]u8 = @splat(0);
+        seedHead(&malformed_bytes, 0x40);
+        seedCapabilityNode(&malformed_bytes, 0x40, @intFromEnum(Id.msi), 0x42);
+        var malformed_backend = TestConfigSpace.fromSingle(test_sbdf, &malformed_bytes);
+
+        try testing.expectError(error.MalformedCapability, Pcie.find(makeFunction(&malformed_backend)));
+    }
+
+    test "v1 accessors read exact base-relative whole registers" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        seedPcieCapability(&bytes, 0x80, 1, 0);
+        store32(&bytes, 0x80 + pcie.device.offsets.capabilities, 0xA39C_5A15);
+        store16(&bytes, 0x80 + pcie.device.offsets.control, 0xFFFF);
+        store16(&bytes, 0x80 + pcie.device.offsets.status, 0xFFFF);
+        store32(&bytes, 0x80 + pcie.link.offsets.capabilities, 0x5A7E_3C21);
+        store16(&bytes, 0x80 + pcie.link.offsets.control, 0xFFFF);
+        store16(&bytes, 0x80 + pcie.link.offsets.status, 0xFFFF);
+        store32(&bytes, 0x80 + pcie.slot.offsets.capabilities, 0x7BDF_93C1);
+        store16(&bytes, 0x80 + pcie.slot.offsets.control, 0xFFFF);
+        store16(&bytes, 0x80 + pcie.slot.offsets.status, 0xFFFF);
+        store16(&bytes, 0x80 + pcie.root.offsets.control, 0xFFFF);
+        store16(&bytes, 0x80 + pcie.root.offsets.capabilities, 0x0001);
+        store32(&bytes, 0x80 + pcie.root.offsets.status, 0xBEEF_0000);
+        var backend = TestConfigSpace.fromSingle(test_sbdf, &bytes);
+        const view = try Pcie.tryFrom(makeFunction(&backend), capabilityAt(0x80));
+
+        try testing.expectEqual(@as(u32, 0xA39C_5A15), @as(u32, @bitCast(try view.deviceCapabilities())));
+        try testing.expectEqual(@as(u32, 0x5A7E_3C21), @as(u32, @bitCast(try view.linkCapabilities())));
+        try testing.expectEqual(@as(u32, 0x7BDF_93C1), @as(u32, @bitCast(try view.slotCapabilities())));
+        try testing.expectEqual(@as(u16, 0x0001), @as(u16, @bitCast(try view.rootCapabilities())));
+        try testing.expectEqual(@as(u32, 0xBEEF_0000), @as(u32, @bitCast(try view.rootStatus())));
+    }
+
+    test "v1 accessors write exact base-relative whole registers" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        seedPcieCapability(&bytes, 0x80, 1, 0);
+        var backend = TestConfigSpace.fromSingle(test_sbdf, &bytes);
+        const view = try Pcie.tryFrom(makeFunction(&backend), capabilityAt(0x80));
+
+        const device_control: DeviceControl = .{
+            .correctable_error_reporting_enable = true,
+            .max_payload_size = .bytes_512,
+            .max_read_request_size = .bytes_1024,
+        };
+        const link_control: LinkControl = .{
+            .aspm = .l1,
+            .retrain = true,
+            .link_bandwidth_management_interrupt_enable = true,
+        };
+        const slot_control: SlotControl = .{
+            .attention_button_pressed_enable = true,
+            .attention_indicator = 0b10,
+            .power_indicator = 0b01,
+            .data_link_layer_state_changed_enable = true,
+        };
+        const root_control: RootControl = .{
+            .sys_error_on_fatal_enable = true,
+            .pme_interrupt_enable = true,
+        };
+
+        try view.setDeviceControl(device_control);
+        try view.setLinkControl(link_control);
+        try view.setSlotControl(slot_control);
+        try view.setRootControl(root_control);
+
+        try testing.expectEqual(@as(u16, @bitCast(device_control)), load16(&bytes, 0x80 + pcie.device.offsets.control));
+        try testing.expectEqual(@as(u16, @bitCast(link_control)), load16(&bytes, 0x80 + pcie.link.offsets.control));
+        try testing.expectEqual(@as(u16, @bitCast(slot_control)), load16(&bytes, 0x80 + pcie.slot.offsets.control));
+        try testing.expectEqual(@as(u16, @bitCast(root_control)), load16(&bytes, 0x80 + pcie.root.offsets.control));
+
+        const device_status = device.Status.encode(.{
+            .correctable_error_detected = true,
+            .unsupported_request_detected = true,
+            .emergency_power_reduction_detected = true,
+        });
+        const link_status = link.Status.mask(.link_bandwidth_management_status);
+        const slot_status = slot.Status.mask(.{ .attention_button_pressed, .command_completed, .data_link_layer_state_changed });
+        const root_status = root.Status.masks.w1c | 0xA500_002A;
+
+        try view.clearDeviceStatusBits(device_status);
+        try view.clearLinkStatusBits(link_status);
+        try view.clearSlotStatusBits(slot_status);
+        try view.clearRootStatusBits(root_status);
+
+        try testing.expectEqual(@as(u16, 0x49), load16(&bytes, 0x80 + pcie.device.offsets.status));
+        try testing.expectEqual(@as(u16, 0x4000), load16(&bytes, 0x80 + pcie.link.offsets.status));
+        try testing.expectEqual(@as(u16, 0x111), load16(&bytes, 0x80 + pcie.slot.offsets.status));
+        try testing.expectEqual(@as(u32, 0xA501_002A), load32(&bytes, 0x80 + pcie.root.offsets.status));
+    }
+
+    test "v2 accessors gate UnsupportedRevision before config access" {
+        var backend = GateAfterTryFromConfig{ .version = 1 };
+        const view = try Pcie.tryFrom(Function.from(backend.config(), test_sbdf), capabilityAt(0x80));
+
+        try testing.expectError(error.UnsupportedRevision, view.deviceCapabilities2());
+        try testing.expectError(error.UnsupportedRevision, view.deviceControl2());
+        try testing.expectError(error.UnsupportedRevision, view.setDeviceControl2(.{}));
+        try testing.expectError(error.UnsupportedRevision, view.deviceStatus2());
+        try testing.expectError(error.UnsupportedRevision, view.linkCapabilities2());
+        try testing.expectError(error.UnsupportedRevision, view.linkControl2());
+        try testing.expectError(error.UnsupportedRevision, view.setLinkControl2(.{}));
+        try testing.expectError(error.UnsupportedRevision, view.linkStatus2());
+        try testing.expectError(
+            error.UnsupportedRevision,
+            view.clearLinkStatus2Bits(0x8000),
+        );
+        try testing.expectError(error.UnsupportedRevision, view.slotCapabilities2());
+        try testing.expectError(error.UnsupportedRevision, view.slotControl2());
+        try testing.expectError(error.UnsupportedRevision, view.setSlotControl2(slot.Control2.from(0xA5A5)));
+        try testing.expectError(error.UnsupportedRevision, view.slotStatus2());
+
+        try testing.expectEqual(@as(usize, 1), backend.access_count);
+    }
+
+    test "v2 accessors read and write exact whole registers on revision two or newer" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        seedPcieCapability(&bytes, 0x80, 2, 0);
+        store32(&bytes, 0x80 + pcie.device.offsets.capabilities_2, 0xC5A3_7E1F);
+        store16(&bytes, 0x80 + pcie.device.offsets.control_2, 0x0A51);
+        store16(&bytes, 0x80 + pcie.device.offsets.status_2, 0xA5A5);
+        store32(&bytes, 0x80 + pcie.link.offsets.capabilities_2, 0x81FE_00AA);
+        store16(&bytes, 0x80 + pcie.link.offsets.control_2, 0x1556);
+        store16(&bytes, 0x80 + pcie.link.offsets.status_2, 0x8421);
+        store32(&bytes, 0x80 + pcie.slot.offsets.capabilities_2, 0x0000_0002);
+        store16(&bytes, 0x80 + pcie.slot.offsets.control_2, 0xBEEF);
+        store16(&bytes, 0x80 + pcie.slot.offsets.status_2, 0xCAFE);
+        var backend = TestConfigSpace.fromSingle(test_sbdf, &bytes);
+        const view = try Pcie.tryFrom(makeFunction(&backend), capabilityAt(0x80));
+
+        try testing.expectEqual(@as(u32, 0xC5A3_7E1F), @as(u32, @bitCast(try view.deviceCapabilities2())));
+        try testing.expectEqual(@as(u16, 0x0A51), @as(u16, @bitCast(try view.deviceControl2())));
+        try testing.expectEqual(@as(u16, 0xA5A5), @as(u16, @bitCast(try view.deviceStatus2())));
+        try testing.expectEqual(@as(u32, 0x81FE_00AA), @as(u32, @bitCast(try view.linkCapabilities2())));
+        try testing.expectEqual(@as(u16, 0x1556), @as(u16, @bitCast(try view.linkControl2())));
+        try testing.expectEqual(@as(u16, 0x8421), @as(u16, @bitCast(try view.linkStatus2())));
+        try testing.expectEqual(@as(u32, 0x0000_0002), @as(u32, @bitCast(try view.slotCapabilities2())));
+        try testing.expectEqual(@as(u16, 0xBEEF), @as(u16, @bitCast(try view.slotControl2())));
+        try testing.expectEqual(@as(u16, 0xCAFE), @as(u16, @bitCast(try view.slotStatus2())));
+
+        const device_control_2: DeviceControl2 = .{
+            .completion_timeout = .range_c_1s_3_5s,
+            .completion_timeout_disable = true,
+            .ari_forwarding_enable = true,
+            .obff_enable = 0b10,
+        };
+        const link_control_2: LinkControl2 = .{
+            .target_speed = .gen5,
+            .hardware_autonomous_speed_disable = true,
+            .transmit_margin = 0b101,
+            .compliance_preset_or_deemphasis = 0xC,
+        };
+        const link_status_2 = link.Status2.mask(.{ .link_equalization_request_8gt, .drs_message_received });
+
+        const slot_control_2 = slot.Control2.from(0x5AA5);
+
+        try view.setDeviceControl2(device_control_2);
+        try view.setLinkControl2(link_control_2);
+        try view.clearLinkStatus2Bits(link_status_2);
+        try view.setSlotControl2(slot_control_2);
+
+        try testing.expectEqual(@as(u16, @bitCast(device_control_2)), load16(&bytes, 0x80 + pcie.device.offsets.control_2));
+        try testing.expectEqual(@as(u16, @bitCast(link_control_2)), load16(&bytes, 0x80 + pcie.link.offsets.control_2));
+        try testing.expectEqual(@as(u16, 0x8020), load16(&bytes, 0x80 + pcie.link.offsets.status_2));
+        try testing.expectEqual(@as(u16, @bitCast(slot_control_2)), load16(&bytes, 0x80 + pcie.slot.offsets.control_2));
+    }
+
+    test "caller-side whole-register round trips preserve reserved bits" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        seedPcieCapability(&bytes, 0x80, 2, 0);
+        store16(&bytes, 0x80 + pcie.root.offsets.control, 0xFFE0);
+        store16(&bytes, 0x80 + pcie.slot.offsets.control_2, 0x7E5A);
+        var backend = TestConfigSpace.fromSingle(test_sbdf, &bytes);
+        const view = try Pcie.tryFrom(makeFunction(&backend), capabilityAt(0x80));
+
+        var root_control = try view.rootControl();
+        root_control.pme_interrupt_enable = true;
+        try view.setRootControl(root_control);
+
+        try testing.expectEqual(@as(u16, 0xFFE8), load16(&bytes, 0x80 + pcie.root.offsets.control));
+
+        const slot_control_2 = try view.slotControl2();
+        try view.setSlotControl2(slot_control_2);
+
+        try testing.expectEqual(@as(u16, 0x7E5A), load16(&bytes, 0x80 + pcie.slot.offsets.control_2));
+    }
+
+    test "backend errors propagate after capability validation succeeds" {
+        var backend = GateAfterTryFromConfig{ .version = 2 };
+        const view = try Pcie.tryFrom(Function.from(backend.config(), test_sbdf), capabilityAt(0x80));
+
+        try testing.expectError(error.UnsupportedAccessWidth, view.deviceCapabilities());
+        try testing.expectError(error.UnsupportedAccessWidth, view.setDeviceControl(.{}));
+        try testing.expectError(error.UnsupportedAccessWidth, view.deviceCapabilities2());
+        try testing.expectError(error.UnsupportedAccessWidth, view.setLinkControl2(.{}));
+    }
+
+    test "PCIe register access cannot escape conventional config space" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        seedPcieCapability(&bytes, 0xDC, 2, 0);
+        store32(&bytes, 0xFC, 0xAABB_CCDD);
+        var backend = TestConfigSpace.fromSingle(test_sbdf, &bytes);
+        const view = try Pcie.tryFrom(makeFunction(&backend), capabilityAt(0xDC));
+
+        try testing.expectEqual(@as(u32, 0xAABB_CCDD), @as(u32, @bitCast(try view.rootStatus())));
+
+        const before = bytes;
+
+        try testing.expectError(error.MalformedCapability, view.deviceCapabilities2());
+        try testing.expectError(error.MalformedCapability, view.setDeviceControl2(.{}));
+        try testing.expectEqualSlices(u8, &before, &bytes);
+
+        var guard = GateAfterTryFromConfig{ .version = 2 };
+        const invalid: Pcie = .{ .function = Function.from(guard.config(), test_sbdf), .base = 0xFC, .version = 2 };
+
+        try testing.expectError(error.MalformedCapability, invalid.deviceCapabilities());
+        try testing.expectError(error.MalformedCapability, invalid.setDeviceControl(.{}));
+        try testing.expectEqual(@as(usize, 0), guard.access_count);
+    }
+
+    fn makeFunction(backend: *TestConfigSpace) Function {
+        return Function.from(backend.config(), test_sbdf);
+    }
+
+    fn capabilityAt(base: u8) Entry {
+        return .{ .id = pcie.id, .offset = base };
+    }
+
+    fn makeCapabilities(version: u4) u16 {
+        return @as(u16, version) |
+            (@as(u16, @intFromEnum(DevicePortType.root_port)) << 4) |
+            (@as(u16, 1) << 8) |
+            (@as(u16, 0x12) << 9);
+    }
+
+    fn enableCapabilities(bytes: *[pcie_window_size]u8) void {
+        store16(bytes, offset.status, status.cap_list);
+    }
+
+    fn seedHead(bytes: *[pcie_window_size]u8, head: u8) void {
+        enableCapabilities(bytes);
+        bytes[head_offset] = head;
+    }
+
+    fn seedCapabilityNode(bytes: *[pcie_window_size]u8, base: u8, id: u8, next: u8) void {
+        bytes[base] = id;
+        bytes[@as(usize, base) + 1] = next;
+    }
+
+    fn seedPcieCapability(bytes: *[pcie_window_size]u8, base: u8, version: u4, next: u8) void {
+        seedCapabilityNode(bytes, base, @intFromEnum(pcie.id), next);
+        store16(bytes, @as(usize, base) + pcie.offsets.capabilities, makeCapabilities(version));
+    }
+
+    fn store16(bytes: []u8, byte_offset: usize, value: u16) void {
+        std.mem.writeInt(u16, bytes[byte_offset..][0..@sizeOf(u16)], value, .little);
+    }
+
+    fn store32(bytes: []u8, byte_offset: usize, value: u32) void {
+        std.mem.writeInt(u32, bytes[byte_offset..][0..@sizeOf(u32)], value, .little);
+    }
+
+    fn load16(bytes: []const u8, byte_offset: usize) u16 {
+        return std.mem.readInt(u16, bytes[byte_offset..][0..@sizeOf(u16)], .little);
+    }
+
+    fn load32(bytes: []const u8, byte_offset: usize) u32 {
+        return std.mem.readInt(u32, bytes[byte_offset..][0..@sizeOf(u32)], .little);
+    }
+};

@@ -1,20 +1,12 @@
-//! PCI identifier newtypes. Spec: docs/specs/core/ids.md.
+//! PCI identifiers.
 
 const std = @import("std");
 
 pub const SegmentId = enum(u16) {
     _,
 
-    pub fn of(comptime n: u16) SegmentId {
-        return @enumFromInt(n);
-    }
-
     pub fn from(n: u16) SegmentId {
         return @enumFromInt(n);
-    }
-
-    pub fn eql(a: SegmentId, b: SegmentId) bool {
-        return a == b;
     }
 
     comptime {
@@ -23,57 +15,27 @@ pub const SegmentId = enum(u16) {
 };
 
 pub const VendorId = enum(u16) {
+    absent = 0xFFFF,
     _,
-
-    /// PCI absent-function marker (0xFFFF).
-    pub const absent: VendorId = @enumFromInt(0xFFFF);
-
-    pub fn of(comptime n: u16) VendorId {
-        return @enumFromInt(n);
-    }
 
     pub fn from(n: u16) VendorId {
         return @enumFromInt(n);
-    }
-
-    pub fn eql(a: VendorId, b: VendorId) bool {
-        return a == b;
-    }
-
-    pub fn isAbsent(self: VendorId) bool {
-        return self == absent;
     }
 };
 
 pub const DeviceId = enum(u16) {
     _,
 
-    pub fn of(comptime n: u16) DeviceId {
-        return @enumFromInt(n);
-    }
-
     pub fn from(n: u16) DeviceId {
         return @enumFromInt(n);
-    }
-
-    pub fn eql(a: DeviceId, b: DeviceId) bool {
-        return a == b;
     }
 };
 
 pub const RevisionId = enum(u8) {
     _,
 
-    pub fn of(comptime n: u8) RevisionId {
-        return @enumFromInt(n);
-    }
-
     pub fn from(n: u8) RevisionId {
         return @enumFromInt(n);
-    }
-
-    pub fn eql(a: RevisionId, b: RevisionId) bool {
-        return a == b;
     }
 };
 
@@ -102,90 +64,52 @@ pub const BaseClass = enum(u8) {
     unassigned = 0xFF,
     _,
 
-    pub fn of(comptime n: u8) BaseClass {
-        return @enumFromInt(n);
-    }
-
     pub fn from(n: u8) BaseClass {
         return @enumFromInt(n);
-    }
-
-    pub fn eql(a: BaseClass, b: BaseClass) bool {
-        return a == b;
     }
 };
 
 pub const Subclass = enum(u8) {
     _,
 
-    pub fn of(comptime n: u8) Subclass {
-        return @enumFromInt(n);
-    }
-
     pub fn from(n: u8) Subclass {
         return @enumFromInt(n);
-    }
-
-    pub fn eql(a: Subclass, b: Subclass) bool {
-        return a == b;
     }
 };
 
 pub const ProgIf = enum(u8) {
     _,
 
-    pub fn of(comptime n: u8) ProgIf {
-        return @enumFromInt(n);
-    }
-
     pub fn from(n: u8) ProgIf {
         return @enumFromInt(n);
     }
-
-    pub fn eql(a: ProgIf, b: ProgIf) bool {
-        return a == b;
-    }
 };
 
-/// PCI class code triple at configuration-space offsets 0x09..0x0C,
-/// little-endian: prog_if at 0x09, subclass at 0x0A, base_class at 0x0B.
-/// `@alignOf == 1`, so header decode may byte-cast a `*const u8` into
-/// `*const ClassCode` without `@alignCast`.
 pub const ClassCode = extern struct {
     prog_if: ProgIf,
     subclass: Subclass,
-    base_class: BaseClass,
+    base: BaseClass,
 
-    pub const bridge: ClassCode = .of(0x06, 0x04, 0x00);
-    pub const nvme: ClassCode = .of(0x01, 0x08, 0x02);
-    pub const ahci: ClassCode = .of(0x01, 0x06, 0x01);
-    pub const vga: ClassCode = .of(0x03, 0x00, 0x00);
-    pub const xhci: ClassCode = .of(0x0C, 0x03, 0x30);
-    pub const ehci: ClassCode = .of(0x0C, 0x03, 0x20);
-    pub const uhci: ClassCode = .of(0x0C, 0x03, 0x00);
-
-    /// Order: (base_class, subclass, prog_if) matching PCI-SIG assignment
-    /// notation; wire layout stays prog-if-first.
-    pub fn of(comptime base: u8, comptime sub: u8, comptime pif: u8) ClassCode {
-        return .{
-            .prog_if = ProgIf.of(pif),
-            .subclass = Subclass.of(sub),
-            .base_class = BaseClass.of(base),
-        };
-    }
+    pub const bridge: ClassCode = .from(0x06, 0x04, 0x00);
+    pub const nvme: ClassCode = .from(0x01, 0x08, 0x02);
+    pub const ahci: ClassCode = .from(0x01, 0x06, 0x01);
+    pub const vga: ClassCode = .from(0x03, 0x00, 0x00);
+    pub const xhci: ClassCode = .from(0x0C, 0x03, 0x30);
+    pub const ehci: ClassCode = .from(0x0C, 0x03, 0x20);
+    pub const uhci: ClassCode = .from(0x0C, 0x03, 0x00);
 
     pub fn from(base: u8, sub: u8, pif: u8) ClassCode {
         return .{
             .prog_if = ProgIf.from(pif),
             .subclass = Subclass.from(sub),
-            .base_class = BaseClass.from(base),
+            .base = BaseClass.from(base),
         };
     }
 
     pub fn eql(a: ClassCode, b: ClassCode) bool {
-        return a.base_class.eql(b.base_class) and
-            a.subclass.eql(b.subclass) and
-            a.prog_if.eql(b.prog_if);
+        return a.base == b.base and
+            a.subclass == b.subclass and
+            a.prog_if == b.prog_if;
     }
 
     comptime {
@@ -193,6 +117,95 @@ pub const ClassCode = extern struct {
         std.debug.assert(@alignOf(ClassCode) == 1);
         std.debug.assert(@offsetOf(ClassCode, "prog_if") == 0);
         std.debug.assert(@offsetOf(ClassCode, "subclass") == 1);
-        std.debug.assert(@offsetOf(ClassCode, "base_class") == 2);
+        std.debug.assert(@offsetOf(ClassCode, "base") == 2);
+    }
+};
+
+pub const unit = struct {
+    const testing = std.testing;
+
+    test "VendorId.absent recognizes only the PCI 0xFFFF no-function marker" {
+        try testing.expectEqual(@as(u16, 0xFFFF), @intFromEnum(VendorId.absent));
+        try testing.expect(VendorId.from(0x8086) != .absent);
+    }
+
+    test "VendorId accepts zero and ordinary u16 identifiers as present devices" {
+        try testing.expect(VendorId.from(0) != .absent);
+        try testing.expect(VendorId.from(0xFFFE) != .absent);
+    }
+
+    test "BaseClass named constants match PCI-SIG assignments" {
+        try testing.expectEqual(@as(u8, 0x00), @intFromEnum(BaseClass.unclassified));
+        try testing.expectEqual(@as(u8, 0x01), @intFromEnum(BaseClass.mass_storage));
+        try testing.expectEqual(@as(u8, 0x02), @intFromEnum(BaseClass.network_controller));
+        try testing.expectEqual(@as(u8, 0x03), @intFromEnum(BaseClass.display_controller));
+        try testing.expectEqual(@as(u8, 0x04), @intFromEnum(BaseClass.multimedia_controller));
+        try testing.expectEqual(@as(u8, 0x05), @intFromEnum(BaseClass.memory_controller));
+        try testing.expectEqual(@as(u8, 0x06), @intFromEnum(BaseClass.bridge));
+        try testing.expectEqual(@as(u8, 0x07), @intFromEnum(BaseClass.simple_comm_controller));
+        try testing.expectEqual(@as(u8, 0x08), @intFromEnum(BaseClass.base_system_peripheral));
+        try testing.expectEqual(@as(u8, 0x09), @intFromEnum(BaseClass.input_device));
+        try testing.expectEqual(@as(u8, 0x0A), @intFromEnum(BaseClass.docking_station));
+        try testing.expectEqual(@as(u8, 0x0B), @intFromEnum(BaseClass.processor));
+        try testing.expectEqual(@as(u8, 0x0C), @intFromEnum(BaseClass.serial_bus_controller));
+        try testing.expectEqual(@as(u8, 0x0D), @intFromEnum(BaseClass.wireless_controller));
+        try testing.expectEqual(@as(u8, 0x0E), @intFromEnum(BaseClass.intelligent_controller));
+        try testing.expectEqual(@as(u8, 0x0F), @intFromEnum(BaseClass.satellite_comm));
+        try testing.expectEqual(@as(u8, 0x10), @intFromEnum(BaseClass.encryption_controller));
+        try testing.expectEqual(@as(u8, 0x11), @intFromEnum(BaseClass.signal_processing));
+        try testing.expectEqual(@as(u8, 0x12), @intFromEnum(BaseClass.processing_accelerator));
+        try testing.expectEqual(@as(u8, 0x13), @intFromEnum(BaseClass.non_essential_instr));
+        try testing.expectEqual(@as(u8, 0x40), @intFromEnum(BaseClass.coprocessor));
+        try testing.expectEqual(@as(u8, 0xFF), @intFromEnum(BaseClass.unassigned));
+    }
+
+    test "BaseClass preserves unknown assignment values" {
+        const unknown = BaseClass.from(0x42);
+
+        try testing.expectEqual(@as(u8, 0x42), @intFromEnum(unknown));
+    }
+
+    test "ClassCode.from stores PCI-SIG notation in wire byte order" {
+        const cc = ClassCode.from(0x06, 0x04, 0x00);
+        const bytes: [3]u8 = @bitCast(cc);
+
+        try testing.expectEqual(@as(u8, 0x00), bytes[0]);
+        try testing.expectEqual(@as(u8, 0x04), bytes[1]);
+        try testing.expectEqual(@as(u8, 0x06), bytes[2]);
+    }
+
+    test "byte-cast decode of ClassCode from a raw config-space slice" {
+        const raw = [_]u8{ 0x02, 0x08, 0x01 };
+        const cc: *const ClassCode = @ptrCast(&raw[0]);
+
+        try testing.expect(cc.eql(ClassCode.nvme));
+    }
+
+    test "ClassCode named triples match curated PCI-SIG conventions" {
+        try testing.expect(ClassCode.bridge.eql(ClassCode.from(0x06, 0x04, 0x00)));
+        try testing.expect(ClassCode.nvme.eql(ClassCode.from(0x01, 0x08, 0x02)));
+        try testing.expect(ClassCode.ahci.eql(ClassCode.from(0x01, 0x06, 0x01)));
+        try testing.expect(ClassCode.vga.eql(ClassCode.from(0x03, 0x00, 0x00)));
+        try testing.expect(ClassCode.xhci.eql(ClassCode.from(0x0C, 0x03, 0x30)));
+        try testing.expect(ClassCode.ehci.eql(ClassCode.from(0x0C, 0x03, 0x20)));
+        try testing.expect(ClassCode.uhci.eql(ClassCode.from(0x0C, 0x03, 0x00)));
+    }
+
+    test "ClassCode.eql compares base class, subclass, and programming interface" {
+        const a = ClassCode.from(0x01, 0x08, 0x02);
+        const b = ClassCode.from(0x01, 0x08, 0x02);
+
+        try testing.expect(a.eql(b));
+        try testing.expect(!a.eql(ClassCode.from(0x01, 0x08, 0x00)));
+        try testing.expect(!a.eql(ClassCode.from(0x01, 0x06, 0x02)));
+        try testing.expect(!a.eql(ClassCode.from(0x00, 0x08, 0x02)));
+    }
+
+    test "uncatalogued identifiers preserve encoded values" {
+        try testing.expectEqual(@as(u16, 0xFFFF), @intFromEnum(SegmentId.from(0xFFFF)));
+        try testing.expectEqual(@as(u16, 0xFEDC), @intFromEnum(DeviceId.from(0xFEDC)));
+        try testing.expectEqual(@as(u8, 0xFF), @intFromEnum(RevisionId.from(0xFF)));
+        try testing.expectEqual(@as(u8, 0xFE), @intFromEnum(Subclass.from(0xFE)));
+        try testing.expectEqual(@as(u8, 0xFD), @intFromEnum(ProgIf.from(0xFD)));
     }
 };

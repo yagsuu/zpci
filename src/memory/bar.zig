@@ -1,18 +1,10 @@
-//! BAR memory accessor. Spec: docs/specs/memory/bar.md.
+//! BAR memory accessor.
 
-const std = @import("std");
-
-/// Borrowed handle over backend-owned BAR memory. Distinct from
-/// `config.ConfigSpace`: MSI-X table and PBA writes go through this seam.
-///
-/// Non-allocating; never sleeps or blocks. Handle copies share the
-/// backend context. Concurrency and memory ordering are backend-defined;
-/// this type adds no synchronization. `context` and the backing storage
-/// must outlive every copy of the handle.
+/// Borrowed handle over backend-owned BAR memory.
 pub const BarMemory = struct {
     context: *anyopaque,
     vtable: *const VTable,
-    len_bytes: usize,
+    len: usize,
 
     pub const Error = error{
         BarMemoryOutOfBounds,
@@ -24,38 +16,162 @@ pub const BarMemory = struct {
         write32: *const fn (context: *anyopaque, offset: usize, value: u32) Error!void,
     };
 
-    pub fn init(context: *anyopaque, vtable: *const VTable, len_bytes: usize) BarMemory {
-        return .{ .context = context, .vtable = vtable, .len_bytes = len_bytes };
+    pub fn from(context: *anyopaque, vtable: *const VTable, len: usize) BarMemory {
+        return .{
+            .context = context,
+            .vtable = vtable,
+            .len = len,
+        };
     }
 
-    pub fn len(self: BarMemory) usize {
-        return self.len_bytes;
-    }
-
-    /// Returns a native `u32` from the little-endian storage. Fails with
-    /// `BarMemoryOutOfBounds` when the 4-byte window overruns `len()`
-    /// and `UnalignedAccess` when `offset % 4 != 0`.
     pub fn read32(self: BarMemory, offset: usize) Error!u32 {
-        try self.check(offset, 4);
+        try self.check(offset);
         return self.vtable.read32(self.context, offset);
     }
 
-    /// Encodes `value` little-endian into storage. Same validation and
-    /// error mapping as `read32`. On error, storage is unchanged.
     pub fn write32(self: BarMemory, offset: usize, value: u32) Error!void {
-        try self.check(offset, 4);
+        try self.check(offset);
         return self.vtable.write32(self.context, offset, value);
     }
 
-    /// Containment before alignment: `read32(len_bytes - 3)` yields
-    /// `BarMemoryOutOfBounds`, not `UnalignedAccess`.
-    fn check(self: BarMemory, offset: usize, width: usize) Error!void {
-        std.debug.assert(width == 4);
+    fn check(self: BarMemory, offset: usize) Error!void {
+        if (offset > self.len) {
+            return error.BarMemoryOutOfBounds;
+        }
 
-        if (offset > self.len_bytes) return error.BarMemoryOutOfBounds;
-        std.debug.assert(self.len_bytes >= offset);
-        if (width > self.len_bytes - offset) return error.BarMemoryOutOfBounds;
-        if (offset % width != 0) return error.UnalignedAccess;
+        if (4 > self.len - offset) {
+            return error.BarMemoryOutOfBounds;
+        }
+
+        if (offset % 4 != 0) {
+            return error.UnalignedAccess;
+        }
     }
 };
 
+pub const unit = struct {
+    const std = @import("std");
+
+    const testing = std.testing;
+
+    const ValidationBackend = struct {
+        bytes: []u8,
+        calls: usize = 0,
+
+        fn accessor(self: *ValidationBackend) BarMemory {
+            return BarMemory.from(@ptrCast(self), &vtable, self.bytes.len);
+        }
+
+        const vtable: BarMemory.VTable = .{
+            .read32 = read32,
+            .write32 = write32,
+        };
+
+        fn read32(context: *anyopaque, offset: usize) BarMemory.Error!u32 {
+            const self: *ValidationBackend = @ptrCast(@alignCast(context));
+            self.calls += 1;
+
+            return std.mem.readInt(u32, self.bytes[offset..][0..@sizeOf(u32)], .little);
+        }
+
+        fn write32(context: *anyopaque, offset: usize, value: u32) BarMemory.Error!void {
+            const self: *ValidationBackend = @ptrCast(@alignCast(context));
+            self.calls += 1;
+
+            std.mem.writeInt(u32, self.bytes[offset..][0..@sizeOf(u32)], value, .little);
+        }
+    };
+
+    test "read starting exactly at the end reports BarMemoryOutOfBounds" {
+        var backing: [16]u8 = @splat(0);
+        var backend: ValidationBackend = .{ .bytes = &backing };
+        const table = backend.accessor();
+
+        try testing.expectError(error.BarMemoryOutOfBounds, table.read32(backing.len));
+
+        try testing.expectEqual(@as(usize, 0), backend.calls);
+    }
+
+    test "write past the region reports BarMemoryOutOfBounds" {
+        var backing: [16]u8 = @splat(0);
+        var backend: ValidationBackend = .{ .bytes = &backing };
+        const table = backend.accessor();
+
+        try testing.expectError(error.BarMemoryOutOfBounds, table.write32(backing.len, 0));
+        try testing.expectError(
+            error.BarMemoryOutOfBounds,
+            table.write32(backing.len - 3, 0xAABBCCDD),
+        );
+
+        try testing.expectEqual(@as(usize, 0), backend.calls);
+    }
+
+    test "unaligned read of an in-region offset reports UnalignedAccess" {
+        var backing: [16]u8 = @splat(0);
+        var backend: ValidationBackend = .{ .bytes = &backing };
+        const table = backend.accessor();
+
+        try testing.expectError(error.UnalignedAccess, table.read32(1));
+        try testing.expectError(error.UnalignedAccess, table.read32(2));
+        try testing.expectError(error.UnalignedAccess, table.read32(3));
+
+        try testing.expectEqual(@as(usize, 0), backend.calls);
+    }
+
+    test "unaligned write of an in-region offset reports UnalignedAccess" {
+        var backing: [16]u8 = @splat(0);
+        var backend: ValidationBackend = .{ .bytes = &backing };
+        const table = backend.accessor();
+
+        try testing.expectError(error.UnalignedAccess, table.write32(1, 0));
+        try testing.expectError(error.UnalignedAccess, table.write32(2, 0));
+        try testing.expectError(error.UnalignedAccess, table.write32(3, 0));
+
+        try testing.expectEqual(@as(usize, 0), backend.calls);
+    }
+
+    test "containment beats alignment for end-of-region offsets" {
+        var backing: [16]u8 = @splat(0);
+        var backend: ValidationBackend = .{ .bytes = &backing };
+        const table = backend.accessor();
+
+        try testing.expectError(error.BarMemoryOutOfBounds, table.read32(13));
+
+        try testing.expectEqual(@as(usize, 0), backend.calls);
+    }
+
+    test "zero-length region rejects any read or write" {
+        var backing: [0]u8 = .{};
+        var backend: ValidationBackend = .{ .bytes = &backing };
+        const table = backend.accessor();
+
+        try testing.expectError(error.BarMemoryOutOfBounds, table.read32(0));
+        try testing.expectError(error.BarMemoryOutOfBounds, table.write32(0, 0));
+
+        try testing.expectEqual(@as(usize, 0), backend.calls);
+    }
+
+    test "out-of-region and overflowing offsets do not reach the backend" {
+        var backing: [16]u8 = @splat(0);
+        var backend: ValidationBackend = .{ .bytes = &backing };
+        const table = backend.accessor();
+
+        for ([_]usize{ 17, std.math.maxInt(usize) }) |offset| {
+            try testing.expectError(error.BarMemoryOutOfBounds, table.read32(offset));
+            try testing.expectError(error.BarMemoryOutOfBounds, table.write32(offset, 0));
+        }
+
+        const full = BarMemory.from(
+            @ptrCast(&backend),
+            &ValidationBackend.vtable,
+            std.math.maxInt(usize),
+        );
+
+        for ([_]usize{ std.math.maxInt(usize) - 3, std.math.maxInt(usize) }) |offset| {
+            try testing.expectError(error.BarMemoryOutOfBounds, full.read32(offset));
+            try testing.expectError(error.BarMemoryOutOfBounds, full.write32(offset, 0));
+        }
+
+        try testing.expectEqual(@as(usize, 0), backend.calls);
+    }
+};
