@@ -190,13 +190,12 @@ const pci = @import("pci");
 
 const Command = pci.core.header.Command;
 
-const selected = Command.mask(.{ .mem_enable, .bus_master });
-const ordinary = selected & Command.masks.assign;
+const command = try function.command();
 
-const observed = Command.raw(try function.command());
-const desired = Command.encode(.{ .mem_enable = false, .bus_master = true });
-
-try function.setCommand(Command.from((observed & ~ordinary) | (desired & ordinary)));
+try function.setCommand(Command.replace(command, .{
+    .mem_enable = false,
+    .bus_master = true,
+}));
 ```
 
 ## Build and test
