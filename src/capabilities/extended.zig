@@ -2,13 +2,13 @@
 
 const stdx = @import("stdx");
 
-const pci_config = @import("config");
+const config = @import("config");
 const core = @import("core");
 const canonical = core.capabilities.extended;
 
-const ConfigSpace = pci_config.ConfigSpace;
+const ConfigSpace = config.ConfigSpace;
 const ConfigError = ConfigSpace.Error;
-const Function = pci_config.Function;
+const Function = config.Function;
 const Id = canonical.Id;
 const Header = canonical.Header;
 const Offset = core.Offset;

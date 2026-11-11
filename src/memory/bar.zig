@@ -88,7 +88,6 @@ pub const unit = struct {
         const table = backend.accessor();
 
         try testing.expectError(error.BarMemoryOutOfBounds, table.read32(backing.len));
-
         try testing.expectEqual(@as(usize, 0), backend.calls);
     }
 
@@ -114,7 +113,6 @@ pub const unit = struct {
         try testing.expectError(error.UnalignedAccess, table.read32(1));
         try testing.expectError(error.UnalignedAccess, table.read32(2));
         try testing.expectError(error.UnalignedAccess, table.read32(3));
-
         try testing.expectEqual(@as(usize, 0), backend.calls);
     }
 
@@ -126,7 +124,6 @@ pub const unit = struct {
         try testing.expectError(error.UnalignedAccess, table.write32(1, 0));
         try testing.expectError(error.UnalignedAccess, table.write32(2, 0));
         try testing.expectError(error.UnalignedAccess, table.write32(3, 0));
-
         try testing.expectEqual(@as(usize, 0), backend.calls);
     }
 
@@ -136,7 +133,6 @@ pub const unit = struct {
         const table = backend.accessor();
 
         try testing.expectError(error.BarMemoryOutOfBounds, table.read32(13));
-
         try testing.expectEqual(@as(usize, 0), backend.calls);
     }
 
@@ -147,7 +143,6 @@ pub const unit = struct {
 
         try testing.expectError(error.BarMemoryOutOfBounds, table.read32(0));
         try testing.expectError(error.BarMemoryOutOfBounds, table.write32(0, 0));
-
         try testing.expectEqual(@as(usize, 0), backend.calls);
     }
 

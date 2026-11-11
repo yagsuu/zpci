@@ -2,13 +2,13 @@
 
 const stdx = @import("stdx");
 
-const pci_config = @import("config");
+const config = @import("config");
 const core = @import("core");
 const canonical = core.capabilities.standard;
 
-const ConfigSpace = pci_config.ConfigSpace;
+const ConfigSpace = config.ConfigSpace;
 const ConfigError = ConfigSpace.Error;
-const Function = pci_config.Function;
+const Function = config.Function;
 const Id = canonical.Id;
 const Offset = core.Offset;
 const RelativeOffset = core.RelativeOffset;
@@ -208,6 +208,7 @@ pub const unit = struct {
     const offset = struct {
         const status: usize = 0x06;
     };
+
     const status = struct {
         const cap_list: u16 = 1 << 4;
     };

@@ -78,8 +78,6 @@ while (it.next()) |item| {
 - `requirements`: measured BAR or ROM requirements for one endpoint.
 - `mmio_base` / `mmio_size`: an available 32-bit memory aperture.
 
-`ProgrammingPartial` means rollback failed; hardware may remain partially programmed.
-
 ```zig
 const stdx = @import("stdx");
 const pci = @import("pci");
@@ -111,9 +109,6 @@ try pci.resources.commit(assignments);
 
 ## Interrupts
 
-Use message data `vector_data` for a caller-allocated interrupt vector.
-`ProgrammingPartial` means rollback failed; hardware may remain partially programmed.
-
 ### MSI
 
 ```zig
@@ -131,13 +126,6 @@ try msi.program(.{
 ```
 
 ### MSI-X
-
-Stop device interrupt generation and install the handler for `vector_data` before setup.
-Enable device interrupt generation only after setup succeeds.
-The setup sequence is not atomic; on error, keep device interrupt generation stopped.
-
-`table_memory` starts at the offset returned by `msix.tableLocation()` within
-the indicated BAR.
 
 ```zig
 const pci = @import("pci");
@@ -175,16 +163,13 @@ try table.setMasked(0, false);
 try msix.setFunctionMask(false);
 ```
 
-Stop device interrupt generation before teardown:
+Disable MSI-X:
 
 ```zig
 try msix.setFunctionMask(true);
 try table.setMasked(0, true);
 try msix.disable();
 ```
-
-After successful teardown, drain in-flight handlers, remove the handler, and release
-the interrupt vector.
 
 ## Configuration registers
 
@@ -228,6 +213,6 @@ try function.setCommand(Command.from((observed & ~ordinary) | (desired & ordinar
 Host categories: `core`, `config`, `header`, `bar`, `capabilities`, `interrupts`,
 `memory`, `resources`, `topology`, `testing`, and `integration`.
 
-Tests: `src/` (unit), `test/integration/` (workflows), `test/compile/` (API fixtures).
+Tests: `src/` (unit), `test/integration/` (integration tests), `test/compile/` (API fixtures).
 
 Host tests require no PCI hardware.
