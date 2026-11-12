@@ -290,9 +290,9 @@ pub const offsets = struct {
     pub const capabilities: u8 = 0x04;
     pub const control: u8 = 0x08;
     pub const status: u8 = 0x0A;
-    pub const capabilities_2: u8 = 0x24;
-    pub const control_2: u8 = 0x28;
-    pub const status_2: u8 = 0x2A;
+    pub const capabilities2: u8 = 0x24;
+    pub const control2: u8 = 0x28;
+    pub const status2: u8 = 0x2A;
 };
 
 pub const unit = struct {

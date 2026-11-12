@@ -130,7 +130,7 @@ pub const Capability = struct {
             return error.UnsupportedRevision;
         }
 
-        return pcie.device.Capabilities2.from(try self.registers.read(offsets.device.capabilities_2));
+        return pcie.device.Capabilities2.from(try self.registers.read(offsets.device.capabilities2));
     }
 
     pub fn deviceControl2(self: Capability) Error!DeviceControl2 {
@@ -138,7 +138,7 @@ pub const Capability = struct {
             return error.UnsupportedRevision;
         }
 
-        return pcie.device.Control2.from(try self.registers.read(offsets.device.control_2));
+        return pcie.device.Control2.from(try self.registers.read(offsets.device.control2));
     }
 
     pub fn updateDeviceControl2(self: Capability, args: DeviceControl2Args) Error!void {
@@ -149,7 +149,7 @@ pub const Capability = struct {
         const observed = try self.deviceControl2();
         const updated = pcie.device.Control2.replace(observed, args);
 
-        return self.registers.write(offsets.device.control_2, pcie.device.Control2.raw(updated));
+        return self.registers.write(offsets.device.control2, pcie.device.Control2.raw(updated));
     }
 
     pub fn setMaxPayloadSize(self: Capability, size: PayloadSize) ValidationError!void {
@@ -252,7 +252,7 @@ pub const Capability = struct {
 
         try self.requireLink();
 
-        return pcie.link.Capabilities2.from(try self.registers.read(offsets.link.capabilities_2));
+        return pcie.link.Capabilities2.from(try self.registers.read(offsets.link.capabilities2));
     }
 
     pub fn linkControl2(self: Capability) Error!LinkControl2 {
@@ -262,7 +262,7 @@ pub const Capability = struct {
 
         try self.requireLink();
 
-        return pcie.link.Control2.from(try self.registers.read(offsets.link.control_2));
+        return pcie.link.Control2.from(try self.registers.read(offsets.link.control2));
     }
 
     pub fn updateLinkControl2(self: Capability, args: LinkControl2Args) Error!void {
@@ -275,7 +275,7 @@ pub const Capability = struct {
         const observed = try self.linkControl2();
         const updated = pcie.link.Control2.replace(observed, args);
 
-        return self.registers.write(offsets.link.control_2, pcie.link.Control2.raw(updated));
+        return self.registers.write(offsets.link.control2, pcie.link.Control2.raw(updated));
     }
 
     pub fn linkStatus2(self: Capability) Error!LinkStatus2 {
@@ -285,7 +285,7 @@ pub const Capability = struct {
 
         try self.requireLink();
 
-        return pcie.link.Status2.from(try self.registers.read(offsets.link.status_2));
+        return pcie.link.Status2.from(try self.registers.read(offsets.link.status2));
     }
 
     pub fn ackLinkStatus2(self: Capability, observed: LinkStatus2, comptime fields: anytype) Error!void {
@@ -295,7 +295,7 @@ pub const Capability = struct {
 
         try self.requireLink();
 
-        return self.registers.write(offsets.link.status_2, pcie.link.Status2.ack(observed, fields));
+        return self.registers.write(offsets.link.status2, pcie.link.Status2.ack(observed, fields));
     }
 
     pub fn setTargetLinkSpeed(self: Capability, speed: LinkSpeed) ValidationError!void {
@@ -377,7 +377,7 @@ pub const Capability = struct {
 
         try self.requireSlot();
 
-        return pcie.slot.Capabilities2.from(try self.registers.read(offsets.slot.capabilities_2));
+        return pcie.slot.Capabilities2.from(try self.registers.read(offsets.slot.capabilities2));
     }
 
     pub fn toggleInterlock(self: Capability) ActionError!void {
@@ -454,27 +454,27 @@ pub const offsets = struct {
         pub const capabilities = RelativeOffset(u32).from(pcie.device.offsets.capabilities);
         pub const control = RelativeOffset(u16).from(pcie.device.offsets.control);
         pub const status = RelativeOffset(u16).from(pcie.device.offsets.status);
-        pub const capabilities_2 = RelativeOffset(u32).from(pcie.device.offsets.capabilities_2);
-        pub const control_2 = RelativeOffset(u16).from(pcie.device.offsets.control_2);
-        pub const status_2 = RelativeOffset(u16).from(pcie.device.offsets.status_2);
+        pub const capabilities2 = RelativeOffset(u32).from(pcie.device.offsets.capabilities2);
+        pub const control2 = RelativeOffset(u16).from(pcie.device.offsets.control2);
+        pub const status2 = RelativeOffset(u16).from(pcie.device.offsets.status2);
     };
 
     pub const link = struct {
         pub const capabilities = RelativeOffset(u32).from(pcie.link.offsets.capabilities);
         pub const control = RelativeOffset(u16).from(pcie.link.offsets.control);
         pub const status = RelativeOffset(u16).from(pcie.link.offsets.status);
-        pub const capabilities_2 = RelativeOffset(u32).from(pcie.link.offsets.capabilities_2);
-        pub const control_2 = RelativeOffset(u16).from(pcie.link.offsets.control_2);
-        pub const status_2 = RelativeOffset(u16).from(pcie.link.offsets.status_2);
+        pub const capabilities2 = RelativeOffset(u32).from(pcie.link.offsets.capabilities2);
+        pub const control2 = RelativeOffset(u16).from(pcie.link.offsets.control2);
+        pub const status2 = RelativeOffset(u16).from(pcie.link.offsets.status2);
     };
 
     pub const slot = struct {
         pub const capabilities = RelativeOffset(u32).from(pcie.slot.offsets.capabilities);
         pub const control = RelativeOffset(u16).from(pcie.slot.offsets.control);
         pub const status = RelativeOffset(u16).from(pcie.slot.offsets.status);
-        pub const capabilities_2 = RelativeOffset(u32).from(pcie.slot.offsets.capabilities_2);
-        pub const control_2 = RelativeOffset(u16).from(pcie.slot.offsets.control_2);
-        pub const status_2 = RelativeOffset(u16).from(pcie.slot.offsets.status_2);
+        pub const capabilities2 = RelativeOffset(u32).from(pcie.slot.offsets.capabilities2);
+        pub const control2 = RelativeOffset(u16).from(pcie.slot.offsets.control2);
+        pub const status2 = RelativeOffset(u16).from(pcie.slot.offsets.status2);
     };
 
     pub const root = struct {
@@ -593,7 +593,7 @@ pub const unit = struct {
                     const clear_mask: u16 = switch (byte_offset) {
                         0x80 + pcie.device.offsets.status => pcie.device.Status.masks.w1c,
                         0x80 + pcie.link.offsets.status => pcie.link.Status.masks.w1c,
-                        0x80 + pcie.link.offsets.status_2 => pcie.link.Status2.masks.w1c,
+                        0x80 + pcie.link.offsets.status2 => pcie.link.Status2.masks.w1c,
                         0x80 + pcie.slot.offsets.status => pcie.slot.Status.masks.w1c,
                         else => 0,
                     };
@@ -708,8 +708,8 @@ pub const unit = struct {
         store16(&bytes, 0x80 + pcie.link.offsets.control, 0x8020);
         store16(&bytes, 0x80 + pcie.slot.offsets.control, 0x8C20);
         store16(&bytes, 0x80 + pcie.root.offsets.control, 0xFFE0);
-        store16(&bytes, 0x80 + pcie.device.offsets.control_2, 0x0100);
-        store16(&bytes, 0x80 + pcie.link.offsets.control_2, 0x0411);
+        store16(&bytes, 0x80 + pcie.device.offsets.control2, 0x0100);
+        store16(&bytes, 0x80 + pcie.link.offsets.control2, 0x0411);
 
         var backend = ConfigBackend{ .version = 2, .bytes = &bytes };
         const view = try Pcie.tryFrom(Function.from(backend.config(), test_sbdf), capabilityAt(0x80));
@@ -859,7 +859,7 @@ pub const unit = struct {
     test "device control two updates preserve a power request until explicitly cleared" {
         var bytes: [pcie_window_size]u8 = @splat(0);
         seedPcieCapability(&bytes, 0x80, 2, 0);
-        store16(&bytes, 0x80 + pcie.device.offsets.control_2, 0x0800);
+        store16(&bytes, 0x80 + pcie.device.offsets.control2, 0x0800);
 
         var backend = ConfigBackend{ .version = 2, .bytes = &bytes };
         const view = try Pcie.tryFrom(Function.from(backend.config(), test_sbdf), capabilityAt(0x80));
@@ -874,7 +874,7 @@ pub const unit = struct {
     test "completion timeout setter validates ranges without changing other controls" {
         var bytes: [pcie_window_size]u8 = @splat(0);
         seedPcieCapability(&bytes, 0x80, 2, 0);
-        store16(&bytes, 0x80 + pcie.device.offsets.control_2, 0x4800);
+        store16(&bytes, 0x80 + pcie.device.offsets.control2, 0x4800);
 
         var backend = ConfigBackend{ .version = 2, .bytes = &bytes };
         const view = try Pcie.tryFrom(Function.from(backend.config(), test_sbdf), capabilityAt(0x80));
@@ -884,12 +884,12 @@ pub const unit = struct {
         try testing.expectEqual(@as(usize, 0), backend.write_count);
         try testing.expectEqual(@as(u16, 0x4800), std.mem.readInt(u16, bytes[0xA8..0xAA], .little));
 
-        store32(&bytes, 0x80 + pcie.device.offsets.capabilities_2, 2);
+        store32(&bytes, 0x80 + pcie.device.offsets.capabilities2, 2);
         try testing.expectError(error.UnsupportedFeature, view.setCompletionTimeout(.range_a_50us_100us));
         try view.setCompletionTimeout(.range_b_16ms_55ms);
         try testing.expectEqual(@as(u16, 0x4805), std.mem.readInt(u16, bytes[0xA8..0xAA], .little));
 
-        store32(&bytes, 0x80 + pcie.device.offsets.capabilities_2, 0);
+        store32(&bytes, 0x80 + pcie.device.offsets.capabilities2, 0);
         try view.setCompletionTimeout(.default);
 
         try testing.expectEqual(@as(u16, 0x4800), std.mem.readInt(u16, bytes[0xA8..0xAA], .little));
@@ -899,9 +899,9 @@ pub const unit = struct {
     test "target speed setter validates membership without retraining or changing compliance" {
         var bytes: [pcie_window_size]u8 = @splat(0);
         seedPcieCapability(&bytes, 0x80, 2, 0);
-        store32(&bytes, 0x80 + pcie.link.offsets.capabilities_2, 0x12);
+        store32(&bytes, 0x80 + pcie.link.offsets.capabilities2, 0x12);
         store16(&bytes, 0x80 + pcie.link.offsets.control, 0xA55A);
-        store16(&bytes, 0x80 + pcie.link.offsets.control_2, 0xFC11);
+        store16(&bytes, 0x80 + pcie.link.offsets.control2, 0xFC11);
 
         var backend = ConfigBackend{ .version = 2, .bytes = &bytes };
         const view = try Pcie.tryFrom(Function.from(backend.config(), test_sbdf), capabilityAt(0x80));
@@ -954,7 +954,7 @@ pub const unit = struct {
         var bytes: [pcie_window_size]u8 = @splat(0);
         seedPcieCapability(&bytes, 0x80, 2, 0);
         store16(&bytes, 0x80 + pcie.link.offsets.status, 0xFFFF);
-        store16(&bytes, 0x80 + pcie.link.offsets.status_2, 0xFFFF);
+        store16(&bytes, 0x80 + pcie.link.offsets.status2, 0xFFFF);
 
         var backend = ConfigBackend{ .version = 2, .bytes = &bytes };
         const view = try Pcie.tryFrom(Function.from(backend.config(), test_sbdf), capabilityAt(0x80));
@@ -1369,7 +1369,7 @@ pub const unit = struct {
             }));
             store32(&bytes, 0x80 + pcie.link.offsets.capabilities, 1 << 20);
             store16(&bytes, 0x80 + pcie.slot.offsets.status, 1 << 8);
-            store32(&bytes, 0x80 + pcie.slot.offsets.capabilities_2, 1);
+            store32(&bytes, 0x80 + pcie.slot.offsets.capabilities2, 1);
 
             var backend = TestConfigSpace.fromSingle(test_sbdf, &bytes);
             const view = try Pcie.tryFrom(makeFunction(&backend), capabilityAt(0x80));
