@@ -1,8 +1,8 @@
 const stdx = @import("stdx");
+
 const config = @import("../config.zig");
 
 const BitField = stdx.bits.BitField;
-
 const OffsetRange = stdx.ranges.InclusiveRange(u8);
 
 pub const Header = BitField(u16, .{
@@ -11,6 +11,7 @@ pub const Header = BitField(u16, .{
 });
 
 pub const Id = enum(u8) {
+    pm = 0x01,
     pcie = 0x10,
     msi = 0x05,
     msix = 0x11,

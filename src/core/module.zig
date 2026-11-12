@@ -37,6 +37,7 @@ test {
     _ = bar.unit;
     _ = capabilities.msix.unit;
     _ = capabilities.standard.unit;
+    _ = capabilities.pm.unit;
     _ = capabilities.pcie.unit;
     _ = capabilities.pcie.device.unit;
     _ = capabilities.pcie.link.unit;
