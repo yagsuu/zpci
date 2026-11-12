@@ -4,12 +4,12 @@ const stdx = @import("stdx");
 
 const config = @import("config");
 const core = @import("core");
-const canonical = core.capabilities.standard;
+const standard = core.capabilities.standard;
 
 const ConfigSpace = config.ConfigSpace;
 const ConfigError = ConfigSpace.Error;
 const Function = config.Function;
-const Id = canonical.Id;
+const Id = standard.Id;
 const Offset = core.Offset;
 const RelativeOffset = core.RelativeOffset;
 const VisitedSet = stdx.bits.Set(usize).Static(window.count);
@@ -123,11 +123,11 @@ pub const Registers = struct {
 };
 
 pub const offsets = struct {
-    pub const id = RelativeOffset(u8).from(canonical.offsets.id);
-    pub const next = RelativeOffset(u8).from(canonical.offsets.next);
+    pub const id = RelativeOffset(u8).from(standard.offsets.id);
+    pub const next = RelativeOffset(u8).from(standard.offsets.next);
 };
 
-const window = canonical.window;
+const window = standard.window;
 
 fn AccessInt(comptime T: type) type {
     return switch (T) {

@@ -3,7 +3,7 @@
 const std = @import("std");
 
 const stdx = @import("stdx");
-const pci_config = @import("config");
+const config = @import("config");
 const core = @import("core");
 
 const IoRegister = core.bar.Io;
@@ -11,9 +11,9 @@ const MemoryRegister = core.bar.Memory;
 const Memory64 = core.bar.Memory64;
 const Space = core.bar.Space;
 
-const ConfigSpace = pci_config.ConfigSpace;
+const ConfigSpace = config.ConfigSpace;
 const ConfigError = ConfigSpace.Error;
-const Function = pci_config.Function;
+const Function = config.Function;
 const Format = core.header.Format;
 const Offset = core.Offset;
 const HeaderType = core.header.Type;
@@ -93,8 +93,8 @@ pub const Bars = struct {
     pub fn tryFrom(function: Function) ConfigError!?Bars {
         const word = HeaderType.from(try function.typeByte());
         return switch (word.format) {
-            0x00 => Bars.from(function, .type0),
-            0x01 => Bars.from(function, .type1),
+            .type0 => Bars.from(function, .type0),
+            .type1 => Bars.from(function, .type1),
             else => null,
         };
     }

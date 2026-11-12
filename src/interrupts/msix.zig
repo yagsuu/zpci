@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-const pci_config = @import("config");
+const config = @import("config");
 const core = @import("core");
 const capabilities = @import("capabilities");
 const memory = @import("memory");
@@ -11,9 +11,9 @@ const programming = @import("programming.zig");
 const standard = capabilities.standard;
 const msix = core.capabilities.msix;
 
-const ConfigSpace = pci_config.ConfigSpace;
+const ConfigSpace = config.ConfigSpace;
 const ConfigError = ConfigSpace.Error;
-const Function = pci_config.Function;
+const Function = config.Function;
 
 const RelativeOffset = core.RelativeOffset;
 const LocationRegister = msix.Location;
@@ -23,7 +23,6 @@ const VectorControl = msix.VectorControl;
 
 const CapabilityEntry = standard.Entry;
 const CapabilityIterator = standard.Iterator;
-const CapabilityError = standard.Error;
 
 const BarMemory = memory.BarMemory;
 const BarMemoryError = BarMemory.Error;
@@ -72,12 +71,12 @@ pub const Capability = struct {
         return Control.from(try registers.read(offsets.control));
     }
 
-    pub fn tableLocation(self: Capability) ReadError!Location {
+    pub fn table(self: Capability) ReadError!Location {
         const registers = try standard.Registers.tryFrom(self.function, self.base);
         return Location.tryFrom(try registers.read(offsets.table));
     }
 
-    pub fn pbaLocation(self: Capability) ReadError!Location {
+    pub fn pba(self: Capability) ReadError!Location {
         const registers = try standard.Registers.tryFrom(self.function, self.base);
         return Location.tryFrom(try registers.read(offsets.pba));
     }
@@ -94,28 +93,27 @@ pub const Capability = struct {
         try self.updateControl(.{ .function_mask = masked });
     }
 
-    const ControlUpdate = union(enum) {
-        enable: bool,
-        function_mask: bool,
-    };
-
     fn updateControl(self: Capability, update: ControlUpdate) ProgramError!void {
         const registers = standard.Registers.tryFrom(self.function, self.base) catch return error.ProgrammingWriteFailed;
         if (!registers.contains(offsets.pba)) {
             return error.ProgrammingWriteFailed;
         }
 
-        var tx = ConfigTransaction.from(.{ .registers = registers });
-        const saved = tx.read(u16, offsets.control) catch return error.ProgrammingWriteFailed;
+        var tx = ConfigTransaction.from(registers);
+        const saved = tx.read(offsets.control) catch return error.ProgrammingWriteFailed;
 
-        var word = Control.from(saved);
-        switch (update) {
-            .enable => |value| word.enable = value,
-            .function_mask => |value| word.function_mask = value,
-        }
+        const word = Control.replace(Control.from(saved), .{
+            .enable = update.enable,
+            .function_mask = update.function_mask,
+        });
 
-        try tx.writeReadback(u16, offsets.control, Control.raw(word), saved);
+        try tx.write(offsets.control, Control.raw(word), saved);
     }
+
+    const ControlUpdate = struct {
+        enable: ?bool = null,
+        function_mask: ?bool = null,
+    };
 };
 
 pub const Location = struct {
@@ -144,8 +142,10 @@ pub const Table = struct {
         masked: bool,
     };
 
-    pub const ReadError = error{InvalidRouting} || BarMemoryError;
-    pub const ProgramError = error{ InvalidRouting, BarMemoryOutOfBounds, UnalignedAccess } || programming.Error;
+    const BoundsError = error{ InvalidRouting, BarMemoryOutOfBounds };
+
+    pub const ReadError = BoundsError || BarMemoryError;
+    pub const ProgramError = BoundsError || error{UnalignedAccess} || programming.Error;
 
     pub fn from(bar_memory: BarMemory, num_vectors: u16) Table {
         std.debug.assert(num_vectors >= 1 and num_vectors <= msix.max_vectors);
@@ -157,22 +157,13 @@ pub const Table = struct {
     }
 
     pub fn read(self: Table, index: u11) ReadError!Entry {
-        if (index >= self.num_vectors) {
-            return error.InvalidRouting;
-        }
+        const offset = try self.entryOffset(index);
 
-        const offset = @as(usize, index) * entry_size;
-        const vector_control_offset = offset + entry_offsets.control;
+        const address_lo = try self.memory.read32(offset + msix.table.offsets.address_lo);
+        const address_hi = try self.memory.read32(offset + msix.table.offsets.address_hi);
 
-        if (!containsDword(self.memory.len, vector_control_offset)) {
-            return error.BarMemoryOutOfBounds;
-        }
-
-        const address_lo = try self.memory.read32(offset + entry_offsets.address_lo);
-        const address_hi = try self.memory.read32(offset + entry_offsets.address_hi);
-
-        const data = try self.memory.read32(offset + entry_offsets.data);
-        const vector_control = VectorControl.from(try self.memory.read32(offset + entry_offsets.control));
+        const data = try self.memory.read32(offset + msix.table.offsets.data);
+        const vector_control = VectorControl.from(try self.memory.read32(offset + msix.table.offsets.control));
 
         const address = (@as(u64, address_hi) << 32) | @as(u64, address_lo);
 
@@ -197,14 +188,12 @@ pub const Table = struct {
             return;
         }
 
-        const max_additional_entries = std.math.maxInt(usize) - @as(usize, first_index);
-        std.debug.assert(entries.len <= max_additional_entries);
-
         const start = @as(usize, first_index);
-        const end = start + entries.len;
-        if (end > self.num_vectors) {
+        if (start >= self.num_vectors or entries.len > self.num_vectors - start) {
             return error.InvalidRouting;
         }
+
+        const end = start + entries.len;
 
         if (end * entry_size > self.memory.len) {
             return error.BarMemoryOutOfBounds;
@@ -220,27 +209,26 @@ pub const Table = struct {
         index: u11,
         masked: bool,
     ) ProgramError!void {
-        const offset = (try self.entryOffset(index)) + entry_offsets.control;
+        const offset = (try self.entryOffset(index)) + msix.table.offsets.control;
 
-        var tx = TableTransaction.from(.{ .memory = self.memory });
-        const saved = tx.read(u32, offset) catch return error.ProgrammingWriteFailed;
+        var tx = TableTransaction.from(self.memory);
+        const saved = tx.read(offset) catch return error.ProgrammingWriteFailed;
 
-        var control = VectorControl.from(saved);
-        control.masked = masked;
+        const control = VectorControl.replace(VectorControl.from(saved), .{ .masked = masked });
 
-        try tx.writeReadback(u32, offset, VectorControl.raw(control), saved);
+        try tx.write(offset, VectorControl.raw(control), saved);
     }
 
     fn entryOffset(
         self: Table,
         index: u11,
-    ) ProgramError!usize {
+    ) BoundsError!usize {
         if (index >= self.num_vectors) {
             return error.InvalidRouting;
         }
 
         const offset = @as(usize, index) * entry_size;
-        if (!containsDword(self.memory.len, offset + entry_offsets.control)) {
+        if (!containsDword(self.memory.len, offset + msix.table.offsets.control)) {
             return error.BarMemoryOutOfBounds;
         }
 
@@ -252,32 +240,30 @@ pub const Table = struct {
         offset: usize,
         entry: Entry,
     ) ProgramError!void {
-        var tx = TableTransaction.from(.{ .memory = self.memory });
+        var tx = TableTransaction.from(self.memory);
         const saved = .{
-            .address_lo = tx.read(u32, offset + entry_offsets.address_lo) catch return error.ProgrammingWriteFailed,
-            .address_hi = tx.read(u32, offset + entry_offsets.address_hi) catch return error.ProgrammingWriteFailed,
-            .data = tx.read(u32, offset + entry_offsets.data) catch return error.ProgrammingWriteFailed,
-            .control = tx.read(u32, offset + entry_offsets.control) catch return error.ProgrammingWriteFailed,
+            .address_lo = tx.read(offset + msix.table.offsets.address_lo) catch return error.ProgrammingWriteFailed,
+            .address_hi = tx.read(offset + msix.table.offsets.address_hi) catch return error.ProgrammingWriteFailed,
+            .data = tx.read(offset + msix.table.offsets.data) catch return error.ProgrammingWriteFailed,
+            .control = tx.read(offset + msix.table.offsets.control) catch return error.ProgrammingWriteFailed,
         };
 
-        var masked_control = VectorControl.from(saved.control);
-        masked_control.masked = true;
+        const masked_control = VectorControl.replace(VectorControl.from(saved.control), .{ .masked = true });
         const masked_raw = VectorControl.raw(masked_control);
-
-        var final_control = VectorControl.from(saved.control);
-        final_control.masked = entry.masked;
-        const final_raw = VectorControl.raw(final_control);
 
         const address_lo: u32 = @truncate(entry.address);
         const address_hi: u32 = @truncate(entry.address >> 32);
 
-        try tx.writeReadback(u32, offset + entry_offsets.control, masked_raw, saved.control);
+        try tx.write(offset + msix.table.offsets.control, masked_raw, saved.control);
 
-        try tx.writeReadback(u32, offset + entry_offsets.address_lo, address_lo, saved.address_lo);
-        try tx.writeReadback(u32, offset + entry_offsets.address_hi, address_hi, saved.address_hi);
-        try tx.writeReadback(u32, offset + entry_offsets.data, entry.data, saved.data);
+        try tx.write(offset + msix.table.offsets.address_lo, address_lo, saved.address_lo);
+        try tx.write(offset + msix.table.offsets.address_hi, address_hi, saved.address_hi);
+        try tx.write(offset + msix.table.offsets.data, entry.data, saved.data);
 
-        try tx.writeReadback(u32, offset + entry_offsets.control, final_raw, masked_raw);
+        const final_control = VectorControl.replace(VectorControl.from(saved.control), .{ .masked = entry.masked });
+        const final_raw = VectorControl.raw(final_control);
+
+        try tx.write(offset + msix.table.offsets.control, final_raw, masked_raw);
     }
 
     fn containsDword(len_bytes: usize, offset: usize) bool {
@@ -287,13 +273,6 @@ pub const Table = struct {
 
         return @sizeOf(u32) <= len_bytes - offset;
     }
-
-    const entry_offsets = struct {
-        const address_lo = @offsetOf(TableRegister, "address_lo");
-        const address_hi = @offsetOf(TableRegister, "address_hi");
-        const data = @offsetOf(TableRegister, "data");
-        const control = @offsetOf(TableRegister, "control");
-    };
 };
 
 pub const Pba = struct {
@@ -317,10 +296,9 @@ pub const Pba = struct {
             return error.InvalidRouting;
         }
 
-        const dword_index = @divFloor(@as(usize, index), bits_per_dword);
-        const bit_index = @mod(@as(usize, index), bits_per_dword);
+        const dword_index = @as(usize, index) / bits_per_dword;
+        const shift: u5 = @intCast(index % bits_per_dword);
         const bits = try self.read(dword_index);
-        const shift: u5 = @intCast(bit_index);
 
         return bits & (@as(u32, 1) << shift) != 0;
     }
@@ -332,10 +310,6 @@ pub const Pba = struct {
 
         const span = self.spanBytes();
         if (offset > span or @sizeOf(u32) > span - offset) {
-            return error.BarMemoryOutOfBounds;
-        }
-
-        if (offset > self.memory.len or @sizeOf(u32) > self.memory.len - offset) {
             return error.BarMemoryOutOfBounds;
         }
 
@@ -354,43 +328,8 @@ pub const offsets = struct {
     pub const pba = RelativeOffset(u32).from(msix.offsets.pba);
 };
 
-const ConfigTarget = struct {
-    registers: standard.Registers,
-
-    pub const Offset16 = RelativeOffset(u16);
-
-    pub fn read16(self: ConfigTarget, offset: Offset16) CapabilityError!u16 {
-        return self.registers.read(offset);
-    }
-
-    pub fn write16(self: ConfigTarget, offset: Offset16, value: u16) CapabilityError!void {
-        return self.registers.write(offset, value);
-    }
-};
-
-const BarTarget = struct {
-    memory: BarMemory,
-
-    pub const Offset32 = usize;
-
-    pub fn read32(self: BarTarget, offset: usize) BarMemoryError!u32 {
-        return self.memory.read32(offset);
-    }
-
-    pub fn write32(self: BarTarget, offset: usize, value: u32) BarMemoryError!void {
-        return self.memory.write32(offset, value);
-    }
-};
-
-const ConfigTransaction = programming.Transaction(ConfigTarget, .{
-    .capacity = 1,
-    .word16 = true,
-});
-
-const TableTransaction = programming.Transaction(BarTarget, .{
-    .capacity = 5,
-    .word32 = true,
-});
+const ConfigTransaction = programming.ConfigTransaction(1);
+const TableTransaction = programming.BarTransaction(5);
 
 pub const unit = struct {
     const testing = std.testing;
@@ -624,8 +563,8 @@ pub const unit = struct {
         var backend = ConfigBackend.from(&bytes);
         const capability = try tryCapability(&backend);
 
-        try expectLocation(try capability.tableLocation(), 2, 0x180);
-        try expectLocation(try capability.pbaLocation(), 2, 0x280);
+        try expectLocation(try capability.table(), 2, 0x180);
+        try expectLocation(try capability.pba(), 2, 0x280);
         const word = try capability.control();
         const num_vectors = @as(u16, word.table_size_minus_one) + 1;
         var bar_bytes: [0]u8 = .{};
@@ -646,8 +585,8 @@ pub const unit = struct {
         var backend = ConfigBackend.from(&bytes);
         const capability = try tryCapability(&backend);
 
-        try expectLocation(try capability.tableLocation(), 4, 0x1000);
-        try expectLocation(try capability.pbaLocation(), 5, 0x2000);
+        try expectLocation(try capability.table(), 4, 0x1000);
+        try expectLocation(try capability.pba(), 5, 0x2000);
         const word = try capability.control();
         const num_vectors = @as(u16, word.table_size_minus_one) + 1;
         var bar_bytes: [0]u8 = .{};
@@ -735,8 +674,8 @@ pub const unit = struct {
         var backend = ConfigBackend.from(&bytes);
         const capability = try tryCapability(&backend);
         const saved_control = try capability.control();
-        const saved_table = try capability.tableLocation();
-        const saved_pba = try capability.pbaLocation();
+        const saved_table = try capability.table();
+        const saved_pba = try capability.pba();
         backend.resetLog();
 
         store16(&bytes, cap_base + msix.offsets.control, messageControlRaw(.{
@@ -759,13 +698,13 @@ pub const unit = struct {
         try testing.expectEqual(@as(u11, 7), saved_control.table_size_minus_one);
         try expectLocation(saved_table, 1, 0x100);
         try expectLocation(saved_pba, 1, 0x200);
-        try expectLocation(try capability.tableLocation(), 4, 0x300);
-        try expectLocation(try capability.pbaLocation(), 5, 0x400);
+        try expectLocation(try capability.table(), 4, 0x300);
+        try expectLocation(try capability.pba(), 5, 0x400);
         inline for (.{ @as(u3, 6), @as(u3, 7) }) |bir| {
             store32(&bytes, cap_base + msix.offsets.table, locationRaw(bir, 0));
             store32(&bytes, cap_base + msix.offsets.pba, locationRaw(bir, 0));
-            try testing.expectError(error.MalformedField, capability.tableLocation());
-            try testing.expectError(error.MalformedField, capability.pbaLocation());
+            try testing.expectError(error.MalformedField, capability.table());
+            try testing.expectError(error.MalformedField, capability.pba());
         }
     }
 
@@ -1192,8 +1131,8 @@ pub const unit = struct {
         var backend = ConfigBackend.from(&bytes);
         const valid = try Capability.tryFrom(functionFor(&backend), .{ .id = .msix, .offset = 0xF4 });
 
-        try expectLocation(try valid.tableLocation(), 2, 0x1000);
-        try expectLocation(try valid.pbaLocation(), 3, 0x2000);
+        try expectLocation(try valid.table(), 2, 0x1000);
+        try expectLocation(try valid.pba(), 3, 0x2000);
 
         backend.resetLog();
         try testing.expectError(error.MalformedCapability, Capability.tryFrom(functionFor(&backend), .{ .id = .msix, .offset = 0xF8 }));

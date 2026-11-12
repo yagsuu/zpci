@@ -9,6 +9,7 @@ pub const type0 = @import("header/type0.zig");
 pub const type1 = @import("header/type1.zig");
 
 const BitField = stdx.bits.BitField;
+const DeviceId = ids.DeviceId;
 const VendorId = ids.VendorId;
 const ClassCode = ids.ClassCode;
 
@@ -20,8 +21,22 @@ pub const Format = enum {
     type1,
 };
 
+pub const WireFormat = enum(u7) {
+    type0 = 0,
+    type1 = 1,
+    cardbus = 2,
+    _,
+};
+
+pub const DevselTiming = enum(u2) {
+    fast = 0,
+    medium = 1,
+    slow = 2,
+    _,
+};
+
 pub const Type = BitField(u8, .{
-    .format = .{ .type = u7, .access = .ro },
+    .format = .{ .type = WireFormat, .access = .ro, .default = .type0 },
     .multifunction = .{ .type = bool, .access = .ro },
 });
 
@@ -48,7 +63,7 @@ pub const Status = BitField(u16, .{
     ._rsvd_6 = .{ .type = u1, .access = .reserved },
     .fast_back_to_back_capable = .{ .type = bool, .access = .ro },
     .master_data_parity_error = .{ .type = bool, .write = .w1c },
-    .devsel_timing = .{ .type = u2, .access = .ro },
+    .devsel_timing = .{ .type = DevselTiming, .access = .ro, .default = .fast },
     .signaled_target_abort = .{ .type = bool, .write = .w1c },
     .received_target_abort = .{ .type = bool, .write = .w1c },
     .received_master_abort = .{ .type = bool, .write = .w1c },
@@ -87,7 +102,7 @@ pub const BridgeControl = BitField(u16, .{
 
 pub const Subsystem = struct {
     vendor_id: VendorId,
-    id: u16,
+    id: DeviceId,
 };
 
 pub const IntrPin = enum(u8) {
@@ -169,12 +184,21 @@ pub const unit = struct {
     test "Type maps format and multifunction bits" {
         const decoded = Type.from(0x81);
 
-        try testing.expectEqual(@as(u7, 0x01), decoded.format);
+        try testing.expectEqual(WireFormat.type1, decoded.format);
         try testing.expect(decoded.multifunction);
 
-        const word: Type.Word = .{ .format = 0x02 };
+        const word: Type.Word = .{ .format = .cardbus };
 
         try testing.expectEqual(@as(u8, 0x02), Type.raw(word));
+    }
+
+    test "unknown header format and DEVSEL timing preserve wire encodings" {
+        const header_type = Type.from(0xFF);
+        try testing.expectEqual(@as(u7, 0x7F), @intFromEnum(header_type.format));
+        try testing.expectEqual(@as(u8, 0xFF), Type.raw(header_type));
+        const status = Status.from(0x0600);
+        try testing.expectEqual(@as(u2, 3), @intFromEnum(status.devsel_timing));
+        try testing.expectEqual(@as(u16, 0x0600), Status.raw(status));
     }
 
     test "Command maps the PCI command register bits" {
@@ -202,7 +226,7 @@ pub const unit = struct {
         try testing.expect(decoded.capable_66mhz);
         try testing.expect(decoded.fast_back_to_back_capable);
         try testing.expect(decoded.master_data_parity_error);
-        try testing.expectEqual(@as(u2, 2), decoded.devsel_timing);
+        try testing.expectEqual(DevselTiming.slow, decoded.devsel_timing);
         try testing.expect(decoded.signaled_target_abort);
         try testing.expect(decoded.received_target_abort);
         try testing.expect(decoded.received_master_abort);

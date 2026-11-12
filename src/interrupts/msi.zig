@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-const pci_config = @import("config");
+const config = @import("config");
 const core = @import("core");
 const capabilities = @import("capabilities");
 const programming = @import("programming.zig");
@@ -10,9 +10,9 @@ const programming = @import("programming.zig");
 const standard = capabilities.standard;
 const msi = core.capabilities.msi;
 
-const ConfigSpace = pci_config.ConfigSpace;
+const ConfigSpace = config.ConfigSpace;
 const ConfigError = ConfigSpace.Error;
-const Function = pci_config.Function;
+const Function = config.Function;
 
 const RelativeOffset = core.RelativeOffset;
 const Control = msi.Control;
@@ -23,8 +23,6 @@ const Entry = standard.Entry;
 const Registers = standard.Registers;
 const CapabilityIterator = standard.Iterator;
 const CapabilityError = standard.Error;
-
-const ProgrammingError = programming.Error;
 
 pub const Capability = struct {
     function: Function,
@@ -66,17 +64,15 @@ pub const Capability = struct {
         std.debug.assert(entry.id == msi.id);
 
         const registers = try Registers.tryFrom(function, entry.offset);
-        const word = Control.from(try registers.read(offsets.addr32.control));
-        _ = try VectorCount.from(word.multiple_msg_capable).count();
+        const ctl = Control.from(try registers.read(offsets.addr32.control));
 
-        const capability: Capability = .{
+        _ = try ctl.multi_msg_capable.count();
+        try Layout.from(ctl).validateExtent(registers);
+
+        return .{
             .function = function,
             .base = entry.offset,
         };
-
-        try validateExtent(registers, word);
-
-        return capability;
     }
 
     pub fn control(self: Capability) ReadError!ControlWord {
@@ -86,143 +82,196 @@ pub const Capability = struct {
 
     pub fn address(self: Capability) ReadError!u64 {
         const registers = try Registers.tryFrom(self.function, self.base);
-        const word = Control.from(try registers.read(offsets.addr32.control));
-        return readAddress(registers, word);
+        const ctl = Control.from(try registers.read(offsets.addr32.control));
+        return readAddress(registers, ctl);
     }
 
     pub fn data(self: Capability) ReadError!u16 {
         const registers = try Registers.tryFrom(self.function, self.base);
-        const word = Control.from(try registers.read(offsets.addr32.control));
-        return registers.read(dataOffset(word));
+        const ctl = Control.from(try registers.read(offsets.addr32.control));
+
+        const offset = if (ctl.addr64_capable)
+            offsets.addr64.data
+        else
+            offsets.addr32.data;
+
+        return registers.read(offset);
     }
 
     pub fn extData(self: Capability) ReadError!u16 {
         const registers = try Registers.tryFrom(self.function, self.base);
-        const word = Control.from(try registers.read(offsets.addr32.control));
-        std.debug.assert(word.ext_data_capable);
-        return registers.read(extDataOffset(word));
+        const ctl = Control.from(try registers.read(offsets.addr32.control));
+        std.debug.assert(ctl.ext_data_capable);
+
+        const offset = if (ctl.addr64_capable)
+            offsets.addr64.ext_data
+        else
+            offsets.addr32.ext_data;
+
+        return registers.read(offset);
     }
 
     pub fn mask(self: Capability) ReadError!u32 {
         const registers = try Registers.tryFrom(self.function, self.base);
-        const word = Control.from(try registers.read(offsets.addr32.control));
-        std.debug.assert(word.pvm_capable);
-        return registers.read(maskOffset(word));
+        const ctl = Control.from(try registers.read(offsets.addr32.control));
+        std.debug.assert(ctl.pvm_capable);
+
+        const offset = if (ctl.addr64_capable)
+            offsets.addr64.mask
+        else
+            offsets.addr32.mask;
+
+        return registers.read(offset);
     }
 
     pub fn pending(self: Capability) ReadError!u32 {
         const registers = try Registers.tryFrom(self.function, self.base);
-        const word = Control.from(try registers.read(offsets.addr32.control));
-        std.debug.assert(word.pvm_capable);
-        return registers.read(pendingOffset(word));
+        const ctl = Control.from(try registers.read(offsets.addr32.control));
+        std.debug.assert(ctl.pvm_capable);
+
+        const offset = if (ctl.addr64_capable)
+            offsets.addr64.pending
+        else
+            offsets.addr32.pending;
+
+        return registers.read(offset);
     }
 
     pub fn readRouting(self: Capability) ReadError!Routing {
         const registers = try Registers.tryFrom(self.function, self.base);
-        const word = Control.from(try registers.read(offsets.addr32.control));
-        const num_vectors = VectorCount.from(word.multiple_msg_enable);
+        const ctl = Control.from(try registers.read(offsets.addr32.control));
+
+        const num_vectors = ctl.multi_msg_enable;
         _ = try num_vectors.count();
 
+        const layout = Layout.from(ctl);
+        const address_value = try readAddress(registers, ctl);
+        const data_value = try registers.read(layout.data);
+
+        const initial_mask = try layout.mask.read(registers);
+        const ext_data = try layout.ext_data.read(registers);
+
         return .{
-            .address = try readAddress(registers, word),
-            .data = try registers.read(dataOffset(word)),
+            .address = address_value,
+            .data = data_value,
             .num_vectors = num_vectors,
-            .initial_mask = if (word.pvm_capable) try registers.read(maskOffset(word)) else null,
-            .ext_data = if (word.ext_data_capable) try registers.read(extDataOffset(word)) else null,
+            .initial_mask = initial_mask,
+            .ext_data = ext_data,
         };
     }
 
     pub fn setVectorMasked(self: Capability, index: u5, masked: bool) ProgramError!void {
         const registers = Registers.tryFrom(self.function, self.base) catch return error.ProgrammingWriteFailed;
-        const word = Control.from(registers.read(offsets.addr32.control) catch return error.ProgrammingWriteFailed);
-        std.debug.assert(word.pvm_capable);
-        const num_vectors = try VectorCount.from(word.multiple_msg_capable).count();
-        std.debug.assert(index < num_vectors);
-        validateExtent(registers, word) catch return error.ProgrammingWriteFailed;
+        const ctl = Control.from(registers.read(offsets.addr32.control) catch return error.ProgrammingWriteFailed);
+        const layout = Layout.from(ctl);
+        std.debug.assert(ctl.pvm_capable);
 
-        var tx = Transaction.from(ConfigTarget.from(registers, word));
-        const offset = tx.target.mask.?;
-        const saved = tx.read(u32, offset) catch return error.ProgrammingWriteFailed;
-        var value = saved;
+        const num_vectors = try ctl.multi_msg_capable.count();
+        std.debug.assert(index < num_vectors);
+
+        layout.validateExtent(registers) catch return error.ProgrammingWriteFailed;
+
+        var tx = Transaction.from(registers);
+        const offset = layout.mask.offset.?;
+        const saved = tx.read(offset) catch return error.ProgrammingWriteFailed;
+
         const bit = @as(u32, 1) << index;
+        var value = saved;
+
         if (masked) {
             value |= bit;
         } else {
             value &= ~bit;
         }
 
-        try tx.writeReadback(u32, offset, value, saved);
+        try tx.write(offset, value, saved);
     }
 
     pub fn setMask(self: Capability, value: u32) ProgramError!void {
         const registers = Registers.tryFrom(self.function, self.base) catch return error.ProgrammingWriteFailed;
-        const word = Control.from(registers.read(offsets.addr32.control) catch return error.ProgrammingWriteFailed);
-        validateExtent(registers, word) catch return error.ProgrammingWriteFailed;
-        std.debug.assert(word.pvm_capable);
+        const ctl = Control.from(registers.read(offsets.addr32.control) catch return error.ProgrammingWriteFailed);
+        const layout = Layout.from(ctl);
 
-        var tx = Transaction.from(ConfigTarget.from(registers, word));
-        const offset = tx.target.mask.?;
-        const saved = tx.read(u32, offset) catch return error.ProgrammingWriteFailed;
+        layout.validateExtent(registers) catch return error.ProgrammingWriteFailed;
+        std.debug.assert(ctl.pvm_capable);
 
-        try tx.writeReadback(u32, offset, value, saved);
+        var tx = Transaction.from(registers);
+        const offset = layout.mask.offset.?;
+        const saved = tx.read(offset) catch return error.ProgrammingWriteFailed;
+
+        try tx.write(offset, value, saved);
     }
 
     pub fn program(self: Capability, routing: Routing) ProgramError!void {
         const registers = Registers.tryFrom(self.function, self.base) catch return error.ProgrammingWriteFailed;
-        const word = Control.from(registers.read(offsets.addr32.control) catch return error.ProgrammingWriteFailed);
-        try validateRouting(word, routing);
-        validateExtent(registers, word) catch return error.ProgrammingWriteFailed;
+        const ctl = Control.from(registers.read(offsets.addr32.control) catch return error.ProgrammingWriteFailed);
+        const layout = Layout.from(ctl);
 
-        var tx = Transaction.from(ConfigTarget.from(registers, word));
-        const saved = Snapshot.read(word, &tx) catch return error.ProgrammingWriteFailed;
+        try validateRouting(ctl, routing);
+        layout.validateExtent(registers) catch return error.ProgrammingWriteFailed;
 
-        var disabled_control = saved.control;
-        disabled_control.enable = false;
-        try tx.writeReadback(u16, tx.target.control, Control.raw(disabled_control), Control.raw(saved.control));
+        var tx = Transaction.from(registers);
+        const saved = Snapshot.read(registers, layout, ctl) catch return error.ProgrammingWriteFailed;
+
+        const disabled_control = Control.replace(saved.control, .{ .enable = false });
+        try tx.write(layout.control, Control.raw(disabled_control), Control.raw(saved.control));
 
         if (routing.initial_mask) |value| {
-            try tx.writeReadback(u32, tx.target.mask.?, value, saved.mask);
+            try tx.write(layout.mask.offset.?, value, saved.mask);
         }
 
-        try tx.writeReadback(u32, tx.target.address_lo, @truncate(routing.address), saved.address_lo);
-        if (word.addr64_capable) {
-            try tx.writeReadback(u32, tx.target.address_hi.?, @truncate(routing.address >> 32), saved.address_hi);
+        try tx.write(layout.address_lo, @truncate(routing.address), saved.address_lo);
+        if (layout.address_hi.offset) |offset| {
+            try tx.write(offset, @truncate(routing.address >> 32), saved.address_hi);
         }
 
-        try tx.writeReadback(u16, tx.target.data, routing.data, saved.data);
+        try tx.write(layout.data, routing.data, saved.data);
 
         if (routing.ext_data) |value| {
-            try tx.writeReadback(u16, tx.target.ext_data.?, value, saved.ext_data);
+            try tx.write(layout.ext_data.offset.?, value, saved.ext_data);
         }
 
-        var enabled_control = saved.control;
-        enabled_control.enable = true;
-        enabled_control.multiple_msg_enable = @intFromEnum(routing.num_vectors);
-        enabled_control.ext_data_enable = routing.ext_data != null;
-        try tx.writeReadback(u16, tx.target.control, Control.raw(enabled_control), Control.raw(saved.control));
+        const enabled_control = Control.replace(saved.control, .{
+            .enable = true,
+            .multi_msg_enable = routing.num_vectors,
+            .ext_data_enable = routing.ext_data != null,
+        });
+
+        try tx.write(layout.control, Control.raw(enabled_control), Control.raw(saved.control));
     }
 
     pub fn disable(self: Capability) ProgramError!void {
         const registers = Registers.tryFrom(self.function, self.base) catch return error.ProgrammingWriteFailed;
-        var word = Control.from(registers.read(offsets.addr32.control) catch return error.ProgrammingWriteFailed);
-        validateExtent(registers, word) catch return error.ProgrammingWriteFailed;
+        const saved = Control.from(registers.read(offsets.addr32.control) catch return error.ProgrammingWriteFailed);
+        const layout = Layout.from(saved);
+        layout.validateExtent(registers) catch return error.ProgrammingWriteFailed;
 
-        var tx = Transaction.from(ConfigTarget.from(registers, word));
-        const saved_raw = Control.raw(word);
+        var tx = Transaction.from(registers);
+        const ctl = Control.replace(saved, .{ .enable = false });
 
-        word.enable = false;
-
-        try tx.writeReadback(u16, tx.target.control, Control.raw(word), saved_raw);
+        try tx.write(layout.control, Control.raw(ctl), Control.raw(saved));
     }
 
-    fn validateRouting(word: ControlWord, routing: Routing) ProgramError!void {
+    fn readAddress(registers: Registers, ctl: ControlWord) ReadError!u64 {
+        const lo = try registers.read(offsets.addr32.address_lo);
+        if (!ctl.addr64_capable) {
+            return lo;
+        }
+
+        const hi = try registers.read(offsets.addr64.address_hi);
+
+        return (@as(u64, hi) << 32) | @as(u64, lo);
+    }
+
+    fn validateRouting(ctl: ControlWord, routing: Routing) ProgramError!void {
         const requested = try routing.num_vectors.count();
-        const capable = try VectorCount.from(word.multiple_msg_capable).count();
+        const capable = try ctl.multi_msg_capable.count();
+
         if (requested > capable) {
             return error.InvalidRouting;
         }
 
-        if (!word.addr64_capable and routing.address > std.math.maxInt(u32)) {
+        if (!ctl.addr64_capable and routing.address > std.math.maxInt(u32)) {
             return error.InvalidRouting;
         }
 
@@ -231,51 +280,12 @@ pub const Capability = struct {
             return error.InvalidRouting;
         }
 
-        if (routing.initial_mask != null and !word.pvm_capable) {
+        if (routing.initial_mask != null and !ctl.pvm_capable) {
             return error.InvalidRouting;
         }
 
-        if ((routing.ext_data != null) != word.ext_data_capable) {
+        if ((routing.ext_data != null) != ctl.ext_data_capable) {
             return error.InvalidRouting;
-        }
-    }
-
-    fn readAddress(registers: Registers, word: ControlWord) ReadError!u64 {
-        const lo = try registers.read(offsets.addr32.address_lo);
-        if (!word.addr64_capable) {
-            return lo;
-        }
-
-        const hi = try registers.read(offsets.addr64.address_hi);
-        return (@as(u64, hi) << 32) | @as(u64, lo);
-    }
-
-    fn dataOffset(word: ControlWord) RelativeOffset(u16) {
-        return if (word.addr64_capable) offsets.addr64.data else offsets.addr32.data;
-    }
-
-    fn extDataOffset(word: ControlWord) RelativeOffset(u16) {
-        return if (word.addr64_capable) offsets.addr64.ext_data else offsets.addr32.ext_data;
-    }
-
-    fn maskOffset(word: ControlWord) RelativeOffset(u32) {
-        return if (word.addr64_capable) offsets.addr64.mask else offsets.addr32.mask;
-    }
-
-    fn pendingOffset(word: ControlWord) RelativeOffset(u32) {
-        return if (word.addr64_capable) offsets.addr64.pending else offsets.addr32.pending;
-    }
-
-    fn validateExtent(registers: Registers, word: ControlWord) error{MalformedCapability}!void {
-        const contained = if (word.pvm_capable)
-            registers.contains(pendingOffset(word))
-        else if (word.ext_data_capable)
-            registers.contains(extDataOffset(word))
-        else
-            registers.contains(dataOffset(word));
-
-        if (!contained) {
-            return error.MalformedCapability;
         }
     }
 };
@@ -301,52 +311,62 @@ pub const offsets = struct {
     };
 };
 
-const ConfigTarget = struct {
-    registers: Registers,
+fn OptionalRegister(comptime T: type) type {
+    return struct {
+        offset: ?RelativeOffset(T),
+
+        const Self = @This();
+
+        fn read(self: Self, registers: Registers) CapabilityError!?T {
+            const offset = self.offset orelse return null;
+            return try registers.read(offset);
+        }
+
+        fn readOrDefault(self: Self, registers: Registers, default: T) CapabilityError!T {
+            return (try self.read(registers)) orelse default;
+        }
+    };
+}
+
+const Layout = struct {
     control: Offset16,
     address_lo: Offset32,
-    address_hi: ?Offset32,
+    address_hi: OptionalRegister(u32),
     data: Offset16,
-    ext_data: ?Offset16,
-    mask: ?Offset32,
+    ext_data: OptionalRegister(u16),
+    mask: OptionalRegister(u32),
+    pending: OptionalRegister(u32),
 
     pub const Offset16 = RelativeOffset(u16);
     pub const Offset32 = RelativeOffset(u32);
 
-    pub fn from(registers: Registers, word: ControlWord) ConfigTarget {
+    fn from(control: ControlWord) Layout {
         return .{
-            .registers = registers,
             .control = offsets.addr32.control,
             .address_lo = offsets.addr32.address_lo,
-            .address_hi = if (word.addr64_capable) offsets.addr64.address_hi else null,
-            .data = Capability.dataOffset(word),
-            .ext_data = if (word.ext_data_capable) Capability.extDataOffset(word) else null,
-            .mask = if (word.pvm_capable) Capability.maskOffset(word) else null,
+            .address_hi = .{ .offset = if (control.addr64_capable) offsets.addr64.address_hi else null },
+            .data = if (control.addr64_capable) offsets.addr64.data else offsets.addr32.data,
+            .ext_data = .{ .offset = if (!control.ext_data_capable) null else if (control.addr64_capable) offsets.addr64.ext_data else offsets.addr32.ext_data },
+            .mask = .{ .offset = if (!control.pvm_capable) null else if (control.addr64_capable) offsets.addr64.mask else offsets.addr32.mask },
+            .pending = .{ .offset = if (!control.pvm_capable) null else if (control.addr64_capable) offsets.addr64.pending else offsets.addr32.pending },
         };
     }
 
-    pub fn read16(self: ConfigTarget, offset: Offset16) CapabilityError!u16 {
-        return self.registers.read(offset);
-    }
+    fn validateExtent(self: Layout, registers: Registers) error{MalformedCapability}!void {
+        const contained = if (self.pending.offset) |offset|
+            registers.contains(offset)
+        else if (self.ext_data.offset) |offset|
+            registers.contains(offset)
+        else
+            registers.contains(self.data);
 
-    pub fn read32(self: ConfigTarget, offset: Offset32) CapabilityError!u32 {
-        return self.registers.read(offset);
-    }
-
-    pub fn write16(self: ConfigTarget, offset: Offset16, value: u16) CapabilityError!void {
-        return self.registers.write(offset, value);
-    }
-
-    pub fn write32(self: ConfigTarget, offset: Offset32, value: u32) CapabilityError!void {
-        return self.registers.write(offset, value);
+        if (!contained) {
+            return error.MalformedCapability;
+        }
     }
 };
 
-const Transaction = programming.Transaction(ConfigTarget, .{
-    .capacity = 7,
-    .word16 = true,
-    .word32 = true,
-});
+const Transaction = programming.ConfigTransaction(7);
 
 const Snapshot = struct {
     control: ControlWord,
@@ -356,24 +376,16 @@ const Snapshot = struct {
     ext_data: u16 = 0,
     mask: u32 = 0,
 
-    fn read(word: ControlWord, tx: *Transaction) ProgrammingError!Snapshot {
-        const address_lo = try tx.read(u32, tx.target.address_lo);
-        const address_hi = if (word.addr64_capable)
-            try tx.read(u32, tx.target.address_hi.?)
-        else
-            0;
-        const data = try tx.read(u16, tx.target.data);
-        const ext_data = if (word.ext_data_capable)
-            try tx.read(u16, tx.target.ext_data.?)
-        else
-            0;
-        const mask = if (word.pvm_capable)
-            try tx.read(u32, tx.target.mask.?)
-        else
-            0;
+    fn read(registers: Registers, layout: Layout, control: ControlWord) CapabilityError!Snapshot {
+        const address_lo = try registers.read(layout.address_lo);
+        const address_hi = try layout.address_hi.readOrDefault(registers, 0);
+
+        const data = try registers.read(layout.data);
+        const ext_data = try layout.ext_data.readOrDefault(registers, 0);
+        const mask = try layout.mask.readOrDefault(registers, 0);
 
         return .{
-            .control = word,
+            .control = control,
             .address_lo = address_lo,
             .address_hi = address_hi,
             .data = data,
@@ -401,8 +413,8 @@ pub const unit = struct {
 
     const ControlFields = struct {
         enable: bool = false,
-        multiple_msg_capable: u3 = 0,
-        multiple_msg_enable: u3 = 0,
+        multi_msg_capable: u3 = 0,
+        multi_msg_enable: u3 = 0,
         addr64_capable: bool = false,
         pvm_capable: bool = false,
         ext_data_capable: bool = false,
@@ -575,7 +587,7 @@ pub const unit = struct {
         seedCapabilityNode(&present.bytes, 0x40, @intFromEnum(Id.pcie), test_base);
         seedCapabilityNode(&present.bytes, test_base, @intFromEnum(msi.id), 0);
         store16(&present.bytes, @as(usize, test_base) + addr32_offsets.control, controlRaw(.{
-            .multiple_msg_capable = @intFromEnum(VectorCount.four),
+            .multi_msg_capable = @intFromEnum(VectorCount.four),
             .addr64_capable = true,
             .pvm_capable = true,
         }));
@@ -583,10 +595,10 @@ pub const unit = struct {
         const found = (try Capability.find(function(&present))).?;
 
         try testing.expectEqual(test_base, found.base);
-        const word = try found.control();
-        try testing.expect(word.addr64_capable);
-        try testing.expect(word.pvm_capable);
-        try testing.expectEqual(VectorCount.four, VectorCount.from(word.multiple_msg_capable));
+        const control = try found.control();
+        try testing.expect(control.addr64_capable);
+        try testing.expect(control.pvm_capable);
+        try testing.expectEqual(VectorCount.four, control.multi_msg_capable);
 
         var no_list = MsiConfig.from();
         try testing.expect((try Capability.find(function(&no_list))) == null);
@@ -605,11 +617,11 @@ pub const unit = struct {
         try testing.expectError(error.MalformedCapability, Capability.find(function(&cycle)));
     }
 
-    test "tryFrom rejects reserved multiple_msg_capable encodings" {
+    test "tryFrom rejects reserved multi_msg_capable encodings" {
         for ([_]u3{ 6, 7 }) |reserved| {
             var backend = MsiConfig.from();
             store16(&backend.bytes, @as(usize, test_base) + addr32_offsets.control, controlRaw(.{
-                .multiple_msg_capable = reserved,
+                .multi_msg_capable = reserved,
             }));
 
             try testing.expectError(error.MalformedField, Capability.tryFrom(function(&backend), capabilityAt(test_base)));
@@ -619,7 +631,7 @@ pub const unit = struct {
     test "live reads dispatch through 32-bit and 64-bit MSI layouts" {
         var msi32 = MsiConfig.from();
         seedMsiCapability(&msi32, test_base, controlRaw(.{
-            .multiple_msg_enable = @intFromEnum(VectorCount.two),
+            .multi_msg_enable = @intFromEnum(VectorCount.two),
             .pvm_capable = true,
         }));
         store32(&msi32.bytes, @as(usize, test_base) + addr32_offsets.address_lo, 0x89AB_CDEF);
@@ -631,13 +643,13 @@ pub const unit = struct {
 
         try testing.expectEqual(@as(u64, 0x89AB_CDEF), try capability32.address());
         try testing.expectEqual(@as(u16, 0x3456), try capability32.data());
-        try testing.expectEqual(VectorCount.two, VectorCount.from((try capability32.control()).multiple_msg_enable));
+        try testing.expectEqual(VectorCount.two, (try capability32.control()).multi_msg_enable);
         try testing.expectEqual(@as(u32, 0xCAFE_BABE), try capability32.mask());
         try testing.expectEqual(@as(u32, 0x1234_5678), try capability32.pending());
 
         var msi64 = MsiConfig.from();
         seedMsiCapability(&msi64, test_base, controlRaw(.{
-            .multiple_msg_enable = @intFromEnum(VectorCount.four),
+            .multi_msg_enable = @intFromEnum(VectorCount.four),
             .addr64_capable = true,
             .pvm_capable = true,
             .ext_data_capable = true,
@@ -655,7 +667,7 @@ pub const unit = struct {
         try testing.expectEqual(@as(u64, 0x1122_3344_5566_7788), try capability64.address());
         try testing.expectEqual(@as(u16, 0x7788), try capability64.data());
         const word64 = try capability64.control();
-        try testing.expectEqual(VectorCount.four, VectorCount.from(word64.multiple_msg_enable));
+        try testing.expectEqual(VectorCount.four, word64.multi_msg_enable);
         try testing.expect(word64.ext_data_enable);
         try testing.expectEqual(@as(u16, 0x99AA), try capability64.extData());
         try testing.expectEqual(@as(u32, 0x0F0F_F0F0), try capability64.mask());
@@ -668,8 +680,8 @@ pub const unit = struct {
         const capability = try Capability.tryFrom(function(&backend), capabilityAt(test_base));
         for ([_]u3{ 6, 7 }) |reserved| {
             store16(&backend.bytes, @as(usize, test_base) + addr32_offsets.control, controlRaw(.{
-                .multiple_msg_capable = reserved,
-                .multiple_msg_enable = reserved,
+                .multi_msg_capable = reserved,
+                .multi_msg_enable = reserved,
                 .pvm_capable = true,
             }));
             backend.resetIoCounts();
@@ -694,7 +706,7 @@ pub const unit = struct {
             .addr64_capable = true,
             .pvm_capable = true,
             .ext_data_capable = true,
-            .multiple_msg_enable = @intFromEnum(VectorCount.two),
+            .multi_msg_enable = @intFromEnum(VectorCount.two),
         }));
         store32(&backend.bytes, @as(usize, test_base) + addr32_offsets.address_lo, 0x5566_7788);
         store32(&backend.bytes, @as(usize, test_base) + addr64_offsets.address_hi, 0x1122_3344);
@@ -759,7 +771,7 @@ pub const unit = struct {
             .data = 0x40,
             .num_vectors = .two,
         });
-        try expectInvalidRoutingNoWrites(controlRaw(.{ .multiple_msg_capable = @intFromEnum(VectorCount.two) }), .{
+        try expectInvalidRoutingNoWrites(controlRaw(.{ .multi_msg_capable = @intFromEnum(VectorCount.two) }), .{
             .address = 0xFEE0_0000,
             .data = 0x41,
             .num_vectors = .two,
@@ -787,8 +799,8 @@ pub const unit = struct {
         var backend = MsiConfig.from();
         seedMsiCapability(&backend, test_base, controlRaw(.{
             .enable = true,
-            .multiple_msg_capable = @intFromEnum(VectorCount.four),
-            .multiple_msg_enable = @intFromEnum(VectorCount.four),
+            .multi_msg_capable = @intFromEnum(VectorCount.four),
+            .multi_msg_enable = @intFromEnum(VectorCount.four),
             .addr64_capable = true,
             .pvm_capable = true,
             .ext_data_capable = true,
@@ -803,8 +815,8 @@ pub const unit = struct {
         const raw = load16(&backend.bytes, @as(usize, test_base) + addr32_offsets.control);
         const control = Control.from(raw);
         try testing.expect(!control.enable);
-        try testing.expectEqual(@as(u3, @intFromEnum(VectorCount.four)), control.multiple_msg_capable);
-        try testing.expectEqual(@as(u3, @intFromEnum(VectorCount.four)), control.multiple_msg_enable);
+        try testing.expectEqual(VectorCount.four, control.multi_msg_capable);
+        try testing.expectEqual(VectorCount.four, control.multi_msg_enable);
         try testing.expect(control.addr64_capable);
         try testing.expect(control.pvm_capable);
         try testing.expect(control.ext_data_capable);
@@ -848,8 +860,8 @@ pub const unit = struct {
         var backend = MsiConfig.from();
         seedMsiCapability(&backend, test_base, controlRaw(.{
             .enable = true,
-            .multiple_msg_capable = @intFromEnum(VectorCount.four),
-            .multiple_msg_enable = @intFromEnum(VectorCount.two),
+            .multi_msg_capable = @intFromEnum(VectorCount.four),
+            .multi_msg_enable = @intFromEnum(VectorCount.two),
             .addr64_capable = true,
             .pvm_capable = true,
             .ext_data_capable = true,
@@ -874,8 +886,8 @@ pub const unit = struct {
         try testing.expectEqual(@as(usize, 13), backend.read_count);
 
         const disabled = controlRaw(.{
-            .multiple_msg_capable = @intFromEnum(VectorCount.four),
-            .multiple_msg_enable = @intFromEnum(VectorCount.two),
+            .multi_msg_capable = @intFromEnum(VectorCount.four),
+            .multi_msg_enable = @intFromEnum(VectorCount.two),
             .addr64_capable = true,
             .pvm_capable = true,
             .ext_data_capable = true,
@@ -883,8 +895,8 @@ pub const unit = struct {
         });
         const enabled = controlRaw(.{
             .enable = true,
-            .multiple_msg_capable = @intFromEnum(VectorCount.four),
-            .multiple_msg_enable = @intFromEnum(VectorCount.four),
+            .multi_msg_capable = @intFromEnum(VectorCount.four),
+            .multi_msg_enable = @intFromEnum(VectorCount.four),
             .addr64_capable = true,
             .pvm_capable = true,
             .ext_data_capable = true,
@@ -913,8 +925,8 @@ pub const unit = struct {
         var backend = MsiConfig.from();
         seedMsiCapability(&backend, test_base, controlRaw(.{
             .enable = true,
-            .multiple_msg_capable = @intFromEnum(VectorCount.two),
-            .multiple_msg_enable = @intFromEnum(VectorCount.two),
+            .multi_msg_capable = @intFromEnum(VectorCount.two),
+            .multi_msg_enable = @intFromEnum(VectorCount.two),
             .pvm_capable = true,
             .reserved11 = 0b01101,
         }));
@@ -936,8 +948,8 @@ pub const unit = struct {
         try testing.expectEqualSlices(u8, &before, &backend.bytes);
         try expectWrites(&backend, &.{
             .{ .width = 2, .offset = @as(usize, test_base) + addr32_offsets.control, .value = controlRaw(.{
-                .multiple_msg_capable = @intFromEnum(VectorCount.two),
-                .multiple_msg_enable = @intFromEnum(VectorCount.two),
+                .multi_msg_capable = @intFromEnum(VectorCount.two),
+                .multi_msg_enable = @intFromEnum(VectorCount.two),
                 .pvm_capable = true,
                 .reserved11 = 0b01101,
             }) },
@@ -949,8 +961,8 @@ pub const unit = struct {
             .{ .width = 4, .offset = @as(usize, test_base) + addr32_offsets.mask, .value = 0x0000_FFFF },
             .{ .width = 2, .offset = @as(usize, test_base) + addr32_offsets.control, .value = controlRaw(.{
                 .enable = true,
-                .multiple_msg_capable = @intFromEnum(VectorCount.two),
-                .multiple_msg_enable = @intFromEnum(VectorCount.two),
+                .multi_msg_capable = @intFromEnum(VectorCount.two),
+                .multi_msg_enable = @intFromEnum(VectorCount.two),
                 .pvm_capable = true,
                 .reserved11 = 0b01101,
             }) },
@@ -1022,8 +1034,8 @@ pub const unit = struct {
     fn controlRaw(fields: ControlFields) u16 {
         return Control.raw(.{
             .enable = fields.enable,
-            .multiple_msg_capable = fields.multiple_msg_capable,
-            .multiple_msg_enable = fields.multiple_msg_enable,
+            .multi_msg_capable = .from(fields.multi_msg_capable),
+            .multi_msg_enable = .from(fields.multi_msg_enable),
             .addr64_capable = fields.addr64_capable,
             .pvm_capable = fields.pvm_capable,
             .ext_data_capable = fields.ext_data_capable,

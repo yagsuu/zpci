@@ -2,9 +2,11 @@ const std = @import("std");
 
 const stdx = @import("stdx");
 
-const pci_bar = @import("../bar.zig");
+const bar = @import("../bar.zig");
 const header = @import("../header.zig");
 const ids = @import("../ids.zig");
+
+const type0 = @This();
 
 const Bist = header.Bist.Word;
 const ClassCode = ids.ClassCode;
@@ -33,7 +35,7 @@ pub const Header = Struct(.{ .size = 64, .alignment = 4 }, .{
     .bars = .{ .type = [num_bar_slots]u32, .offset = offsets.bar_base },
     .cardbus_cis_ptr = .{ .type = u32, .offset = offsets.cardbus_cis_ptr },
     .subsystem_vendor_id = .{ .type = VendorId, .offset = offsets.subsystem_vendor_id },
-    .subsystem_id = .{ .type = u16, .offset = offsets.subsystem_id },
+    .subsystem_id = .{ .type = DeviceId, .offset = offsets.subsystem_id },
     .rom_base = .{ .type = ExpansionRom, .offset = offsets.rom_base },
     .cap_ptr = .{ .type = u8, .offset = offsets.cap_ptr },
     .intr_line = .{ .type = u8, .offset = offsets.intr_line },
@@ -70,7 +72,7 @@ pub const offsets = struct {
 
     pub fn bar(index: usize) usize {
         std.debug.assert(index < num_bar_slots);
-        return bar_base + pci_bar.stride * index;
+        return bar_base + type0.bar.stride * index;
     }
 };
 
@@ -88,6 +90,7 @@ pub const unit = struct {
         bytes[14] = 0x80;
         std.mem.writeInt(u32, bytes[0x10..0x14], 0x8000_0004, .little);
         std.mem.writeInt(u16, bytes[0x2C..0x2E], 0x1AF4, .little);
+        std.mem.writeInt(u16, bytes[0x2E..0x30], 0xFFFF, .little);
         std.mem.writeInt(u32, bytes[0x30..0x34], 0xC000_0001, .little);
 
         var decoded: Header = @bitCast(bytes);
@@ -99,6 +102,7 @@ pub const unit = struct {
         try testing.expect(decoded.type.multifunction);
         try testing.expectEqual(@as(u32, 0x8000_0004), decoded.bars[0]);
         try testing.expectEqual(VendorId.from(0x1AF4), decoded.subsystem_vendor_id);
+        try testing.expectEqual(DeviceId.from(0xFFFF), decoded.subsystem_id);
         try testing.expect(decoded.rom_base.enable);
 
         decoded.command.bus_master = false;

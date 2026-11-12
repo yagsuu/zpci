@@ -1,6 +1,9 @@
 const stdx = @import("stdx");
 
+const pcie = @import("../pcie.zig");
+
 const BitField = stdx.bits.BitField;
+const PowerLimitScale = pcie.PowerLimitScale;
 
 pub const Capabilities = BitField(u32, .{
     .attention_button_present = .{ .type = bool, .access = .ro },
@@ -10,9 +13,9 @@ pub const Capabilities = BitField(u32, .{
     .power_indicator_present = .{ .type = bool, .access = .ro },
     .hot_plug_surprise = .{ .type = bool, .access = .ro },
     .hot_plug_capable = .{ .type = bool, .access = .ro },
-    .power_limit_value = .{ .type = u8, .access = .ro },
-    .power_limit_scale = .{ .type = u2, .access = .ro },
-    .electromechanical_interlock_present = .{ .type = bool, .access = .ro },
+    .power_limit = .{ .type = u8, .access = .ro },
+    .power_scale = .{ .type = PowerLimitScale, .access = .ro, .default = .watts_1 },
+    .interlock_present = .{ .type = bool, .access = .ro },
     .no_command_completed_support = .{ .type = bool, .access = .ro },
     .number = .{ .type = u13, .access = .ro },
 });
@@ -22,13 +25,13 @@ pub const Control = BitField(u16, .{
     .power_fault_detected_enable = bool,
     .mrl_sensor_changed_enable = bool,
     .presence_detect_changed_enable = bool,
-    .command_completed_interrupt_enable = bool,
-    .hot_plug_interrupt_enable = bool,
-    .attention_indicator = u2,
-    .power_indicator = u2,
-    .power_control = bool,
-    .electromechanical_interlock_control = .{ .type = bool, .write = .trigger },
-    .data_link_layer_state_changed_enable = bool,
+    .command_completed_intr_enable = bool,
+    .hot_plug_intr_enable = bool,
+    .attention_indicator = .{ .type = Indicator, .default = @as(Indicator, @enumFromInt(0)) },
+    .power_indicator = .{ .type = Indicator, .default = @as(Indicator, @enumFromInt(0)) },
+    .power_control = .{ .type = PowerControl, .default = .on },
+    .interlock_control = .{ .type = bool, .write = .trigger },
+    .dll_state_changed_enable = bool,
     .auto_slot_power_limit_disable = bool,
     .in_band_pd_disable = bool,
     ._rsvd_15 = .{ .type = u1, .access = .reserved },
@@ -42,15 +45,14 @@ pub const Status = BitField(u16, .{
     .command_completed = .{ .type = bool, .write = .w1c },
     .mrl_sensor_state = .{ .type = bool, .access = .ro },
     .presence_detect_state = .{ .type = bool, .access = .ro },
-    .electromechanical_interlock_status = .{ .type = bool, .access = .ro },
-    .data_link_layer_state_changed = .{ .type = bool, .write = .w1c },
+    .interlock_status = .{ .type = bool, .access = .ro },
+    .dll_state_changed = .{ .type = bool, .write = .w1c },
     ._rsvd_9 = .{ .type = u7, .access = .reserved },
 });
 
 pub const Capabilities2 = BitField(u32, .{
-    ._rsvd_0 = .{ .type = u1, .access = .reserved },
     .in_band_pd_disable_supported = .{ .type = bool, .access = .ro },
-    ._rsvd_2 = .{ .type = u30, .access = .reserved },
+    ._rsvd_1 = .{ .type = u31, .access = .reserved },
 });
 
 pub const Control2 = BitField(u16, .{
@@ -60,6 +62,18 @@ pub const Control2 = BitField(u16, .{
 pub const Status2 = BitField(u16, .{
     ._rsvd_0 = .{ .type = u16, .access = .reserved },
 });
+
+pub const Indicator = enum(u2) {
+    on = 1,
+    blink = 2,
+    off = 3,
+    _,
+};
+
+pub const PowerControl = enum(u1) {
+    on = 0,
+    off = 1,
+};
 
 pub const offsets = struct {
     pub const capabilities: u8 = 0x14;
@@ -77,9 +91,30 @@ pub const unit = struct {
         try testing.expectEqual(@as(comptime_int, 6), @bitOffsetOf(Control.Word, "attention_indicator"));
         try testing.expectEqual(
             @as(comptime_int, 12),
-            @bitOffsetOf(Control.Word, "data_link_layer_state_changed_enable"),
+            @bitOffsetOf(Control.Word, "dll_state_changed_enable"),
         );
-        try testing.expectEqual(@as(comptime_int, 8), @bitOffsetOf(Status.Word, "data_link_layer_state_changed"));
+        try testing.expectEqual(@as(comptime_int, 8), @bitOffsetOf(Status.Word, "dll_state_changed"));
+    }
+
+    test "slot controls encode indicator states and power polarity" {
+        const word = Control.from(0x06C0);
+
+        try testing.expectEqual(Indicator.off, word.attention_indicator);
+        try testing.expectEqual(Indicator.blink, word.power_indicator);
+        try testing.expectEqual(PowerControl.off, word.power_control);
+
+        const updated = Control.replace(word, .{
+            .attention_indicator = .on,
+            .power_indicator = .off,
+            .power_control = .on,
+        });
+
+        try testing.expectEqual(@as(u16, 0x0340), Control.raw(updated));
+    }
+
+    test "in-band presence disable support uses bit zero" {
+        try testing.expect(Capabilities2.from(1).in_band_pd_disable_supported);
+        try testing.expect(!Capabilities2.from(2).in_band_pd_disable_supported);
     }
 
     test "access masks distinguish writable, sticky, action, and reserved bits" {
@@ -87,7 +122,7 @@ pub const unit = struct {
             .{ Capabilities, 0, 0, 0, 0 },
             .{ Control, 0x77FF, 0, 0x0800, 0x8000 },
             .{ Status, 0, 0x011F, 0, 0xFE00 },
-            .{ Capabilities2, 0, 0, 0, 0xFFFF_FFFD },
+            .{ Capabilities2, 0, 0, 0, 0xFFFF_FFFE },
             .{ Control2, 0, 0, 0, 0xFFFF },
             .{ Status2, 0, 0, 0, 0xFFFF },
         }) |case| {

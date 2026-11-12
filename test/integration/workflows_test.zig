@@ -275,7 +275,7 @@ test "integration: MSI routing programs discovered capability" {
         .next = 0,
     });
     store16(&bytes, offset.msi_capability + msi.addr32.offsets.control, msiControlRaw(.{
-        .multiple_msg_capable = @intFromEnum(MsiVectorCount.two),
+        .multi_msg_capable = @intFromEnum(MsiVectorCount.two),
     }));
 
     const address = sbdf(.{ .bus = 0 });
@@ -292,7 +292,7 @@ test "integration: MSI routing programs discovered capability" {
     try testing.expectEqual(@as(u64, 0xFEE0_0000), try capability.address());
     try testing.expectEqual(@as(u16, 0x0040), try capability.data());
     const control = try capability.control();
-    try testing.expectEqual(MsiVectorCount.two, MsiVectorCount.from(control.multiple_msg_enable));
+    try testing.expectEqual(MsiVectorCount.two, control.multi_msg_enable);
     try testing.expect(control.enable);
 }
 
@@ -319,8 +319,8 @@ test "integration: MSI-X routing programs caller BAR memory" {
 
     const control = try capability.control();
     const num_vectors = @as(u16, control.table_size_minus_one) + 1;
-    const table_location = try capability.tableLocation();
-    const pba_location = try capability.pbaLocation();
+    const table_location = try capability.table();
+    const pba_location = try capability.pba();
 
     try testing.expectEqual(@as(u16, 2), num_vectors);
     try testing.expectEqual(@as(u3, 0), table_location.bir);
@@ -449,8 +449,8 @@ fn seedMsixPayload(bytes: []u8, base: u8, fields: struct {
 
 fn msiControlRaw(fields: struct {
     enable: bool = false,
-    multiple_msg_capable: u3 = 0,
-    multiple_msg_enable: u3 = 0,
+    multi_msg_capable: u3 = 0,
+    multi_msg_enable: u3 = 0,
     addr64_capable: bool = false,
     pvm_capable: bool = false,
     ext_data_capable: bool = false,
@@ -459,8 +459,8 @@ fn msiControlRaw(fields: struct {
 }) u16 {
     return MsiControl.raw(.{
         .enable = fields.enable,
-        .multiple_msg_capable = fields.multiple_msg_capable,
-        .multiple_msg_enable = fields.multiple_msg_enable,
+        .multi_msg_capable = MsiVectorCount.from(fields.multi_msg_capable),
+        .multi_msg_enable = MsiVectorCount.from(fields.multi_msg_enable),
         .addr64_capable = fields.addr64_capable,
         .pvm_capable = fields.pvm_capable,
         .ext_data_capable = fields.ext_data_capable,

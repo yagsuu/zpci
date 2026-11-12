@@ -2,9 +2,11 @@ const std = @import("std");
 
 const stdx = @import("stdx");
 
-const pci_bar = @import("../bar.zig");
+const bar = @import("../bar.zig");
 const header = @import("../header.zig");
 const ids = @import("../ids.zig");
+
+const type1 = @This();
 
 const Bist = header.Bist.Word;
 const BridgeControl = header.BridgeControl.Word;
@@ -96,7 +98,7 @@ pub const offsets = struct {
 
     pub fn bar(index: usize) usize {
         std.debug.assert(index < num_bar_slots);
-        return bar_base + pci_bar.stride * index;
+        return bar_base + type1.bar.stride * index;
     }
 };
 

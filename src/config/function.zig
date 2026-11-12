@@ -118,8 +118,8 @@ pub const Function = struct {
     pub fn format(self: Function) Error!HeaderFormat {
         const word = Type.from(try self.typeByte());
         return switch (word.format) {
-            0x00 => .type0,
-            0x01 => .type1,
+            .type0 => .type0,
+            .type1 => .type1,
             else => error.BadHeaderType,
         };
     }

@@ -25,10 +25,10 @@ pub const Location = BitField(u32, .{
 });
 
 pub const TableEntry = Struct(.{ .size = 16, .alignment = 4 }, .{
-    .address_lo = .{ .type = u32, .offset = 0x00 },
-    .address_hi = .{ .type = u32, .offset = 0x04 },
-    .data = .{ .type = u32, .offset = 0x08 },
-    .control = .{ .type = VectorControl.Word, .offset = 0x0C },
+    .address_lo = .{ .type = u32, .offset = table.offsets.address_lo },
+    .address_hi = .{ .type = u32, .offset = table.offsets.address_hi },
+    .data = .{ .type = u32, .offset = table.offsets.data },
+    .control = .{ .type = VectorControl.Word, .offset = table.offsets.control },
 });
 
 pub const VectorControl = BitField(u32, .{
@@ -40,6 +40,15 @@ pub const offsets = struct {
     pub const control: u8 = 0x02;
     pub const table: u8 = 0x04;
     pub const pba: u8 = 0x08;
+};
+
+pub const table = struct {
+    pub const offsets = struct {
+        pub const address_lo: u8 = 0x00;
+        pub const address_hi: u8 = 0x04;
+        pub const data: u8 = 0x08;
+        pub const control: u8 = 0x0C;
+    };
 };
 
 pub const unit = struct {

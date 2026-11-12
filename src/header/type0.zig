@@ -111,8 +111,8 @@ pub const Type0 = struct {
         return .from(try self.function.read(offsets.subsystem_vendor_id));
     }
 
-    pub fn subsystemId(self: Type0) ConfigError!u16 {
-        return self.function.read(offsets.subsystem_id);
+    pub fn subsystemId(self: Type0) ConfigError!DeviceId {
+        return .from(try self.function.read(offsets.subsystem_id));
     }
 
     pub fn subsystem(self: Type0) ConfigError!Subsystem {
@@ -120,7 +120,7 @@ pub const Type0 = struct {
 
         return .{
             .vendor_id = .from(@truncate(raw)),
-            .id = @truncate(raw >> 16),
+            .id = .from(@truncate(raw >> 16)),
         };
     }
 
@@ -230,8 +230,8 @@ pub const unit = struct {
 
         try testing.expectEqual(@as(u32, 0xCAFE_BABE), try view.cardbusCisPtr());
         try testing.expectEqual(@as(u16, 0x1AF4), @intFromEnum(try view.subsystemVendorId()));
-        try testing.expectEqual(@as(u16, 0x1042), try view.subsystemId());
-        try testing.expectEqual(Subsystem{ .vendor_id = .from(0x1AF4), .id = 0x1042 }, try view.subsystem());
+        try testing.expectEqual(DeviceId.from(0x1042), try view.subsystemId());
+        try testing.expectEqual(Subsystem{ .vendor_id = .from(0x1AF4), .id = .from(0x1042) }, try view.subsystem());
         try testing.expectEqual(@as(u32, 0xD5E6_5AAB), ExpansionRom.raw(try view.rom()));
         try testing.expectEqual(@as(u8, 0x90), try view.capPtr());
         try testing.expectEqual(@as(u8, 0xFE), try view.intrLine());

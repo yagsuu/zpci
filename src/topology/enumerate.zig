@@ -148,12 +148,12 @@ const Enumerator = struct {
             if (descend) {
                 const routing: FunctionRouting = routing: {
                     const capability = Pcie.find(function) catch |err| switch (err) {
-                        error.MalformedCapability, error.UnsupportedRevision => break :routing .classic,
+                        error.MalformedCapability, error.UnsupportedRevision, error.UnsupportedRegister => break :routing .classic,
                         else => |other| return other,
                     } orelse break :routing .classic;
 
                     const control = capability.deviceControl2() catch |err| switch (err) {
-                        error.MalformedCapability, error.UnsupportedRevision => break :routing .classic,
+                        error.MalformedCapability, error.UnsupportedRevision, error.UnsupportedRegister => break :routing .classic,
                         else => |other| return other,
                     };
 

@@ -11,8 +11,8 @@ pub const id: Id = .msi;
 
 pub const Control = BitField(u16, .{
     .enable = bool,
-    .multiple_msg_capable = .{ .type = u3, .access = .ro },
-    .multiple_msg_enable = u3,
+    .multi_msg_capable = .{ .type = VectorCount, .access = .ro, .default = .one },
+    .multi_msg_enable = .{ .type = VectorCount, .default = .one },
     .addr64_capable = .{ .type = bool, .access = .ro },
     .pvm_capable = .{ .type = bool, .access = .ro },
     .ext_data_capable = .{ .type = bool, .access = .ro },
@@ -83,6 +83,24 @@ pub const addr64 = struct {
 
 pub const unit = struct {
     const testing = @import("std").testing;
+
+    test "vector count fields preserve valid and reserved encodings" {
+        for (@as(u4, 0)..8) |raw| {
+            const encoding: u3 = @intCast(raw);
+            const bits = (@as(u16, encoding) << 1) | (@as(u16, encoding) << 4);
+            const word = Control.from(bits);
+            try testing.expectEqual(encoding, @intFromEnum(word.multi_msg_capable));
+            try testing.expectEqual(encoding, @intFromEnum(word.multi_msg_enable));
+            try testing.expectEqual(bits, Control.raw(word));
+            if (encoding <= 5) {
+                try testing.expectEqual(@as(u6, 1) << encoding, try word.multi_msg_capable.count());
+            } else {
+                try testing.expectError(error.MalformedField, word.multi_msg_capable.count());
+                try testing.expectError(error.MalformedField, word.multi_msg_enable.count());
+            }
+        }
+        try testing.expectEqual(@as(u16, 0), Control.raw(.{}));
+    }
 
     test "access masks distinguish writable, sticky, action, and reserved bits" {
         inline for (.{
