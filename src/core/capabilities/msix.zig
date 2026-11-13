@@ -5,6 +5,7 @@ const stdx = @import("stdx");
 const standard = @import("standard.zig");
 
 const BitField = stdx.bits.BitField;
+const BitFieldExt = stdx.bits.BitFieldExt;
 const Id = standard.Id;
 const Struct = stdx.layout.Struct;
 
@@ -12,12 +13,11 @@ pub const id: Id = .msix;
 
 pub const max_vectors: u16 = @as(u16, std.math.maxInt(@FieldType(Control.Word, "table_size_minus_one"))) + 1;
 
-pub const Control = BitField(u16, .{
+pub const Control = BitFieldExt(u16, .{
     .table_size_minus_one = .{ .type = u11, .access = .ro },
-    ._rsvd_11 = .{ .type = u3, .access = .reserved },
-    .function_mask = bool,
+    .function_mask = .{ .offset = 14, .type = bool },
     .enable = bool,
-});
+}, .{ .unnamed = .reserved });
 
 pub const Location = BitField(u32, .{
     .bir = .{ .type = u3, .access = .ro },
@@ -31,10 +31,9 @@ pub const TableEntry = Struct(.{ .size = 16, .alignment = 4 }, .{
     .control = .{ .type = VectorControl.Word, .offset = table.offsets.control },
 });
 
-pub const VectorControl = BitField(u32, .{
+pub const VectorControl = BitFieldExt(u32, .{
     .masked = bool,
-    ._rsvd_1 = .{ .type = u31, .access = .reserved },
-});
+}, .{ .unnamed = .reserved });
 
 pub const offsets = struct {
     pub const control: u8 = 0x02;

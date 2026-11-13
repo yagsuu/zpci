@@ -9,6 +9,8 @@ pub const type0 = @import("header/type0.zig");
 pub const type1 = @import("header/type1.zig");
 
 const BitField = stdx.bits.BitField;
+const BitFieldExt = stdx.bits.BitFieldExt;
+
 const DeviceId = ids.DeviceId;
 const VendorId = ids.VendorId;
 const ClassCode = ids.ClassCode;
@@ -40,7 +42,7 @@ pub const Type = BitField(u8, .{
     .multifunction = .{ .type = bool, .access = .ro },
 });
 
-pub const Command = BitField(u16, .{
+pub const Command = BitFieldExt(u16, .{
     .io_enable = bool,
     .mem_enable = bool,
     .bus_master = bool,
@@ -48,20 +50,16 @@ pub const Command = BitField(u16, .{
     .mwi_enable = bool,
     .vga_palette_snoop = bool,
     .parity_response = bool,
-    ._rsvd_7 = .{ .type = u1, .access = .reserved },
-    .serr_enable = bool,
+    .serr_enable = .{ .offset = 8, .type = bool },
     .fast_back_to_back = bool,
     .intr_disable = bool,
-    ._rsvd_11 = .{ .type = u5, .access = .reserved },
-});
+}, .{ .unnamed = .reserved });
 
-pub const Status = BitField(u16, .{
-    ._rsvd_0 = .{ .type = u3, .access = .reserved },
-    .intr_pending = .{ .type = bool, .access = .ro },
+pub const Status = BitFieldExt(u16, .{
+    .intr_pending = .{ .offset = 3, .type = bool, .access = .ro },
     .cap_list = .{ .type = bool, .access = .ro },
     .capable_66mhz = .{ .type = bool, .access = .ro },
-    ._rsvd_6 = .{ .type = u1, .access = .reserved },
-    .fast_back_to_back_capable = .{ .type = bool, .access = .ro },
+    .fast_back_to_back_capable = .{ .offset = 7, .type = bool, .access = .ro },
     .master_data_parity_error = .{ .type = bool, .write = .w1c },
     .devsel_timing = .{ .type = DevselTiming, .access = .ro, .default = .fast },
     .signaled_target_abort = .{ .type = bool, .write = .w1c },
@@ -69,22 +67,20 @@ pub const Status = BitField(u16, .{
     .received_master_abort = .{ .type = bool, .write = .w1c },
     .signaled_system_error = .{ .type = bool, .write = .w1c },
     .detected_parity_error = .{ .type = bool, .write = .w1c },
-});
+}, .{ .unnamed = .reserved });
 
-pub const Bist = BitField(u8, .{
+pub const Bist = BitFieldExt(u8, .{
     .code = .{ .type = u4, .access = .ro },
-    ._rsvd_4 = .{ .type = u2, .access = .reserved },
-    .start = .{ .type = bool, .write = .trigger },
+    .start = .{ .offset = 6, .type = bool, .write = .trigger },
     .capable = .{ .type = bool, .access = .ro },
-});
+}, .{ .unnamed = .reserved });
 
-pub const ExpansionRom = BitField(u32, .{
+pub const ExpansionRom = BitFieldExt(u32, .{
     .enable = bool,
-    ._rsvd_1 = .{ .type = u10, .access = .reserved },
-    .base_shifted = u21,
-});
+    .base_shifted = .{ .offset = 11, .type = u21 },
+}, .{ .unnamed = .reserved });
 
-pub const BridgeControl = BitField(u16, .{
+pub const BridgeControl = BitFieldExt(u16, .{
     .parity_response = bool,
     .serr_enable = bool,
     .isa_enable = bool,
@@ -97,8 +93,7 @@ pub const BridgeControl = BitField(u16, .{
     .secondary_discard_timer = bool,
     .discard_timer_status = .{ .type = bool, .write = .w1c },
     .discard_timer_serr_enable = bool,
-    ._rsvd_12 = .{ .type = u4, .access = .reserved },
-});
+}, .{ .unnamed = .reserved });
 
 pub const Subsystem = struct {
     vendor_id: VendorId,
@@ -211,11 +206,11 @@ pub const unit = struct {
         try testing.expect(decoded.mwi_enable);
         try testing.expect(!decoded.vga_palette_snoop);
         try testing.expect(decoded.parity_response);
-        try testing.expectEqual(@as(u1, 0), decoded._rsvd_7);
+        try testing.expectEqual(@as(u16, 0), Command.raw(decoded) & Command.masks.reserved);
         try testing.expect(decoded.serr_enable);
         try testing.expect(!decoded.fast_back_to_back);
         try testing.expect(decoded.intr_disable);
-        try testing.expectEqual(@as(u5, 0), decoded._rsvd_11);
+        try testing.expectEqual(@as(u16, 0x0557), Command.raw(decoded));
     }
 
     test "Status maps PCI status bits and sticky-error mask" {
@@ -240,9 +235,10 @@ pub const unit = struct {
         const decoded = Bist.from(0xD7);
 
         try testing.expectEqual(@as(u4, 0x7), decoded.code);
-        try testing.expectEqual(@as(u2, 0x1), decoded._rsvd_4);
+        try testing.expectEqual(@as(u8, 0x10), Bist.raw(decoded) & Bist.masks.reserved);
         try testing.expect(decoded.start);
         try testing.expect(decoded.capable);
+        try testing.expectEqual(@as(u8, 0xD7), Bist.raw(decoded));
     }
 
     test "ExpansionRom maps enable and base address bits" {
@@ -250,7 +246,7 @@ pub const unit = struct {
         const decoded = ExpansionRom.from(raw);
 
         try testing.expect(decoded.enable);
-        try testing.expectEqual(@as(u10, 0x155), decoded._rsvd_1);
+        try testing.expectEqual(@as(u32, 0x2AA), ExpansionRom.raw(decoded) & ExpansionRom.masks.reserved);
         try testing.expectEqual(@as(u21, 0x1ABC_CB), decoded.base_shifted);
         try testing.expectEqual(raw, ExpansionRom.raw(decoded));
     }
@@ -271,7 +267,7 @@ pub const unit = struct {
         try testing.expect(!decoded.secondary_discard_timer);
         try testing.expect(decoded.discard_timer_status);
         try testing.expect(decoded.discard_timer_serr_enable);
-        try testing.expectEqual(@as(u4, 0xA), decoded._rsvd_12);
+        try testing.expectEqual(@as(u16, 0xA000), BridgeControl.raw(decoded) & BridgeControl.masks.reserved);
         try testing.expectEqual(raw, BridgeControl.raw(decoded));
     }
 
@@ -291,6 +287,10 @@ pub const unit = struct {
             try testing.expectEqual(@as(Raw, case[2]), T.masks.w1c);
             try testing.expectEqual(@as(Raw, case[3]), T.masks.trigger);
             try testing.expectEqual(@as(Raw, case[4]), T.masks.reserved);
+            const raw = std.math.maxInt(Raw);
+            const decoded = T.from(raw);
+            try testing.expectEqual(raw, T.raw(decoded));
+            try testing.expectEqual(raw, T.raw(T.replace(decoded, .{})));
         }
     }
 

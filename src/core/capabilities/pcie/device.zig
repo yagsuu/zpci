@@ -3,23 +3,21 @@ const stdx = @import("stdx");
 const pcie = @import("../pcie.zig");
 
 const BitField = stdx.bits.BitField;
+const BitFieldExt = stdx.bits.BitFieldExt;
 const DevicePortType = pcie.DevicePortType;
 const PowerLimitScale = pcie.PowerLimitScale;
 
-pub const Capabilities = BitField(u32, .{
+pub const Capabilities = BitFieldExt(u32, .{
     .max_payload_size = .{ .type = PayloadSize, .access = .ro, .default = .bytes_128 },
     .phantom_functions_supported = .{ .type = PhantomFunctions, .access = .ro, .default = .none },
     .ext_tag_supported = .{ .type = bool, .access = .ro },
     .l0s_acceptable_latency = .{ .type = L0sAcceptableLatency, .access = .ro, .default = .under_64ns },
     .l1_acceptable_latency = .{ .type = L1AcceptableLatency, .access = .ro, .default = .under_1us },
-    ._rsvd_12 = .{ .type = u3, .access = .reserved },
-    .role_based_error_reporting = .{ .type = bool, .access = .ro },
-    ._rsvd_16 = .{ .type = u2, .access = .reserved },
-    .captured_power_limit = .{ .type = u8, .access = .ro },
+    .role_based_error_reporting = .{ .offset = 15, .type = bool, .access = .ro },
+    .captured_power_limit = .{ .offset = 18, .type = u8, .access = .ro },
     .captured_power_scale = .{ .type = PowerLimitScale, .access = .ro, .default = .watts_1 },
     .flr_supported = .{ .type = bool, .access = .ro },
-    ._rsvd_29 = .{ .type = u3, .access = .reserved },
-});
+}, .{ .unnamed = .reserved });
 
 pub const Control = struct {
     const Fields = BitField(u16, .{
@@ -73,7 +71,7 @@ pub const Control = struct {
     }
 };
 
-pub const Status = BitField(u16, .{
+pub const Status = BitFieldExt(u16, .{
     .correctable_error_detected = .{ .type = bool, .write = .w1c },
     .non_fatal_error_detected = .{ .type = bool, .write = .w1c },
     .fatal_error_detected = .{ .type = bool, .write = .w1c },
@@ -81,10 +79,9 @@ pub const Status = BitField(u16, .{
     .aux_power_detected = .{ .type = bool, .access = .ro },
     .transactions_pending = .{ .type = bool, .access = .ro },
     .emergency_power_reduction_detected = .{ .type = bool, .write = .w1c },
-    ._rsvd_7 = .{ .type = u9, .access = .reserved },
-});
+}, .{ .unnamed = .reserved });
 
-pub const Capabilities2 = BitField(u32, .{
+pub const Capabilities2 = BitFieldExt(u32, .{
     .completion_timeout_ranges_supported = .{ .type = CompletionTimeoutRanges, .access = .ro, .default = CompletionTimeoutRanges.from(0) },
     .completion_timeout_disable_supported = .{ .type = bool, .access = .ro },
     .ari_forwarding_supported = .{ .type = bool, .access = .ro },
@@ -104,10 +101,8 @@ pub const Capabilities2 = BitField(u32, .{
     .max_e2e_tlp_prefixes = .{ .type = E2eTlpPrefixCount, .access = .ro, .default = .four },
     .emergency_power_reduction_supported = .{ .type = EmergencyPowerReductionSupport, .access = .ro, .default = .unsupported },
     .emergency_power_reduction_init_required = .{ .type = bool, .access = .ro },
-    ._rsvd_27 = .{ .type = u3, .access = .reserved },
-    .frs_supported = .{ .type = bool, .access = .ro },
-    ._rsvd_31 = .{ .type = u1, .access = .reserved },
-});
+    .frs_supported = .{ .offset = 30, .type = bool, .access = .ro },
+}, .{ .unnamed = .reserved });
 
 pub const Control2 = BitField(u16, .{
     .completion_timeout = .{ .type = CompletionTimeout, .default = .default },
@@ -124,9 +119,7 @@ pub const Control2 = BitField(u16, .{
     .e2e_tlp_prefix_blocking = bool,
 });
 
-pub const Status2 = BitField(u16, .{
-    ._rsvd_0 = .{ .type = u16, .access = .reserved },
-});
+pub const Status2 = BitFieldExt(u16, .{}, .{ .unnamed = .reserved });
 
 pub const PayloadSize = enum(u3) {
     bytes_128 = 0,
@@ -381,7 +374,7 @@ pub const unit = struct {
             @as(comptime_int, 6),
             @bitOffsetOf(Status.Word, "emergency_power_reduction_detected"),
         );
-        try testing.expectEqual(@as(comptime_int, 7), @bitOffsetOf(Status.Word, "_rsvd_7"));
+        try testing.expectEqual(@as(u16, 0xFF80), Status.masks.reserved);
         try testing.expectEqual(
             @as(comptime_int, 4),
             @bitOffsetOf(Control2.Word, "completion_timeout_disable"),
@@ -420,6 +413,11 @@ pub const unit = struct {
             try testing.expectEqual(@as(Raw, case[2]), T.masks.w1c);
             try testing.expectEqual(@as(Raw, case[3]), T.masks.trigger);
             try testing.expectEqual(@as(Raw, case[4]), T.masks.reserved);
+            try testing.expectEqual(@as(Raw, case[4]), T.raw(T.from(case[4])));
+            try testing.expectEqual(@as(Raw, case[4]), T.raw(T.replace(T.from(case[4]), .{})));
+            try testing.expectEqual(@as(Raw, 0), T.raw(T.default()) & T.masks.reserved);
+            try testing.expectEqual(@as(Raw, 0), T.encode(.{}) & T.masks.reserved);
+            try testing.expectEqual(~@as(Raw, 0), T.raw(T.from(~@as(Raw, 0))));
         }
     }
 
@@ -458,9 +456,9 @@ pub const unit = struct {
         try testing.expectEqual(@as(u16, 0x0020), Control2.raw(cleared));
     }
 
-    test "field masks select payload and high reserved bits" {
+    test "field masks select payload and reserved masks include high bits" {
         try testing.expectEqual(@as(u16, 0x00E0), Control.mask(.{.max_payload_size}));
-        try testing.expectEqual(@as(u32, 0x8000_0000), Capabilities2.mask(.{._rsvd_31}));
+        try testing.expectEqual(@as(u32, 0x8000_0000), Capabilities2.masks.reserved & 0x8000_0000);
     }
 
     fn expectPayloadBytes(value: PayloadSize, expected: u32) !void {

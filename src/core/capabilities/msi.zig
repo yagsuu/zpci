@@ -4,12 +4,12 @@ const standard = @import("standard.zig");
 
 const msi = @This();
 
-const BitField = stdx.bits.BitField;
+const BitFieldExt = stdx.bits.BitFieldExt;
 const Id = standard.Id;
 
 pub const id: Id = .msi;
 
-pub const Control = BitField(u16, .{
+pub const Control = BitFieldExt(u16, .{
     .enable = bool,
     .multi_msg_capable = .{ .type = VectorCount, .access = .ro, .default = .one },
     .multi_msg_enable = .{ .type = VectorCount, .default = .one },
@@ -17,8 +17,7 @@ pub const Control = BitField(u16, .{
     .pvm_capable = .{ .type = bool, .access = .ro },
     .ext_data_capable = .{ .type = bool, .access = .ro },
     .ext_data_enable = bool,
-    ._rsvd_11 = .{ .type = u5, .access = .reserved },
-});
+}, .{ .unnamed = .reserved });
 
 pub const VectorCount = enum(u3) {
     one = 0,

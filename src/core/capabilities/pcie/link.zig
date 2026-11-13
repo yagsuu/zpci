@@ -1,8 +1,9 @@
 const stdx = @import("stdx");
 
 const BitField = stdx.bits.BitField;
+const BitFieldExt = stdx.bits.BitFieldExt;
 
-pub const Capabilities = BitField(u32, .{
+pub const Capabilities = BitFieldExt(u32, .{
     .max_speed = .{ .type = LinkSpeed, .access = .ro, .default = @as(LinkSpeed, @enumFromInt(0)) },
     .max_width = .{ .type = LinkWidth, .access = .ro, .default = @as(LinkWidth, @enumFromInt(0)) },
     .aspm_support = .{ .type = AspmSupport, .access = .ro, .default = .unsupported },
@@ -13,14 +14,12 @@ pub const Capabilities = BitField(u32, .{
     .dll_active_report_capable = .{ .type = bool, .access = .ro },
     .bw_notification_capable = .{ .type = bool, .access = .ro },
     .aspm_optionality_compliance = .{ .type = bool, .access = .ro },
-    ._rsvd_23 = .{ .type = u1, .access = .reserved },
-    .port = .{ .type = u8, .access = .ro },
-});
+    .port = .{ .offset = 24, .type = u8, .access = .ro },
+}, .{ .unnamed = .reserved });
 
-pub const Control = BitField(u16, .{
+pub const Control = BitFieldExt(u16, .{
     .aspm = .{ .type = AspmControl, .default = .disabled },
-    ._rsvd_2 = .{ .type = u1, .access = .reserved },
-    .read_completion_boundary = .{ .type = ReadCompletionBoundary, .default = .bytes_64 },
+    .read_completion_boundary = .{ .offset = 3, .type = ReadCompletionBoundary, .default = .bytes_64 },
     .disable = bool,
     .retrain = .{ .type = bool, .write = .trigger },
     .common_clock = bool,
@@ -29,11 +28,9 @@ pub const Control = BitField(u16, .{
     .hw_auto_width_disable = bool,
     .bw_management_intr_enable = bool,
     .bw_autonomous_intr_enable = bool,
-    ._rsvd_12 = .{ .type = u1, .access = .reserved },
-    .flit_mode_disable = bool,
+    .flit_mode_disable = .{ .offset = 13, .type = bool },
     .drs_signaling_control = bool,
-    ._rsvd_15 = .{ .type = u1, .access = .reserved },
-});
+}, .{ .unnamed = .reserved });
 
 pub const Status = BitField(u16, .{
     .speed = .{ .type = LinkSpeed, .access = .ro, .default = @as(LinkSpeed, @enumFromInt(0)) },
@@ -46,17 +43,15 @@ pub const Status = BitField(u16, .{
     .bw_autonomous = .{ .type = bool, .write = .w1c },
 });
 
-pub const Capabilities2 = BitField(u32, .{
-    ._rsvd_0 = .{ .type = u1, .access = .reserved },
-    .supported_speeds = .{ .type = LinkSpeeds, .access = .ro, .default = LinkSpeeds.from(0) },
+pub const Capabilities2 = BitFieldExt(u32, .{
+    .supported_speeds = .{ .offset = 1, .type = LinkSpeeds, .access = .ro, .default = LinkSpeeds.from(0) },
     .crosslink_supported = .{ .type = bool, .access = .ro },
     .lower_skp_os_generation_supported = .{ .type = u7, .access = .ro },
     .lower_skp_os_reception_supported = .{ .type = u7, .access = .ro },
     .retimer_detect_supported = .{ .type = bool, .access = .ro },
     .two_retimers_detect_supported = .{ .type = bool, .access = .ro },
-    ._rsvd_25 = .{ .type = u6, .access = .reserved },
-    .drs_supported = .{ .type = bool, .access = .ro },
-});
+    .drs_supported = .{ .offset = 31, .type = bool, .access = .ro },
+}, .{ .unnamed = .reserved });
 
 pub const Control2 = BitField(u16, .{
     .target_speed = .{ .type = LinkSpeed, .default = @as(LinkSpeed, @enumFromInt(0)) },
@@ -69,7 +64,7 @@ pub const Control2 = BitField(u16, .{
     .compliance_preset_or_deemphasis = u4,
 });
 
-pub const Status2 = BitField(u16, .{
+pub const Status2 = BitFieldExt(u16, .{
     .deemphasis = .{ .type = Deemphasis, .access = .ro, .default = .db_6 },
     .eq_8gt_complete = .{ .type = bool, .access = .ro },
     .eq_8gt_phase1_success = .{ .type = bool, .access = .ro },
@@ -80,10 +75,9 @@ pub const Status2 = BitField(u16, .{
     .two_retimers_detected = .{ .type = bool, .access = .ro },
     .crosslink_resolution = .{ .type = CrosslinkResolution, .access = .ro, .default = .unsupported },
     .flit_mode = .{ .type = bool, .access = .ro },
-    ._rsvd_11 = .{ .type = u1, .access = .reserved },
-    .downstream_component_presence = .{ .type = DownstreamComponentPresence, .access = .ro, .default = .link_down_not_determined },
+    .downstream_component_presence = .{ .offset = 12, .type = DownstreamComponentPresence, .access = .ro, .default = .link_down_not_determined },
     .drs_received = .{ .type = bool, .write = .w1c },
-});
+}, .{ .unnamed = .reserved });
 
 pub const LinkSpeed = enum(u4) {
     gen1 = 0x1,
@@ -256,7 +250,7 @@ pub const unit = struct {
             @as(comptime_int, 1),
             @bitOffsetOf(Capabilities2.Word, "supported_speeds"),
         );
-        try testing.expectEqual(@as(comptime_int, 25), @bitOffsetOf(Capabilities2.Word, "_rsvd_25"));
+        try testing.expectEqual(@as(comptime_int, 31), @bitOffsetOf(Capabilities2.Word, "drs_supported"));
         try testing.expectEqual(@as(comptime_int, 0), @bitOffsetOf(Control2.Word, "target_speed"));
         try testing.expectEqual(
             @as(comptime_int, 12),
@@ -344,6 +338,11 @@ pub const unit = struct {
             try testing.expectEqual(@as(Raw, case[2]), T.masks.w1c);
             try testing.expectEqual(@as(Raw, case[3]), T.masks.trigger);
             try testing.expectEqual(@as(Raw, case[4]), T.masks.reserved);
+            try testing.expectEqual(@as(Raw, case[4]), T.raw(T.from(case[4])));
+            try testing.expectEqual(@as(Raw, case[4]), T.raw(T.replace(T.from(case[4]), .{})));
+            try testing.expectEqual(@as(Raw, 0), T.raw(T.default()) & T.masks.reserved);
+            try testing.expectEqual(@as(Raw, 0), T.encode(.{}) & T.masks.reserved);
+            try testing.expectEqual(~@as(Raw, 0), T.raw(T.from(~@as(Raw, 0))));
         }
     }
 
@@ -390,6 +389,16 @@ pub const unit = struct {
         try testing.expect(!Status2.from(0x0800).flit_mode);
         try testing.expectEqual(@as(u16, 0x2000), Control.mask(.{.flit_mode_disable}));
         try testing.expectEqual(@as(u16, 0x0400), Status2.mask(.{.flit_mode}));
+    }
+
+    test "control updates preserve gaps and undefined status remains read-only" {
+        const updated = Control.replace(Control.from(0x9004), .{ .common_clock = true });
+
+        try testing.expectEqual(@as(u16, 0x9044), Control.raw(updated));
+        try testing.expectEqual(@as(u16, 0x0400), Status.mask(.{._undefined_10}));
+        try testing.expectEqual(@as(u16, 0), Status.masks.reserved & 0x0400);
+        try testing.expectEqual(@as(u16, 0), Status.masks.assign & 0x0400);
+        try testing.expectEqual(@as(u16, 0x0400), Status.raw(Status.from(0x0400)));
     }
 
     test "compliance settings persist across unrelated control updates" {

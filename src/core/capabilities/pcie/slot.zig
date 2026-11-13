@@ -3,6 +3,7 @@ const stdx = @import("stdx");
 const pcie = @import("../pcie.zig");
 
 const BitField = stdx.bits.BitField;
+const BitFieldExt = stdx.bits.BitFieldExt;
 const PowerLimitScale = pcie.PowerLimitScale;
 
 pub const Capabilities = BitField(u32, .{
@@ -20,7 +21,7 @@ pub const Capabilities = BitField(u32, .{
     .number = .{ .type = u13, .access = .ro },
 });
 
-pub const Control = BitField(u16, .{
+pub const Control = BitFieldExt(u16, .{
     .attention_button_pressed_enable = bool,
     .power_fault_detected_enable = bool,
     .mrl_sensor_changed_enable = bool,
@@ -34,10 +35,9 @@ pub const Control = BitField(u16, .{
     .dll_state_changed_enable = bool,
     .auto_slot_power_limit_disable = bool,
     .in_band_pd_disable = bool,
-    ._rsvd_15 = .{ .type = u1, .access = .reserved },
-});
+}, .{ .unnamed = .reserved });
 
-pub const Status = BitField(u16, .{
+pub const Status = BitFieldExt(u16, .{
     .attention_button_pressed = .{ .type = bool, .write = .w1c },
     .power_fault_detected = .{ .type = bool, .write = .w1c },
     .mrl_sensor_changed = .{ .type = bool, .write = .w1c },
@@ -47,21 +47,15 @@ pub const Status = BitField(u16, .{
     .presence_detect_state = .{ .type = bool, .access = .ro },
     .interlock_status = .{ .type = bool, .access = .ro },
     .dll_state_changed = .{ .type = bool, .write = .w1c },
-    ._rsvd_9 = .{ .type = u7, .access = .reserved },
-});
+}, .{ .unnamed = .reserved });
 
-pub const Capabilities2 = BitField(u32, .{
+pub const Capabilities2 = BitFieldExt(u32, .{
     .in_band_pd_disable_supported = .{ .type = bool, .access = .ro },
-    ._rsvd_1 = .{ .type = u31, .access = .reserved },
-});
+}, .{ .unnamed = .reserved });
 
-pub const Control2 = BitField(u16, .{
-    ._rsvd_0 = .{ .type = u16, .access = .reserved },
-});
+pub const Control2 = BitFieldExt(u16, .{}, .{ .unnamed = .reserved });
 
-pub const Status2 = BitField(u16, .{
-    ._rsvd_0 = .{ .type = u16, .access = .reserved },
-});
+pub const Status2 = BitFieldExt(u16, .{}, .{ .unnamed = .reserved });
 
 pub const Indicator = enum(u2) {
     on = 1,
@@ -97,7 +91,7 @@ pub const unit = struct {
     }
 
     test "slot controls encode indicator states and power polarity" {
-        const word = Control.from(0x06C0);
+        const word = Control.from(0x86C0);
 
         try testing.expectEqual(Indicator.off, word.attention_indicator);
         try testing.expectEqual(Indicator.blink, word.power_indicator);
@@ -109,7 +103,7 @@ pub const unit = struct {
             .power_control = .on,
         });
 
-        try testing.expectEqual(@as(u16, 0x0340), Control.raw(updated));
+        try testing.expectEqual(@as(u16, 0x8340), Control.raw(updated));
     }
 
     test "in-band presence disable support uses bit zero" {
@@ -133,10 +127,20 @@ pub const unit = struct {
             try testing.expectEqual(@as(Raw, case[2]), T.masks.w1c);
             try testing.expectEqual(@as(Raw, case[3]), T.masks.trigger);
             try testing.expectEqual(@as(Raw, case[4]), T.masks.reserved);
+            try testing.expectEqual(@as(Raw, case[4]), T.raw(T.from(case[4])));
+            try testing.expectEqual(@as(Raw, case[4]), T.raw(T.replace(T.from(case[4]), .{})));
+            try testing.expectEqual(@as(Raw, 0), T.raw(T.default()) & T.masks.reserved);
+            try testing.expectEqual(@as(Raw, 0), T.encode(.{}) & T.masks.reserved);
+            try testing.expectEqual(~@as(Raw, 0), T.raw(T.from(~@as(Raw, 0))));
         }
     }
 
-    test "field mask includes the full reserved status register" {
-        try testing.expectEqual(@as(u16, 0xFFFF), Status2.mask(.{._rsvd_0}));
+    test "empty schemas reserve entire control and status registers" {
+        inline for (.{ Control2, Status2 }) |T| {
+            try testing.expectEqual(@as(u16, 0xFFFF), T.masks.reserved);
+            try testing.expectEqual(@as(u16, 0), T.mask(.{}));
+            try testing.expectEqual(@as(u16, 0), T.encode(.{}));
+            try testing.expectEqual(@as(u16, 0xA55A), T.raw(T.replace(T.from(0xA55A), .{})));
+        }
     }
 };

@@ -821,7 +821,7 @@ pub const unit = struct {
         try testing.expect(control.pvm_capable);
         try testing.expect(control.ext_data_capable);
         try testing.expect(control.ext_data_enable);
-        try testing.expectEqual(@as(u5, 0b10101), control._rsvd_11);
+        try testing.expectEqual(@as(u16, 0b10101 << 11), raw & Control.masks.reserved);
         try expectWrites(&backend, &.{.{ .width = 2, .offset = @as(usize, test_base) + addr32_offsets.control, .value = raw }});
     }
 
@@ -1040,8 +1040,7 @@ pub const unit = struct {
             .pvm_capable = fields.pvm_capable,
             .ext_data_capable = fields.ext_data_capable,
             .ext_data_enable = fields.ext_data_enable,
-            ._rsvd_11 = fields.reserved11,
-        });
+        }) | (@as(u16, fields.reserved11) << 11);
     }
 
     fn expectVectorCount(comptime count: VectorCount, expected: u6) !void {

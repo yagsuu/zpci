@@ -2,38 +2,34 @@ const stdx = @import("stdx");
 
 const standard = @import("standard.zig");
 
-const BitField = stdx.bits.BitField;
+const BitFieldExt = stdx.bits.BitFieldExt;
 const Id = standard.Id;
 
 pub const id: Id = .pm;
 
-pub const Capabilities = BitField(u16, .{
+pub const Capabilities = BitFieldExt(u16, .{
     .version = .{ .type = u3, .access = .ro },
     .pme_clock_required = .{ .type = bool, .access = .ro },
-    ._rsvd_4 = .{ .type = u1, .access = .reserved },
-    .device_specific_init = .{ .type = bool, .access = .ro },
+    .device_specific_init = .{ .offset = 5, .type = bool, .access = .ro },
     .aux_current = .{ .type = AuxCurrent, .access = .ro, .default = .ma_0 },
     .d1_supported = .{ .type = bool, .access = .ro },
     .d2_supported = .{ .type = bool, .access = .ro },
     .pme_support = .{ .type = PmeSupport, .access = .ro, .default = PmeSupport.from(0) },
-});
+}, .{ .unnamed = .reserved });
 
-pub const Control = BitField(u16, .{
+pub const Control = BitFieldExt(u16, .{
     .state = .{ .type = State, .default = .d0 },
-    ._rsvd_2 = .{ .type = u1, .access = .reserved },
-    .no_soft_reset = .{ .type = bool, .access = .ro },
-    ._rsvd_4 = .{ .type = u4, .access = .reserved },
-    .pme_enable = bool,
+    .no_soft_reset = .{ .offset = 3, .type = bool, .access = .ro },
+    .pme_enable = .{ .offset = 8, .type = bool },
     .data_select = .{ .type = DataSelect, .default = .consumed_d0 },
     .data_scale = .{ .type = DataScale, .access = .ro, .default = .unknown },
     .pme_status = .{ .type = bool, .write = .w1c },
-});
+}, .{ .unnamed = .reserved });
 
-pub const BridgeSupport = BitField(u8, .{
-    ._rsvd_0 = .{ .type = u6, .access = .reserved },
-    .secondary_state = .{ .type = SecondaryState, .access = .ro, .default = .power_off },
+pub const BridgeSupport = BitFieldExt(u8, .{
+    .secondary_state = .{ .offset = 6, .type = SecondaryState, .access = .ro, .default = .power_off },
     .bus_control_enabled = .{ .type = bool, .access = .ro },
-});
+}, .{ .unnamed = .reserved });
 
 pub const State = enum(u2) {
     d0 = 0,
@@ -132,7 +128,7 @@ pub const unit = struct {
     const testing = @import("std").testing;
 
     test "PM capabilities decode auxiliary current and independent PME state support" {
-        const caps = Capabilities.from(0xCAEB);
+        const caps = Capabilities.from(0xCAFB);
 
         try testing.expectEqual(@as(u3, 3), caps.version);
         try testing.expect(caps.pme_clock_required);
@@ -145,6 +141,8 @@ pub const unit = struct {
         try testing.expect(!caps.pme_support.supports(.d2));
         try testing.expect(caps.pme_support.supports(.d3hot));
         try testing.expect(caps.pme_support.supports(.d3cold));
+        try testing.expectEqual(@as(u16, 0x0010), Capabilities.masks.reserved);
+        try testing.expectEqual(@as(u16, 0xCAFB), Capabilities.raw(caps));
 
         const future = Capabilities.from(0x0007);
         try testing.expectEqual(@as(u3, 7), future.version);
@@ -182,14 +180,15 @@ pub const unit = struct {
     }
 
     test "PMCSR partial updates preserve omitted controls without reclassifying PME status as assignment" {
-        const observed = Control.from(0xEF0B);
+        const observed = Control.from(0xEFFF);
         const updated = Control.replace(observed, .{ .pme_enable = false, .data_select = .common_power });
 
-        try testing.expectEqual(@as(u16, 0xF00B), Control.raw(updated));
+        try testing.expectEqual(@as(u16, 0xF0FF), Control.raw(updated));
         try testing.expectEqual(State.d3hot, updated.state);
         try testing.expect(updated.pme_status);
         try testing.expect(updated.no_soft_reset);
         try testing.expectEqual(DataScale.thousandths, updated.data_scale);
+        try testing.expectEqual(Control.raw(observed) & Control.masks.reserved, Control.raw(updated) & Control.masks.reserved);
     }
 
     test "power data selectors preserve reserved encodings and unknown scale remains distinct" {
@@ -214,7 +213,7 @@ pub const unit = struct {
     }
 
     test "bridge support reports secondary power-off versus clock-stop without writable fields" {
-        const stopped = BridgeSupport.from(0xC0);
+        const stopped = BridgeSupport.from(0xFF);
         const powered_off = BridgeSupport.from(0x80);
 
         try testing.expect(stopped.bus_control_enabled);
@@ -223,5 +222,7 @@ pub const unit = struct {
         try testing.expectEqual(SecondaryState.power_off, powered_off.secondary_state);
         try testing.expectEqual(@as(u8, 0), BridgeSupport.masks.assign);
         try testing.expectEqual(@as(u8, 0x3F), BridgeSupport.masks.reserved);
+        try testing.expectEqual(@as(u8, 0xFF), BridgeSupport.raw(stopped));
+        try testing.expectEqual(@as(u8, 0xFF), BridgeSupport.raw(BridgeSupport.replace(stopped, .{})));
     }
 };

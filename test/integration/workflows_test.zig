@@ -465,8 +465,7 @@ fn msiControlRaw(fields: struct {
         .pvm_capable = fields.pvm_capable,
         .ext_data_capable = fields.ext_data_capable,
         .ext_data_enable = fields.ext_data_enable,
-        ._rsvd_11 = fields.reserved11,
-    });
+    }) | (@as(u16, fields.reserved11) << 11);
 }
 
 fn msixControlRaw(fields: struct {
@@ -477,10 +476,9 @@ fn msixControlRaw(fields: struct {
 }) u16 {
     return MsixControl.raw(.{
         .table_size_minus_one = fields.table_size_minus_one,
-        ._rsvd_11 = fields.reserved11,
         .function_mask = fields.function_mask,
         .enable = fields.enable,
-    });
+    }) | (@as(u16, fields.reserved11) << 11);
 }
 
 fn locationRaw(bir: u3, byte_offset: u32) u32 {

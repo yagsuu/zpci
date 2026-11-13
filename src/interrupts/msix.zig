@@ -542,13 +542,13 @@ pub const unit = struct {
 
         const control = Control.from(0b11_101_00000000101);
         try testing.expectEqual(@as(u11, 5), control.table_size_minus_one);
-        try testing.expectEqual(@as(u3, 0b101), control._rsvd_11);
+        try testing.expectEqual(@as(u16, 0b101 << 11), Control.raw(control) & Control.masks.reserved);
         try testing.expect(control.function_mask);
         try testing.expect(control.enable);
 
         const vector_control = VectorControl.from(0xFFFF_FFFE);
         try testing.expect(!vector_control.masked);
-        try testing.expectEqual(@as(u31, 0x7FFF_FFFF), vector_control._rsvd_1);
+        try testing.expectEqual(@as(u32, 0xFFFF_FFFE), VectorControl.raw(vector_control) & VectorControl.masks.reserved);
     }
 
     test "live locations and explicit spans" {
@@ -1196,12 +1196,11 @@ pub const unit = struct {
     }
 
     fn messageControlRaw(options: MsixSeed) u16 {
-        var control = Control.from(0);
-        control.table_size_minus_one = options.table_size_minus_one;
-        control._rsvd_11 = options.reserved;
-        control.function_mask = options.function_mask;
-        control.enable = options.enable;
-        return Control.raw(control);
+        return Control.raw(.{
+            .table_size_minus_one = options.table_size_minus_one,
+            .function_mask = options.function_mask,
+            .enable = options.enable,
+        }) | (@as(u16, options.reserved) << 11);
     }
 
     fn locationRaw(bir: u3, base_offset: u32) u32 {

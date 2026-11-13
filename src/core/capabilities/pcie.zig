@@ -3,7 +3,7 @@ const stdx = @import("stdx");
 const standard = @import("standard.zig");
 
 const Id = standard.Id;
-const BitField = stdx.bits.BitField;
+const BitFieldExt = stdx.bits.BitFieldExt;
 
 pub const device = @import("pcie/device.zig");
 pub const link = @import("pcie/link.zig");
@@ -12,14 +12,13 @@ pub const root = @import("pcie/root.zig");
 
 pub const id: Id = .pcie;
 
-pub const Capabilities = BitField(u16, .{
+pub const Capabilities = BitFieldExt(u16, .{
     .version = .{ .type = u4, .access = .ro },
     .type = .{ .type = DevicePortType, .access = .ro, .default = .endpoint },
     .has_slot = .{ .type = bool, .access = .ro },
     .intr_message = .{ .type = u5, .access = .ro },
-    ._rsvd_14 = .{ .type = u1, .access = .reserved },
-    .flit_mode_supported = .{ .type = bool, .access = .ro },
-});
+    .flit_mode_supported = .{ .offset = 15, .type = bool, .access = .ro },
+}, .{ .unnamed = .reserved });
 
 pub const DevicePortType = enum(u4) {
     endpoint = 0x0,
@@ -52,7 +51,7 @@ pub const unit = struct {
         try testing.expectEqual(@as(comptime_int, 0), @bitOffsetOf(Capabilities.Word, "version"));
         try testing.expectEqual(@as(comptime_int, 4), @bitOffsetOf(Capabilities.Word, "type"));
         try testing.expectEqual(@as(comptime_int, 8), @bitOffsetOf(Capabilities.Word, "has_slot"));
-        try testing.expectEqual(@as(comptime_int, 14), @bitOffsetOf(Capabilities.Word, "_rsvd_14"));
+        try testing.expectEqual(@as(comptime_int, 15), @bitOffsetOf(Capabilities.Word, "flit_mode_supported"));
     }
 
     test "capabilities decode flit support independently of slot and port type" {
@@ -76,6 +75,11 @@ pub const unit = struct {
             try testing.expectEqual(@as(Raw, case[2]), T.masks.w1c);
             try testing.expectEqual(@as(Raw, case[3]), T.masks.trigger);
             try testing.expectEqual(@as(Raw, case[4]), T.masks.reserved);
+            try testing.expectEqual(@as(Raw, case[4]), T.raw(T.from(case[4])));
+            try testing.expectEqual(@as(Raw, case[4]), T.raw(T.replace(T.from(case[4]), .{})));
+            try testing.expectEqual(@as(Raw, 0), T.raw(T.default()) & T.masks.reserved);
+            try testing.expectEqual(@as(Raw, 0), T.encode(.{}) & T.masks.reserved);
+            try testing.expectEqual(~@as(Raw, 0), T.raw(T.from(~@as(Raw, 0))));
         }
     }
 };
