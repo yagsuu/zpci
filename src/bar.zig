@@ -84,6 +84,8 @@ pub const Bars = struct {
     pub const Result = stdx.collections.List.Static(Bar, core.header.type0.num_bar_slots);
 
     pub fn from(function: Function, format: Format) Bars {
+        std.debug.assert(format == .type0 or format == .type1);
+
         return .{
             .function = function,
             .format = format,
@@ -103,6 +105,7 @@ pub const Bars = struct {
         return switch (self.format) {
             .type0 => core.header.type0.num_bar_slots,
             .type1 => core.header.type1.num_bar_slots,
+            else => unreachable,
         };
     }
 
@@ -449,10 +452,7 @@ pub const unit = struct {
         fn from(format: Format) ProbeConfig {
             var self: ProbeConfig = .{};
             self.setCommand(0);
-            self.bytes[offset.type] = switch (format) {
-                .type0 => 0x00,
-                .type1 => 0x01,
-            };
+            self.bytes[offset.type] = @intFromEnum(format);
 
             return self;
         }

@@ -406,6 +406,7 @@ const Commit = struct {
         return switch (self.format) {
             .type0 => Type0.num_bar_slots,
             .type1 => Type1.num_bar_slots,
+            else => unreachable,
         };
     }
 
@@ -413,6 +414,7 @@ const Commit = struct {
         return switch (self.format) {
             .type0 => type0.offsets.rom_base,
             .type1 => type1.offsets.rom_base,
+            else => unreachable,
         };
     }
 
@@ -1124,10 +1126,7 @@ pub const unit = struct {
     }
 
     fn seedHeader(bytes: []u8, format: HeaderFormat, command: u16) void {
-        bytes[offset.type] = switch (format) {
-            .type0 => 0x00,
-            .type1 => 0x01,
-        };
+        bytes[offset.type] = @intFromEnum(format);
         store16(bytes, offset.command, command);
     }
 

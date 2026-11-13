@@ -18,12 +18,7 @@ const ClassCode = ids.ClassCode;
 pub const Type0 = type0.Header;
 pub const Type1 = type1.Header;
 
-pub const Format = enum {
-    type0,
-    type1,
-};
-
-pub const WireFormat = enum(u7) {
+pub const Format = enum(u7) {
     type0 = 0,
     type1 = 1,
     cardbus = 2,
@@ -38,7 +33,7 @@ pub const DevselTiming = enum(u2) {
 };
 
 pub const Type = BitField(u8, .{
-    .format = .{ .type = WireFormat, .access = .ro, .default = .type0 },
+    .format = .{ .type = Format, .access = .ro, .default = .type0 },
     .multifunction = .{ .type = bool, .access = .ro },
 });
 
@@ -179,7 +174,7 @@ pub const unit = struct {
     test "Type maps format and multifunction bits" {
         const decoded = Type.from(0x81);
 
-        try testing.expectEqual(WireFormat.type1, decoded.format);
+        try testing.expectEqual(Format.type1, decoded.format);
         try testing.expect(decoded.multifunction);
 
         const word: Type.Word = .{ .format = .cardbus };
