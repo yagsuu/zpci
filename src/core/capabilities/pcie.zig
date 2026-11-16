@@ -26,10 +26,10 @@ pub const DevicePortType = enum(u4) {
     root_port = 0x4,
     upstream = 0x5,
     downstream = 0x6,
-    pcie_to_pci_bridge = 0x7,
-    pci_to_pcie_bridge = 0x8,
-    root_complex_integrated_endpoint = 0x9,
-    root_complex_event_collector = 0xA,
+    pcie_to_pci = 0x7,
+    pci_to_pcie = 0x8,
+    rciep = 0x9,
+    rcec = 0xA,
     _,
 };
 

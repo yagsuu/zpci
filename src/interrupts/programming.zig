@@ -6,7 +6,9 @@ const core = @import("core");
 const capabilities = @import("capabilities");
 const memory = @import("memory");
 
-const RelativeOffset = core.RelativeOffset;
+const Rel16 = core.RelativeOffset(u16);
+const Rel32 = core.RelativeOffset(u32);
+
 const Registers = capabilities.standard.Registers;
 const BarMemory = memory.BarMemory;
 
@@ -29,8 +31,8 @@ pub fn ConfigTransaction(comptime capacity: usize) type {
         const Self = @This();
 
         const Entry = union(enum) {
-            word16: struct { offset: RelativeOffset(u16), value: u16 },
-            word32: struct { offset: RelativeOffset(u32), value: u32 },
+            word16: struct { offset: Rel16, value: u16 },
+            word32: struct { offset: Rel32, value: u32 },
         };
 
         pub fn from(registers: Registers) Self {

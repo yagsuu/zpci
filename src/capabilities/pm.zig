@@ -6,11 +6,13 @@ const pm = core.capabilities.pm;
 
 const standard = @import("standard.zig");
 
+const Rel8 = core.RelativeOffset(u8);
+const Rel16 = core.RelativeOffset(u16);
+
 const Function = config.Function;
 const Entry = standard.Entry;
 const CapabilityError = standard.Error;
 const Registers = standard.Registers;
-const RelativeOffset = core.RelativeOffset;
 const HeaderType = core.header.Type;
 
 const Capabilities = pm.Capabilities.Word;
@@ -114,10 +116,10 @@ pub const Capability = struct {
 };
 
 pub const offsets = struct {
-    pub const capabilities = RelativeOffset(u16).from(pm.offsets.capabilities);
-    pub const control = RelativeOffset(u16).from(pm.offsets.control);
-    pub const bridge_support = RelativeOffset(u8).from(pm.offsets.bridge_support);
-    pub const data = RelativeOffset(u8).from(pm.offsets.data);
+    pub const capabilities = Rel16.from(pm.offsets.capabilities);
+    pub const control = Rel16.from(pm.offsets.control);
+    pub const bridge_support = Rel8.from(pm.offsets.bridge_support);
+    pub const data = Rel8.from(pm.offsets.data);
 };
 
 pub const unit = struct {

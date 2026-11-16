@@ -11,11 +11,13 @@ const programming = @import("programming.zig");
 const standard = capabilities.standard;
 const msix = core.capabilities.msix;
 
+const Rel16 = core.RelativeOffset(u16);
+const Rel32 = core.RelativeOffset(u32);
+
 const ConfigSpace = config.ConfigSpace;
 const ConfigError = ConfigSpace.Error;
 const Function = config.Function;
 
-const RelativeOffset = core.RelativeOffset;
 const LocationRegister = msix.Location;
 const TableRegister = msix.TableEntry;
 const Control = msix.Control;
@@ -323,9 +325,9 @@ pub const Pba = struct {
 };
 
 pub const offsets = struct {
-    pub const control = RelativeOffset(u16).from(msix.offsets.control);
-    pub const table = RelativeOffset(u32).from(msix.offsets.table);
-    pub const pba = RelativeOffset(u32).from(msix.offsets.pba);
+    pub const control = Rel16.from(msix.offsets.control);
+    pub const table = Rel32.from(msix.offsets.table);
+    pub const pba = Rel32.from(msix.offsets.pba);
 };
 
 const ConfigTransaction = programming.ConfigTransaction(1);

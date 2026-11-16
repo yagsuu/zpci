@@ -8,11 +8,13 @@ const pcie = core.capabilities.pcie;
 
 const standard = @import("standard.zig");
 
+const Rel16 = core.RelativeOffset(u16);
+const Rel32 = core.RelativeOffset(u32);
+
 const Function = config.Function;
 const Entry = standard.Entry;
 const CapabilityError = standard.Error;
 const Registers = standard.Registers;
-const RelativeOffset = core.RelativeOffset;
 
 const Capabilities = pcie.Capabilities.Word;
 const DevicePortType = pcie.DevicePortType;
@@ -110,7 +112,7 @@ pub const Capability = struct {
         const observed = try self.deviceControl();
         var updated = pcie.device.Control.replace(observed, args);
 
-        if (self.type != .pcie_to_pci_bridge) {
+        if (self.type != .pcie_to_pci) {
             updated.bcre_initiate_flr = false;
         }
 
@@ -196,7 +198,7 @@ pub const Capability = struct {
         const Control = pcie.device.Control;
 
         switch (self.type) {
-            .endpoint, .legacy_endpoint, .root_complex_integrated_endpoint => {},
+            .endpoint, .legacy_endpoint, .rciep => {},
             else => return error.UnsupportedRegister,
         }
 
@@ -328,7 +330,7 @@ pub const Capability = struct {
         const Control = pcie.link.Control;
 
         switch (self.type) {
-            .root_port, .downstream, .pci_to_pcie_bridge => {},
+            .root_port, .downstream, .pci_to_pcie => {},
             else => return error.UnsupportedRegister,
         }
 
@@ -427,60 +429,60 @@ pub const Capability = struct {
 
     fn requireLink(self: Capability) error{UnsupportedRegister}!void {
         switch (self.type) {
-            .endpoint, .legacy_endpoint, .root_port, .upstream, .downstream, .pcie_to_pci_bridge, .pci_to_pcie_bridge => {},
+            .endpoint, .legacy_endpoint, .root_port, .upstream, .downstream, .pcie_to_pci, .pci_to_pcie => {},
             else => return error.UnsupportedRegister,
         }
     }
 
     fn requireSlot(self: Capability) error{UnsupportedRegister}!void {
         switch (self.type) {
-            .root_port, .downstream, .pci_to_pcie_bridge => {},
+            .root_port, .downstream, .pci_to_pcie => {},
             else => return error.UnsupportedRegister,
         }
     }
 
     fn requireRoot(self: Capability) error{UnsupportedRegister}!void {
         switch (self.type) {
-            .root_port, .root_complex_event_collector => {},
+            .root_port, .rcec => {},
             else => return error.UnsupportedRegister,
         }
     }
 };
 
 pub const offsets = struct {
-    pub const capabilities = RelativeOffset(u16).from(pcie.offsets.capabilities);
+    pub const capabilities = Rel16.from(pcie.offsets.capabilities);
 
     pub const device = struct {
-        pub const capabilities = RelativeOffset(u32).from(pcie.device.offsets.capabilities);
-        pub const control = RelativeOffset(u16).from(pcie.device.offsets.control);
-        pub const status = RelativeOffset(u16).from(pcie.device.offsets.status);
-        pub const capabilities2 = RelativeOffset(u32).from(pcie.device.offsets.capabilities2);
-        pub const control2 = RelativeOffset(u16).from(pcie.device.offsets.control2);
-        pub const status2 = RelativeOffset(u16).from(pcie.device.offsets.status2);
+        pub const capabilities = Rel32.from(pcie.device.offsets.capabilities);
+        pub const control = Rel16.from(pcie.device.offsets.control);
+        pub const status = Rel16.from(pcie.device.offsets.status);
+        pub const capabilities2 = Rel32.from(pcie.device.offsets.capabilities2);
+        pub const control2 = Rel16.from(pcie.device.offsets.control2);
+        pub const status2 = Rel16.from(pcie.device.offsets.status2);
     };
 
     pub const link = struct {
-        pub const capabilities = RelativeOffset(u32).from(pcie.link.offsets.capabilities);
-        pub const control = RelativeOffset(u16).from(pcie.link.offsets.control);
-        pub const status = RelativeOffset(u16).from(pcie.link.offsets.status);
-        pub const capabilities2 = RelativeOffset(u32).from(pcie.link.offsets.capabilities2);
-        pub const control2 = RelativeOffset(u16).from(pcie.link.offsets.control2);
-        pub const status2 = RelativeOffset(u16).from(pcie.link.offsets.status2);
+        pub const capabilities = Rel32.from(pcie.link.offsets.capabilities);
+        pub const control = Rel16.from(pcie.link.offsets.control);
+        pub const status = Rel16.from(pcie.link.offsets.status);
+        pub const capabilities2 = Rel32.from(pcie.link.offsets.capabilities2);
+        pub const control2 = Rel16.from(pcie.link.offsets.control2);
+        pub const status2 = Rel16.from(pcie.link.offsets.status2);
     };
 
     pub const slot = struct {
-        pub const capabilities = RelativeOffset(u32).from(pcie.slot.offsets.capabilities);
-        pub const control = RelativeOffset(u16).from(pcie.slot.offsets.control);
-        pub const status = RelativeOffset(u16).from(pcie.slot.offsets.status);
-        pub const capabilities2 = RelativeOffset(u32).from(pcie.slot.offsets.capabilities2);
-        pub const control2 = RelativeOffset(u16).from(pcie.slot.offsets.control2);
-        pub const status2 = RelativeOffset(u16).from(pcie.slot.offsets.status2);
+        pub const capabilities = Rel32.from(pcie.slot.offsets.capabilities);
+        pub const control = Rel16.from(pcie.slot.offsets.control);
+        pub const status = Rel16.from(pcie.slot.offsets.status);
+        pub const capabilities2 = Rel32.from(pcie.slot.offsets.capabilities2);
+        pub const control2 = Rel16.from(pcie.slot.offsets.control2);
+        pub const status2 = Rel16.from(pcie.slot.offsets.status2);
     };
 
     pub const root = struct {
-        pub const control = RelativeOffset(u16).from(pcie.root.offsets.control);
-        pub const capabilities = RelativeOffset(u16).from(pcie.root.offsets.capabilities);
-        pub const status = RelativeOffset(u32).from(pcie.root.offsets.status);
+        pub const control = Rel16.from(pcie.root.offsets.control);
+        pub const capabilities = Rel16.from(pcie.root.offsets.capabilities);
+        pub const status = Rel32.from(pcie.root.offsets.status);
     };
 };
 
@@ -746,7 +748,7 @@ pub const unit = struct {
     }
 
     test "device updates preserve BCRE only on PCIe-to-PCI bridges and never replay FLR" {
-        const ports = [_]DevicePortType{ .endpoint, .root_port, .pcie_to_pci_bridge };
+        const ports = [_]DevicePortType{ .endpoint, .root_port, .pcie_to_pci };
 
         for (ports) |port_type| {
             var bytes: [pcie_window_size]u8 = @splat(0);
@@ -764,7 +766,7 @@ pub const unit = struct {
 
             try view.updateDeviceControl(.{ .no_snoop_enable = false });
 
-            const expected: u16 = if (port_type == .pcie_to_pci_bridge) 0xA11F else 0x211F;
+            const expected: u16 = if (port_type == .pcie_to_pci) 0xA11F else 0x211F;
             const raw = std.mem.readInt(u16, bytes[0x88..0x8A], .little);
 
             try testing.expectEqual(expected, raw);
@@ -1018,7 +1020,7 @@ pub const unit = struct {
     }
 
     test "FLR requests preserve controls and do not poll pending transactions or access after the write" {
-        const ports = [_]DevicePortType{ .endpoint, .legacy_endpoint, .root_complex_integrated_endpoint };
+        const ports = [_]DevicePortType{ .endpoint, .legacy_endpoint, .rciep };
 
         for (ports) |port_type| {
             var bytes: [pcie_window_size]u8 = @splat(0);
@@ -1054,7 +1056,7 @@ pub const unit = struct {
         for (0..16) |encoding| {
             const port_type: DevicePortType = @enumFromInt(encoding);
             switch (port_type) {
-                .endpoint, .legacy_endpoint, .root_complex_integrated_endpoint => continue,
+                .endpoint, .legacy_endpoint, .rciep => continue,
                 else => {},
             }
 
@@ -1068,7 +1070,7 @@ pub const unit = struct {
     }
 
     test "FLR support rejection precedes control reads on every eligible role" {
-        const ports = [_]DevicePortType{ .endpoint, .legacy_endpoint, .root_complex_integrated_endpoint };
+        const ports = [_]DevicePortType{ .endpoint, .legacy_endpoint, .rciep };
 
         for (ports) |port_type| {
             var bytes: [pcie_window_size]u8 = @splat(0);
@@ -1137,7 +1139,7 @@ pub const unit = struct {
     }
 
     test "retrain requests preserve controls without polling or observing completion" {
-        const ports = [_]DevicePortType{ .root_port, .downstream, .pci_to_pcie_bridge };
+        const ports = [_]DevicePortType{ .root_port, .downstream, .pci_to_pcie };
 
         for (ports) |port_type| {
             var bytes: [pcie_window_size]u8 = @splat(0);
@@ -1168,9 +1170,9 @@ pub const unit = struct {
             .endpoint,
             .legacy_endpoint,
             .upstream,
-            .pcie_to_pci_bridge,
-            .root_complex_integrated_endpoint,
-            .root_complex_event_collector,
+            .pcie_to_pci,
+            .rciep,
+            .rcec,
             @enumFromInt(0xF),
         };
 
@@ -1233,7 +1235,7 @@ pub const unit = struct {
     }
 
     test "v2 accessors gate UnsupportedRevision before config access" {
-        var backend = ConfigBackend{ .version = 1, .port_type = .root_complex_integrated_endpoint };
+        var backend = ConfigBackend{ .version = 1, .port_type = .rciep };
         const view = try Pcie.tryFrom(Function.from(backend.config(), test_sbdf), capabilityAt(0x80));
 
         try testing.expectError(error.UnsupportedRevision, view.deviceCapabilities2());
@@ -1256,8 +1258,8 @@ pub const unit = struct {
 
     test "linkless roles reject link access before backend I/O" {
         const linkless = [_]DevicePortType{
-            .root_complex_integrated_endpoint,
-            .root_complex_event_collector,
+            .rciep,
+            .rcec,
             @enumFromInt(0xF),
         };
 
@@ -1282,8 +1284,13 @@ pub const unit = struct {
 
     test "upstream-facing and linkless roles reject slot access before backend I/O" {
         const slotless = [_]DevicePortType{
-            .endpoint,                         .legacy_endpoint,              .upstream,         .pcie_to_pci_bridge,
-            .root_complex_integrated_endpoint, .root_complex_event_collector, @enumFromInt(0xF),
+            .endpoint,
+            .legacy_endpoint,
+            .upstream,
+            .pcie_to_pci,
+            .rciep,
+            .rcec,
+            @enumFromInt(0xF),
         };
 
         for (slotless) |port_type| {
@@ -1303,8 +1310,14 @@ pub const unit = struct {
 
     test "non-root roles reject root access before backend I/O" {
         const non_root = [_]DevicePortType{
-            .endpoint,           .legacy_endpoint,                  .upstream,         .downstream, .pcie_to_pci_bridge,
-            .pci_to_pcie_bridge, .root_complex_integrated_endpoint, @enumFromInt(0xF),
+            .endpoint,
+            .legacy_endpoint,
+            .upstream,
+            .downstream,
+            .pcie_to_pci,
+            .pci_to_pcie,
+            .rciep,
+            @enumFromInt(0xF),
         };
 
         for (non_root) |port_type| {
@@ -1322,8 +1335,13 @@ pub const unit = struct {
 
     test "link-bearing roles reach the backend and preserve its errors" {
         const ports = [_]DevicePortType{
-            .endpoint,   .legacy_endpoint,    .root_port,          .upstream,
-            .downstream, .pcie_to_pci_bridge, .pci_to_pcie_bridge,
+            .endpoint,
+            .legacy_endpoint,
+            .root_port,
+            .upstream,
+            .downstream,
+            .pcie_to_pci,
+            .pci_to_pcie,
         };
 
         for (ports) |port_type| {
@@ -1343,7 +1361,7 @@ pub const unit = struct {
         seedPcieCapability(&bytes, 0x80, 2, 0);
         store16(&bytes, 0x80 + pcie.offsets.capabilities, pcie.Capabilities.encode(.{
             .version = 2,
-            .type = .root_complex_event_collector,
+            .type = .rcec,
         }));
         store32(&bytes, 0x80 + pcie.root.offsets.status, 0x0001_1234);
 
@@ -1358,7 +1376,7 @@ pub const unit = struct {
     }
 
     test "downstream slot registers remain inspectable without an implemented slot" {
-        const ports = [_]DevicePortType{ .root_port, .downstream, .pci_to_pcie_bridge };
+        const ports = [_]DevicePortType{ .root_port, .downstream, .pci_to_pcie };
 
         for (ports) |port_type| {
             var bytes: [pcie_window_size]u8 = @splat(0);
@@ -1390,7 +1408,7 @@ pub const unit = struct {
 
         store16(&bytes, 0x80 + pcie.offsets.capabilities, pcie.Capabilities.encode(.{
             .version = 1,
-            .type = .root_complex_integrated_endpoint,
+            .type = .rciep,
         }));
         store16(&bytes, 0x80 + pcie.root.offsets.control, 1 << 3);
 
@@ -1398,7 +1416,7 @@ pub const unit = struct {
         try testing.expectEqual(DevicePortType.root_port, view.type);
         try testing.expect(view.has_slot);
         try testing.expect((try view.rootControl()).pme_interrupt_enable);
-        try testing.expectEqual(DevicePortType.root_complex_integrated_endpoint, (try view.capabilities()).type);
+        try testing.expectEqual(DevicePortType.rciep, (try view.capabilities()).type);
 
         const refreshed = try Pcie.tryFrom(makeFunction(&backend), capabilityAt(0x80));
 

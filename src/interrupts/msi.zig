@@ -10,11 +10,14 @@ const programming = @import("programming.zig");
 const standard = capabilities.standard;
 const msi = core.capabilities.msi;
 
+const RelativeOffset = core.RelativeOffset;
+const Rel16 = RelativeOffset(u16);
+const Rel32 = RelativeOffset(u32);
+
 const ConfigSpace = config.ConfigSpace;
 const ConfigError = ConfigSpace.Error;
 const Function = config.Function;
 
-const RelativeOffset = core.RelativeOffset;
 const Control = msi.Control;
 const ControlWord = Control.Word;
 const VectorCount = msi.VectorCount;
@@ -292,22 +295,22 @@ pub const Capability = struct {
 
 pub const offsets = struct {
     pub const addr32 = struct {
-        pub const control = RelativeOffset(u16).from(msi.offsets.control);
-        pub const address_lo = RelativeOffset(u32).from(msi.offsets.address_lo);
-        pub const data = RelativeOffset(u16).from(msi.addr32.offsets.data);
-        pub const ext_data = RelativeOffset(u16).from(msi.addr32.offsets.ext_data);
-        pub const mask = RelativeOffset(u32).from(msi.addr32.offsets.mask);
-        pub const pending = RelativeOffset(u32).from(msi.addr32.offsets.pending);
+        pub const control = Rel16.from(msi.offsets.control);
+        pub const address_lo = Rel32.from(msi.offsets.address_lo);
+        pub const data = Rel16.from(msi.addr32.offsets.data);
+        pub const ext_data = Rel16.from(msi.addr32.offsets.ext_data);
+        pub const mask = Rel32.from(msi.addr32.offsets.mask);
+        pub const pending = Rel32.from(msi.addr32.offsets.pending);
     };
 
     pub const addr64 = struct {
-        pub const control = RelativeOffset(u16).from(msi.offsets.control);
-        pub const address_lo = RelativeOffset(u32).from(msi.offsets.address_lo);
-        pub const address_hi = RelativeOffset(u32).from(msi.addr64.offsets.address_hi);
-        pub const data = RelativeOffset(u16).from(msi.addr64.offsets.data);
-        pub const ext_data = RelativeOffset(u16).from(msi.addr64.offsets.ext_data);
-        pub const mask = RelativeOffset(u32).from(msi.addr64.offsets.mask);
-        pub const pending = RelativeOffset(u32).from(msi.addr64.offsets.pending);
+        pub const control = Rel16.from(msi.offsets.control);
+        pub const address_lo = Rel32.from(msi.offsets.address_lo);
+        pub const address_hi = Rel32.from(msi.addr64.offsets.address_hi);
+        pub const data = Rel16.from(msi.addr64.offsets.data);
+        pub const ext_data = Rel16.from(msi.addr64.offsets.ext_data);
+        pub const mask = Rel32.from(msi.addr64.offsets.mask);
+        pub const pending = Rel32.from(msi.addr64.offsets.pending);
     };
 };
 
@@ -329,16 +332,13 @@ fn OptionalRegister(comptime T: type) type {
 }
 
 const Layout = struct {
-    control: Offset16,
-    address_lo: Offset32,
+    control: Rel16,
+    address_lo: Rel32,
     address_hi: OptionalRegister(u32),
-    data: Offset16,
+    data: Rel16,
     ext_data: OptionalRegister(u16),
     mask: OptionalRegister(u32),
     pending: OptionalRegister(u32),
-
-    pub const Offset16 = RelativeOffset(u16);
-    pub const Offset32 = RelativeOffset(u32);
 
     fn from(control: ControlWord) Layout {
         return .{

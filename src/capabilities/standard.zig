@@ -6,13 +6,16 @@ const config = @import("config");
 const core = @import("core");
 const standard = core.capabilities.standard;
 
+const Offset = core.Offset;
+const Rel8 = core.RelativeOffset(u8);
+const Rel16 = core.RelativeOffset(u16);
+const Rel32 = core.RelativeOffset(u32);
+const VisitedSet = stdx.bits.Set(usize).Static(window.count);
+
 const ConfigSpace = config.ConfigSpace;
 const ConfigError = ConfigSpace.Error;
 const Function = config.Function;
 const Id = standard.Id;
-const Offset = core.Offset;
-const RelativeOffset = core.RelativeOffset;
-const VisitedSet = stdx.bits.Set(usize).Static(window.count);
 
 pub const Error = ConfigError || error{MalformedCapability};
 
@@ -123,17 +126,17 @@ pub const Registers = struct {
 };
 
 pub const offsets = struct {
-    pub const id = RelativeOffset(u8).from(standard.offsets.id);
-    pub const next = RelativeOffset(u8).from(standard.offsets.next);
+    pub const id = Rel8.from(standard.offsets.id);
+    pub const next = Rel8.from(standard.offsets.next);
 };
 
 const window = standard.window;
 
 fn AccessInt(comptime T: type) type {
     return switch (T) {
-        RelativeOffset(u8) => u8,
-        RelativeOffset(u16) => u16,
-        RelativeOffset(u32) => u32,
+        Rel8 => u8,
+        Rel16 => u16,
+        Rel32 => u32,
         else => @compileError("capability access requires a RelativeOffset"),
     };
 }
@@ -381,13 +384,13 @@ pub const unit = struct {
         const function = makeFunction(&backend);
         const registers = try Registers.tryFrom(function, 0x40);
 
-        try testing.expectEqual(@as(u8, 0x12), try registers.read(RelativeOffset(u8).from(0x00)));
-        try testing.expectEqual(@as(u16, 0xBEEF), try registers.read(RelativeOffset(u16).from(0x02)));
-        try testing.expectEqual(@as(u32, 0xCAFE_BABE), try registers.read(RelativeOffset(u32).from(0x04)));
+        try testing.expectEqual(@as(u8, 0x12), try registers.read(Rel8.from(0x00)));
+        try testing.expectEqual(@as(u16, 0xBEEF), try registers.read(Rel16.from(0x02)));
+        try testing.expectEqual(@as(u32, 0xCAFE_BABE), try registers.read(Rel32.from(0x04)));
 
-        try registers.write(RelativeOffset(u8).from(0x08), 0x5A);
-        try registers.write(RelativeOffset(u16).from(0x0A), 0x1234);
-        try registers.write(RelativeOffset(u32).from(0x0C), 0xDEAD_BEEF);
+        try registers.write(Rel8.from(0x08), 0x5A);
+        try registers.write(Rel16.from(0x0A), 0x1234);
+        try registers.write(Rel32.from(0x0C), 0xDEAD_BEEF);
 
         try testing.expectEqual(@as(u8, 0x5A), bytes[0x48]);
         try testing.expectEqual(@as(u16, 0x1234), load16(&bytes, 0x4A));
@@ -401,18 +404,18 @@ pub const unit = struct {
         const function = makeFunction(&backend);
         const registers = try Registers.tryFrom(function, 0xFC);
 
-        try testing.expect(registers.contains(RelativeOffset(u8).from(3)));
-        try testing.expect(registers.contains(RelativeOffset(u16).from(2)));
-        try testing.expect(registers.contains(RelativeOffset(u32).from(0)));
-        try testing.expectEqual(@as(u8, 0xA5), try registers.read(RelativeOffset(u8).from(3)));
-        try testing.expectEqual(@as(u16, 0xA5A5), try registers.read(RelativeOffset(u16).from(2)));
-        try testing.expectEqual(@as(u32, 0xA5A5_A5A5), try registers.read(RelativeOffset(u32).from(0)));
-        try testing.expectError(error.UnalignedAccess, RelativeOffset(u16).tryFrom(1));
-        try testing.expectError(error.UnalignedAccess, RelativeOffset(u32).tryFrom(2));
-        try testing.expectError(error.MalformedCapability, registers.read(RelativeOffset(u8).from(0x04)));
-        try testing.expectError(error.MalformedCapability, registers.write(RelativeOffset(u8).from(0x04), 0));
-        try testing.expect(!registers.contains(RelativeOffset(u32).from(0xFFC)));
-        try testing.expectError(error.MalformedCapability, registers.read(RelativeOffset(u32).from(0xFFC)));
+        try testing.expect(registers.contains(Rel8.from(3)));
+        try testing.expect(registers.contains(Rel16.from(2)));
+        try testing.expect(registers.contains(Rel32.from(0)));
+        try testing.expectEqual(@as(u8, 0xA5), try registers.read(Rel8.from(3)));
+        try testing.expectEqual(@as(u16, 0xA5A5), try registers.read(Rel16.from(2)));
+        try testing.expectEqual(@as(u32, 0xA5A5_A5A5), try registers.read(Rel32.from(0)));
+        try testing.expectError(error.UnalignedAccess, Rel16.tryFrom(1));
+        try testing.expectError(error.UnalignedAccess, Rel32.tryFrom(2));
+        try testing.expectError(error.MalformedCapability, registers.read(Rel8.from(0x04)));
+        try testing.expectError(error.MalformedCapability, registers.write(Rel8.from(0x04), 0));
+        try testing.expect(!registers.contains(Rel32.from(0xFFC)));
+        try testing.expectError(error.MalformedCapability, registers.read(Rel32.from(0xFFC)));
         try testing.expectEqualSlices(u8, &before, &bytes);
     }
 
@@ -421,15 +424,15 @@ pub const unit = struct {
         const function = Function.from(backend.config(), backend.sbdf);
         const registers = try Registers.tryFrom(function, window.range.start);
 
-        try testing.expectError(error.UnsupportedAccessWidth, registers.read(RelativeOffset(u32).from(0x00)));
-        try testing.expectError(error.UnsupportedAccessWidth, registers.write(RelativeOffset(u32).from(0x00), 0));
-        try testing.expect(!registers.contains(RelativeOffset(u32).from(0xFFC)));
-        try testing.expectError(error.MalformedCapability, registers.read(RelativeOffset(u32).from(0xFFC)));
-        try testing.expectError(error.MalformedCapability, registers.write(RelativeOffset(u32).from(0xFFC), 0));
+        try testing.expectError(error.UnsupportedAccessWidth, registers.read(Rel32.from(0x00)));
+        try testing.expectError(error.UnsupportedAccessWidth, registers.write(Rel32.from(0x00), 0));
+        try testing.expect(!registers.contains(Rel32.from(0xFFC)));
+        try testing.expectError(error.MalformedCapability, registers.read(Rel32.from(0xFFC)));
+        try testing.expectError(error.MalformedCapability, registers.write(Rel32.from(0xFFC), 0));
 
-        try registers.write(RelativeOffset(u16).from(0x02), 0x55AA);
+        try registers.write(Rel16.from(0x02), 0x55AA);
 
-        try testing.expectEqual(@as(u16, 0x55AA), try registers.read(RelativeOffset(u16).from(0x02)));
+        try testing.expectEqual(@as(u16, 0x55AA), try registers.read(Rel16.from(0x02)));
     }
 
     fn makeFunction(backend: *TestConfigSpace) Function {

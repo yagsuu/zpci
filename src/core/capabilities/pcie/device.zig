@@ -54,7 +54,7 @@ pub const Control = struct {
 
     pub fn rwMask(port_type: DevicePortType) u16 {
         return switch (port_type) {
-            .pcie_to_pci_bridge => masks.assign | mask(.{.bcre_initiate_flr}),
+            .pcie_to_pci => masks.assign | mask(.{.bcre_initiate_flr}),
             else => masks.assign,
         };
     }
@@ -65,7 +65,7 @@ pub const Control = struct {
         }
 
         return switch (port_type) {
-            .endpoint, .legacy_endpoint, .root_complex_integrated_endpoint => mask(.{.bcre_initiate_flr}),
+            .endpoint, .legacy_endpoint, .rciep => mask(.{.bcre_initiate_flr}),
             else => 0,
         };
     }
