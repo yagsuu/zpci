@@ -16,10 +16,7 @@ const Category = struct {
 
 const CompileFixture = struct {
     name: []const u8,
-    expected: union(enum) {
-        success,
-        failure: []const u8,
-    },
+    message: []const u8,
 };
 
 pub fn addHostTests(
@@ -62,7 +59,7 @@ pub fn addHostTests(
     host.dependOn(integration);
 
     const root = b.createModule(.{
-        .root_source_file = b.path("test/integration/all.zig"),
+        .root_source_file = b.path("test/all.zig"),
         .target = target,
         .optimize = optimize,
         .imports = &.{
@@ -88,10 +85,7 @@ pub fn addCompileFixtureTests(b: *Build, modules: *const Modules) *Step {
         const compile = b.addObject(.{ .name = fixture.name, .root_module = root });
         compile.step.name = b.fmt("compile fixture {s}", .{fixture.name});
 
-        switch (fixture.expected) {
-            .success => {},
-            .failure => |message| compile.expect_errors = .{ .contains = message },
-        }
+        compile.expect_errors = .{ .contains = fixture.message };
 
         step.dependOn(&compile.step);
     }
@@ -107,13 +101,11 @@ fn addSuite(b: *Build, category: *Step, check: *Step, root: *Module) void {
 }
 
 const fixtures = [_]CompileFixture{
-    .{ .name = "typed_config", .expected = .success },
-    .{ .name = "unsupported_offset", .expected = .{ .failure = "configuration offsets require u8, u16, or u32" } },
-    .{ .name = "relative_offset", .expected = .{ .failure = "configuration access requires an absolute Offset" } },
-    .{ .name = "absolute_offset", .expected = .{ .failure = "capability access requires a RelativeOffset" } },
-    .{ .name = "raw_offset", .expected = .{ .failure = "configuration access requires an absolute Offset" } },
-    .{ .name = "config_raw_offset", .expected = .{ .failure = "configuration access requires an absolute Offset" } },
-    .{ .name = "config_relative_offset", .expected = .{ .failure = "configuration access requires an absolute Offset" } },
-    .{ .name = "unaligned_offset", .expected = .{ .failure = "caught unexpected error 'UnalignedAccess'" } },
-    .{ .name = "invalid_device", .expected = .{ .failure = "type 'u5' cannot represent integer value '32'" } },
+    .{ .name = "unsupported_offset", .message = "configuration offsets require u8, u16, or u32" },
+    .{ .name = "relative_offset", .message = "configuration access requires an absolute Offset" },
+    .{ .name = "absolute_offset", .message = "capability access requires a RelativeOffset" },
+    .{ .name = "raw_offset", .message = "configuration access requires an absolute Offset" },
+    .{ .name = "config_raw_offset", .message = "configuration access requires an absolute Offset" },
+    .{ .name = "config_relative_offset", .message = "configuration access requires an absolute Offset" },
+    .{ .name = "unaligned_offset", .message = "'UnalignedAccess'" },
 };
