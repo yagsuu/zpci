@@ -4,3 +4,5 @@ pub const pcie = @import("pcie.zig");
 pub const msi = @import("msi.zig");
 pub const msix = @import("msix.zig");
 pub const pm = @import("pm.zig");
+pub const ari = @import("ari.zig");
+pub const sriov = @import("sriov.zig");

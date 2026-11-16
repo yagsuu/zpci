@@ -45,8 +45,8 @@ pub const Type1 = struct {
         secondary: u8,
         subordinate: u8,
 
-        pub fn isUnprogrammed(self: BusRange) bool {
-            return self.secondary == 0;
+        pub fn programmed(self: BusRange) bool {
+            return self.secondary != 0;
         }
 
         pub fn forwards(self: BusRange, bus: u8) bool {
@@ -64,6 +64,17 @@ pub const Type1 = struct {
             .secondary = try self.secondaryBus(),
             .subordinate = try self.subordinateBus(),
         };
+    }
+
+    pub fn setBusRange(self: Type1, range: BusRange) ConfigError!void {
+        try self.setPrimaryBus(range.primary);
+        try self.setSubordinateBus(range.subordinate);
+        try self.setSecondaryBus(range.secondary);
+    }
+
+    pub fn disableBusRouting(self: Type1) ConfigError!void {
+        try self.setSecondaryBus(0);
+        try self.setSubordinateBus(0);
     }
 
     pub fn windows(self: Type1) ConfigError!WindowState {
@@ -372,6 +383,9 @@ pub const unit = struct {
         widths: [10]u8 = undefined,
         count: usize = 0,
         fail_at: usize,
+        writes: [3]u16 = undefined,
+        write_count: usize = 0,
+        fail_write_at: ?usize = null,
 
         fn view(self: *TraceConfig) Type1 {
             return Type1.from(Function.from(ConfigSpace.from(self, &vtable), test_sbdf));
@@ -413,8 +427,18 @@ pub const unit = struct {
             return read(u32, context, byte_offset);
         }
 
-        fn write8(_: *anyopaque, _: Sbdf, _: usize, _: u8) ConfigError!void {
-            unreachable;
+        fn write8(context: *anyopaque, _: Sbdf, byte_offset: usize, value: u8) ConfigError!void {
+            const self: *TraceConfig = @ptrCast(@alignCast(context));
+            const index = self.write_count;
+
+            self.writes[index] = @intCast(byte_offset);
+            self.write_count += 1;
+
+            if (self.fail_write_at == index) {
+                return error.OutOfBounds;
+            }
+
+            self.bytes[byte_offset] = value;
         }
 
         fn write16(_: *anyopaque, _: Sbdf, _: usize, _: u16) ConfigError!void {
@@ -454,10 +478,10 @@ pub const unit = struct {
         const reset = BusRange{ .primary = 0x00, .secondary = 0x00, .subordinate = 0x00 };
         const programmed = BusRange{ .primary = 0x01, .secondary = 0x20, .subordinate = 0x2F };
 
-        try testing.expect(reset.isUnprogrammed());
+        try testing.expect(!reset.programmed());
         try testing.expect(!reset.forwards(0x00));
 
-        try testing.expect(!programmed.isUnprogrammed());
+        try testing.expect(programmed.programmed());
         try testing.expect(!programmed.forwards(0x1F));
         try testing.expect(programmed.forwards(0x20));
         try testing.expect(programmed.forwards(0x2F));
@@ -478,6 +502,65 @@ pub const unit = struct {
         try testing.expectEqual(@as(u8, 0x11), range.primary);
         try testing.expectEqual(@as(u8, 0x22), range.secondary);
         try testing.expectEqual(@as(u8, 0x33), range.subordinate);
+    }
+
+    test "bus range programming preserves secondary latency and opens the route last" {
+        var backend = TraceConfig{ .fail_at = 0 };
+        backend.bytes[0x1B] = 0xA5;
+
+        const view = backend.view();
+        try view.setBusRange(.{ .primary = 7, .secondary = 8, .subordinate = 20 });
+
+        try testing.expectEqualSlices(u8, &.{ 7, 8, 20, 0xA5 }, backend.bytes[0x18..0x1C]);
+        try testing.expectEqualSlices(u16, &.{ 0x18, 0x1A, 0x19 }, backend.writes[0..backend.write_count]);
+        try testing.expectEqual(@as(usize, 0), backend.count);
+    }
+
+    test "disabling bus routing preserves primary bus and secondary latency" {
+        var backend = TraceConfig{ .fail_at = 0 };
+        backend.bytes[0x18..0x1C].* = .{ 7, 8, 20, 0xA5 };
+
+        const view = backend.view();
+        try view.disableBusRouting();
+
+        try testing.expectEqualSlices(u8, &.{ 7, 0, 0, 0xA5 }, backend.bytes[0x18..0x1C]);
+        try testing.expectEqualSlices(u16, &.{ 0x19, 0x1A }, backend.writes[0..backend.write_count]);
+        try testing.expectEqual(@as(usize, 0), backend.count);
+    }
+
+    test "bus routing operations stop at the first failed write" {
+        const set_offsets = [_]u16{ 0x18, 0x1A, 0x19 };
+
+        for (0..set_offsets.len) |failure| {
+            var backend = TraceConfig{ .fail_at = 0, .fail_write_at = failure };
+            backend.bytes[0x18..0x1C].* = .{ 1, 2, 3, 0xA5 };
+            const view = backend.view();
+
+            try testing.expectError(error.OutOfBounds, view.setBusRange(.{
+                .primary = 7,
+                .secondary = 8,
+                .subordinate = 20,
+            }));
+            try testing.expectEqualSlices(u16, set_offsets[0 .. failure + 1], backend.writes[0..backend.write_count]);
+            try testing.expectEqual(@as(u8, 2), backend.bytes[0x19]);
+            try testing.expectEqual(@as(u8, 0xA5), backend.bytes[0x1B]);
+            try testing.expectEqual(@as(usize, 0), backend.count);
+        }
+
+        const disable_offsets = [_]u16{ 0x19, 0x1A };
+
+        for (0..disable_offsets.len) |failure| {
+            var backend = TraceConfig{ .fail_at = 0, .fail_write_at = failure };
+            backend.bytes[0x18..0x1C].* = .{ 1, 2, 3, 0xA5 };
+            const view = backend.view();
+
+            try testing.expectError(error.OutOfBounds, view.disableBusRouting());
+            try testing.expectEqualSlices(u16, disable_offsets[0 .. failure + 1], backend.writes[0..backend.write_count]);
+            try testing.expectEqual(@as(u8, 1), backend.bytes[0x18]);
+            try testing.expectEqual(@as(u8, 3), backend.bytes[0x1A]);
+            try testing.expectEqual(@as(u8, 0xA5), backend.bytes[0x1B]);
+            try testing.expectEqual(@as(usize, 0), backend.count);
+        }
     }
 
     test "Type1 windows reports disabled IO memory and prefetchable windows" {

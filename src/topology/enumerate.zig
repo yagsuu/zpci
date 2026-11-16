@@ -10,6 +10,7 @@ const core = @import("core");
 const header = @import("header");
 
 const tree = @import("tree.zig");
+const topology = @import("module.zig");
 
 const Allocator = std.mem.Allocator;
 const AllocError = Allocator.Error;
@@ -58,7 +59,6 @@ const Enumerator = struct {
     nodes: *NodeList,
 
     const Self = @This();
-    const max_depth = 31;
 
     const FunctionRouting = enum {
         classic,
@@ -73,7 +73,7 @@ const Enumerator = struct {
     };
 
     fn enumerateBus(self: *Self, args: *const BusArgs) Error!void {
-        if (args.depth > max_depth) {
+        if (args.depth > topology.max_depth) {
             return error.DepthExceeded;
         }
 
@@ -177,7 +177,7 @@ const Enumerator = struct {
     }
 };
 
-fn finish(allocator: Allocator, nodes: *NodeList) Error!*const Tree {
+pub fn finish(allocator: Allocator, nodes: *NodeList) Error!*const Tree {
     std.debug.assert(nodes.items.len <= nodes.capacity);
     std.debug.assert(nodes.items.len <= tree.max_nodes);
 

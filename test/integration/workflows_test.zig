@@ -8,7 +8,6 @@ const pci = @import("pci");
 
 const AssignmentNode = pci.resources.assignment.Node;
 const Bar = pci.bar.Bar;
-const BusBridge = pci.resources.bus.Bridge;
 const StandardEntry = pci.capabilities.standard.Entry;
 const StandardId = pci.core.capabilities.standard.Id;
 const ExtendedEntry = pci.capabilities.extended.Entry;
@@ -62,6 +61,92 @@ const offset = struct {
 
 const status = struct {
     const cap_list: u16 = 1 << 4;
+};
+
+const ColdConfig = struct {
+    bridge: []u8,
+    endpoint: []u8,
+    probing_bar: bool = false,
+
+    fn config(self: *ColdConfig) pci.config.ConfigSpace {
+        return .from(self, &vtable);
+    }
+
+    fn bytes(self: *ColdConfig, address: Sbdf) ?[]u8 {
+        if (address.segment != SegmentId.from(0) or address.bdf.device != 0 or address.bdf.function != 0) {
+            return null;
+        }
+
+        if (address.bdf.bus == 0) {
+            return self.bridge;
+        }
+
+        const secondary = self.bridge[offset.secondary_bus];
+        const subordinate = self.bridge[offset.subordinate_bus];
+        if (secondary != 0 and address.bdf.bus == secondary and secondary <= subordinate) {
+            return self.endpoint;
+        }
+
+        return null;
+    }
+
+    const vtable: pci.config.ConfigSpace.VTable = .{
+        .read8 = read8,
+        .read16 = read16,
+        .read32 = read32,
+        .write8 = write8,
+        .write16 = write16,
+        .write32 = write32,
+    };
+
+    fn read8(context: *anyopaque, address: Sbdf, position: usize) pci.config.ConfigSpace.Error!u8 {
+        const self: *ColdConfig = @ptrCast(@alignCast(context));
+        const storage = self.bytes(address) orelse return 0xFF;
+        return storage[position];
+    }
+
+    fn read16(context: *anyopaque, address: Sbdf, position: usize) pci.config.ConfigSpace.Error!u16 {
+        const self: *ColdConfig = @ptrCast(@alignCast(context));
+        const storage = self.bytes(address) orelse return 0xFFFF;
+        return load16(storage, position);
+    }
+
+    fn read32(context: *anyopaque, address: Sbdf, position: usize) pci.config.ConfigSpace.Error!u32 {
+        const self: *ColdConfig = @ptrCast(@alignCast(context));
+        const storage = self.bytes(address) orelse return 0xFFFF_FFFF;
+
+        if (storage.ptr == self.endpoint.ptr and position == offset.bar0 and self.probing_bar) {
+            return 0xFFFF_F000;
+        }
+
+        return load32(storage, position);
+    }
+
+    fn write8(context: *anyopaque, address: Sbdf, position: usize, value: u8) pci.config.ConfigSpace.Error!void {
+        const self: *ColdConfig = @ptrCast(@alignCast(context));
+        const storage = self.bytes(address) orelse return error.OutOfBounds;
+        storage[position] = value;
+    }
+
+    fn write16(context: *anyopaque, address: Sbdf, position: usize, value: u16) pci.config.ConfigSpace.Error!void {
+        const self: *ColdConfig = @ptrCast(@alignCast(context));
+        const storage = self.bytes(address) orelse return error.OutOfBounds;
+        store16(storage, position, value);
+    }
+
+    fn write32(context: *anyopaque, address: Sbdf, position: usize, value: u32) pci.config.ConfigSpace.Error!void {
+        const self: *ColdConfig = @ptrCast(@alignCast(context));
+        const storage = self.bytes(address) orelse return error.OutOfBounds;
+
+        if (storage.ptr == self.endpoint.ptr and position == offset.bar0) {
+            self.probing_bar = value == 0xFFFF_FFFF;
+            if (self.probing_bar) {
+                return;
+            }
+        }
+
+        store32(storage, position, value);
+    }
 };
 
 test "integration: capability traversal walks seeded config bytes" {
@@ -166,7 +251,7 @@ test "integration: enumerate assign program memory BAR" {
     try testing.expectEqual(@as(u16, 0x0003), load16(&endpoint, offset.command));
 }
 
-test "integration: bridge bus and window programming preserves the discovered subtree" {
+test "integration: cold configuration sizes and programs a downstream memory BAR" {
     var bridge: [pcie_window_size]u8 = undefined;
     var endpoint: [pcie_window_size]u8 = undefined;
     seedFunction(&bridge, .{ .header = 0x01 });
@@ -174,11 +259,7 @@ test "integration: bridge bus and window programming preserves the discovered su
 
     const bridge_address = sbdf(.{ .bus = 0 });
     const endpoint_address = sbdf(.{ .bus = 1 });
-    var entries = [_]ConfigEntry{
-        .{ .sbdf = bridge_address, .bytes = &bridge },
-        .{ .sbdf = endpoint_address, .bytes = &endpoint },
-    };
-    var backend = TestConfigSpace.from(&entries);
+    var backend = ColdConfig{ .bridge = &bridge, .endpoint = &endpoint };
     var segments = [_]Segment{segment(.of(0, 1))};
 
     const before = try pci.topology.enumerate(testing.allocator, .{
@@ -190,26 +271,15 @@ test "integration: bridge bus and window programming preserves the discovered su
     try testing.expectEqual(@as(usize, 1), before.nodes().len);
     try testing.expect(before.node(NodeId.from(0)).function.sbdf.eql(bridge_address));
 
-    const bridges = [_]BusBridge{.{
-        .parent = null,
-        .function = before.node(NodeId.from(0)).function,
-    }};
-    try pci.resources.bus.commit(.{
-        .bridges = &bridges,
-        .roots = &.{0},
-        .root_primary_bus = 0,
-        .bus_end = 1,
+    const after = try pci.topology.configure(testing.allocator, .{
+        .config = backend.config(),
+        .roots = &.{.{ .segment = .from(0), .buses = .of(0, 1) }},
     });
+    defer after.deinit(testing.allocator);
 
     try testing.expectEqual(@as(u8, 0), bridge[offset.primary_bus]);
     try testing.expectEqual(@as(u8, 1), bridge[offset.secondary_bus]);
     try testing.expectEqual(@as(u8, 1), bridge[offset.subordinate_bus]);
-
-    const after = try pci.topology.enumerate(testing.allocator, .{
-        .config = backend.config(),
-        .segments = &segments,
-    });
-    defer after.deinit(testing.allocator);
 
     try testing.expectEqual(@as(usize, 2), after.nodes().len);
     try testing.expect(after.node(NodeId.from(0)).function.sbdf.eql(bridge_address));
@@ -221,15 +291,9 @@ test "integration: bridge bus and window programming preserves the discovered su
     try testing.expect(buses.forwards(1));
 
     const endpoint_function = after.node(NodeId.from(1)).function;
-    const requirement = (try Requirement.fromBar(endpoint_function, .{
-        .index = 0,
-        .type = .{ .memory = .{
-            .base = 0,
-            .size = 0x1000,
-            .width = .bits_32,
-            .prefetchable = false,
-        } },
-    })).?;
+    const bars = (try pci.bar.Bars.tryFrom(endpoint_function)).?;
+    const measured = try bars.probe(0);
+    const requirement = (try Requirement.fromBar(endpoint_function, measured)).?;
     const bridge_requirements = try pci.resources.bridge.aggregate(
         testing.allocator,
         live_bridge.function,

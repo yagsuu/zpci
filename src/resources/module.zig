@@ -9,7 +9,6 @@ const config = @import("config");
 const core = @import("core");
 
 pub const assignment = @import("assignment.zig");
-pub const bus = @import("bus.zig");
 pub const bridge = @import("bridge.zig");
 pub const programming = @import("programming.zig");
 
@@ -272,7 +271,6 @@ pub const EligibleSet = packed struct(u5) {
 test {
     _ = unit;
     _ = assignment.unit;
-    _ = bus.unit;
     _ = bridge.unit;
     _ = programming.unit;
 }

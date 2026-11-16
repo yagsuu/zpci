@@ -1,4 +1,5 @@
 const std = @import("std");
+const stdx = @import("stdx");
 
 const cfg = @import("config");
 const core = @import("core");
@@ -9,6 +10,8 @@ const Function = cfg.Function;
 const HeaderFormat = core.header.Format;
 const SegmentId = core.SegmentId;
 const Sbdf = core.Sbdf;
+const BusIndex = core.bus.Index;
+const BusRange = stdx.ranges.InclusiveRange(BusIndex);
 
 pub const max_nodes: usize = std.math.maxInt(@typeInfo(NodeId).@"enum".tag_type);
 
@@ -200,6 +203,14 @@ pub const Node = struct {
     format: HeaderFormat,
     parent: ?NodeId,
     subtree_end: usize,
+
+    bus_range: ?BusRange = null,
+    vfs: ?VfReservation = null,
+};
+
+pub const VfReservation = struct {
+    capacity: u16,
+    bus_end: BusIndex,
 };
 
 pub const Item = struct {
