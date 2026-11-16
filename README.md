@@ -37,9 +37,9 @@ exe.root_module.addImport("stdx", zstdx.module("stdx"));
 | `pci.bar` | BAR decoding, iteration, and sizing |
 | `pci.capabilities` | Standard, extended, and PCIe capability traversal and decoding |
 | `pci.memory` | BAR-mapped memory access |
-| `pci.resources` | Resource assignment, bridge windows, bus numbering, and programming |
+| `pci.resources` | Resource assignment, bridge windows, and programming |
 | `pci.interrupts` | MSI and MSI-X capability and table programming |
-| `pci.topology` | Enumeration, traversal, and paths |
+| `pci.topology` | Enumeration, bus numbering, traversal, and paths |
 | `pci.testing` | Byte-backed configuration and BAR-memory test backends |
 
 ## Device enumeration
@@ -71,6 +71,27 @@ var it = tree.preorder();
 while (it.next()) |item| {
     std.debug.print("{f}: {s}\n", .{ item.node.function.sbdf, @tagName(item.node.format) });
 }
+```
+
+## Topology configuration
+
+```zig
+const pci = @import("pci");
+
+const Root = pci.topology.Root;
+
+const roots = [_]Root{
+    .{ .segment = .from(0), .buses = .of(first_bus, last_bus) },
+};
+
+// Cold hierarchy; VFs disabled.
+const tree = try pci.topology.configure(allocator, .{
+    .config = ecam.config(),
+    .roots = &roots,
+    .ari = .enable_supported,
+    .vfs = .advertised, // Reserve bus capacity; leave VFs disabled.
+});
+defer tree.deinit(allocator);
 ```
 
 ## Resource allocation
@@ -183,7 +204,7 @@ const Function = pci.config.Function;
 const command = try function.read(Function.offsets.command);
 ```
 
-### Masked command update
+### Masked update
 
 ```zig
 const pci = @import("pci");
@@ -205,13 +226,13 @@ try function.setCommand(Command.replace(command, .{
 | `zig build check` | Compile host tests without running them |
 | `zig build test-host` | Run host tests |
 | `zig build test-<category>` | Run one host category |
-| `zig build test-compile` | Check valid and invalid API compile fixtures |
+| `zig build test-compile` | Check rejection of invalid API usage |
 | `zig build test` | Run host tests and compile fixtures |
 | `zig fmt --check build.zig build.zig.zon build src test` | Check formatting |
 
 Host categories: `core`, `config`, `header`, `bar`, `capabilities`, `interrupts`,
 `memory`, `resources`, `topology`, `testing`, and `integration`.
 
-Tests: `src/` (unit), `test/integration/` (integration tests), `test/compile/` (API fixtures).
+Tests: `src/` (unit), `test/` (integration tests), `test/compile/` (API rejection fixtures).
 
 Host tests require no PCI hardware.
