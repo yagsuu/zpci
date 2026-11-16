@@ -7,7 +7,7 @@ const core = @import("core");
 const header = @import("header");
 
 const bridge = @import("bridge.zig");
-const model = @import("model.zig");
+const resources = @import("module.zig");
 
 const type0 = header.type0;
 const type1 = header.type1;
@@ -24,8 +24,8 @@ const MemoryRegisters = core.bridge.Memory;
 const WindowType = core.bridge.Type;
 const Type0 = header.Type0;
 const Type1 = header.Type1;
-const Assignment = model.Assignment;
-const Type = model.Type;
+const Assignment = resources.Assignment;
+const Type = resources.Type;
 
 const num_bar_slots = core.header.type0.num_bar_slots;
 
@@ -589,7 +589,7 @@ pub const unit = struct {
     const ConfigSpace = cfg.ConfigSpace;
     const ConfigError = ConfigSpace.Error;
 
-    const Requirement = model.Requirement;
+    const Requirement = resources.Requirement;
 
     const Sbdf = core.Sbdf;
 

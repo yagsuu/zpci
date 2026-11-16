@@ -7,7 +7,7 @@ const stdx = @import("stdx");
 const config = @import("config");
 const core = @import("core");
 
-const model = @import("model.zig");
+const resources = @import("module.zig");
 
 const Allocator = std.mem.Allocator;
 const AllocError = Allocator.Error;
@@ -17,9 +17,9 @@ const Io = core.bridge.Io;
 const Memory = core.bridge.Memory;
 const WindowType = core.bridge.Type;
 
-const Requirement = model.Requirement;
-const Assignment = model.Assignment;
-const Type = model.Type;
+const Requirement = resources.Requirement;
+const Assignment = resources.Assignment;
+const Type = resources.Type;
 
 pub const Aggregate = stdx.collections.List.Static(Requirement, 3);
 pub const AggregateError = AllocError || error{ResourceExhausted};

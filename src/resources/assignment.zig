@@ -3,17 +3,17 @@
 const std = @import("std");
 const stdx = @import("stdx");
 
-const model = @import("model.zig");
+const resources = @import("module.zig");
 
 const Allocator = std.mem.Allocator;
 const AllocError = Allocator.Error;
 const Range = stdx.ranges.Range(u64);
 
-const Requirement = model.Requirement;
-const Assignment = model.Assignment;
-const Type = model.Type;
-const Aperture = model.Aperture;
-const Apertures = model.Apertures;
+const Requirement = resources.Requirement;
+const Assignment = resources.Assignment;
+const Type = resources.Type;
+const Aperture = resources.Aperture;
+const Apertures = resources.Apertures;
 
 pub const NodeIndex = u16;
 pub const max_nodes: usize = std.math.maxInt(NodeIndex);
