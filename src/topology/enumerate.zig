@@ -362,8 +362,8 @@ pub const unit = struct {
             }
 
             return address.bdf.bus == 0 and
-                (@intFromEnum(address.segment) < 255 or
-                    (@intFromEnum(address.segment) == 255 and address.bdf.df() < self.final_functions));
+                (address.segment.raw() < 255 or
+                    (address.segment.raw() == 255 and address.bdf.df() < self.final_functions));
         }
 
         const vtable: ConfigSpace.VTable = .{

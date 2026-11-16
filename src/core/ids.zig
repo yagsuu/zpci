@@ -9,6 +9,10 @@ pub const SegmentId = enum(u16) {
         return @enumFromInt(n);
     }
 
+    pub fn raw(self: SegmentId) u16 {
+        return @intFromEnum(self);
+    }
+
     comptime {
         std.debug.assert(@bitSizeOf(SegmentId) == 16);
     }
@@ -21,6 +25,10 @@ pub const VendorId = enum(u16) {
     pub fn from(n: u16) VendorId {
         return @enumFromInt(n);
     }
+
+    pub fn raw(self: VendorId) u16 {
+        return @intFromEnum(self);
+    }
 };
 
 pub const DeviceId = enum(u16) {
@@ -29,6 +37,10 @@ pub const DeviceId = enum(u16) {
     pub fn from(n: u16) DeviceId {
         return @enumFromInt(n);
     }
+
+    pub fn raw(self: DeviceId) u16 {
+        return @intFromEnum(self);
+    }
 };
 
 pub const RevisionId = enum(u8) {
@@ -36,6 +48,10 @@ pub const RevisionId = enum(u8) {
 
     pub fn from(n: u8) RevisionId {
         return @enumFromInt(n);
+    }
+
+    pub fn raw(self: RevisionId) u8 {
+        return @intFromEnum(self);
     }
 };
 
@@ -67,6 +83,10 @@ pub const BaseClass = enum(u8) {
     pub fn from(n: u8) BaseClass {
         return @enumFromInt(n);
     }
+
+    pub fn raw(self: BaseClass) u8 {
+        return @intFromEnum(self);
+    }
 };
 
 pub const Subclass = enum(u8) {
@@ -75,6 +95,10 @@ pub const Subclass = enum(u8) {
     pub fn from(n: u8) Subclass {
         return @enumFromInt(n);
     }
+
+    pub fn raw(self: Subclass) u8 {
+        return @intFromEnum(self);
+    }
 };
 
 pub const ProgIf = enum(u8) {
@@ -82,6 +106,10 @@ pub const ProgIf = enum(u8) {
 
     pub fn from(n: u8) ProgIf {
         return @enumFromInt(n);
+    }
+
+    pub fn raw(self: ProgIf) u8 {
+        return @intFromEnum(self);
     }
 };
 
@@ -125,7 +153,7 @@ pub const unit = struct {
     const testing = std.testing;
 
     test "VendorId.absent recognizes only the PCI 0xFFFF no-function marker" {
-        try testing.expectEqual(@as(u16, 0xFFFF), @intFromEnum(VendorId.absent));
+        try testing.expectEqual(@as(u16, 0xFFFF), VendorId.absent.raw());
         try testing.expect(VendorId.from(0x8086) != .absent);
     }
 
@@ -135,34 +163,34 @@ pub const unit = struct {
     }
 
     test "BaseClass named constants match PCI-SIG assignments" {
-        try testing.expectEqual(@as(u8, 0x00), @intFromEnum(BaseClass.unclassified));
-        try testing.expectEqual(@as(u8, 0x01), @intFromEnum(BaseClass.mass_storage));
-        try testing.expectEqual(@as(u8, 0x02), @intFromEnum(BaseClass.network_controller));
-        try testing.expectEqual(@as(u8, 0x03), @intFromEnum(BaseClass.display_controller));
-        try testing.expectEqual(@as(u8, 0x04), @intFromEnum(BaseClass.multimedia_controller));
-        try testing.expectEqual(@as(u8, 0x05), @intFromEnum(BaseClass.memory_controller));
-        try testing.expectEqual(@as(u8, 0x06), @intFromEnum(BaseClass.bridge));
-        try testing.expectEqual(@as(u8, 0x07), @intFromEnum(BaseClass.simple_comm_controller));
-        try testing.expectEqual(@as(u8, 0x08), @intFromEnum(BaseClass.base_system_peripheral));
-        try testing.expectEqual(@as(u8, 0x09), @intFromEnum(BaseClass.input_device));
-        try testing.expectEqual(@as(u8, 0x0A), @intFromEnum(BaseClass.docking_station));
-        try testing.expectEqual(@as(u8, 0x0B), @intFromEnum(BaseClass.processor));
-        try testing.expectEqual(@as(u8, 0x0C), @intFromEnum(BaseClass.serial_bus_controller));
-        try testing.expectEqual(@as(u8, 0x0D), @intFromEnum(BaseClass.wireless_controller));
-        try testing.expectEqual(@as(u8, 0x0E), @intFromEnum(BaseClass.intelligent_controller));
-        try testing.expectEqual(@as(u8, 0x0F), @intFromEnum(BaseClass.satellite_comm));
-        try testing.expectEqual(@as(u8, 0x10), @intFromEnum(BaseClass.encryption_controller));
-        try testing.expectEqual(@as(u8, 0x11), @intFromEnum(BaseClass.signal_processing));
-        try testing.expectEqual(@as(u8, 0x12), @intFromEnum(BaseClass.processing_accelerator));
-        try testing.expectEqual(@as(u8, 0x13), @intFromEnum(BaseClass.non_essential_instr));
-        try testing.expectEqual(@as(u8, 0x40), @intFromEnum(BaseClass.coprocessor));
-        try testing.expectEqual(@as(u8, 0xFF), @intFromEnum(BaseClass.unassigned));
+        try testing.expectEqual(@as(u8, 0x00), BaseClass.unclassified.raw());
+        try testing.expectEqual(@as(u8, 0x01), BaseClass.mass_storage.raw());
+        try testing.expectEqual(@as(u8, 0x02), BaseClass.network_controller.raw());
+        try testing.expectEqual(@as(u8, 0x03), BaseClass.display_controller.raw());
+        try testing.expectEqual(@as(u8, 0x04), BaseClass.multimedia_controller.raw());
+        try testing.expectEqual(@as(u8, 0x05), BaseClass.memory_controller.raw());
+        try testing.expectEqual(@as(u8, 0x06), BaseClass.bridge.raw());
+        try testing.expectEqual(@as(u8, 0x07), BaseClass.simple_comm_controller.raw());
+        try testing.expectEqual(@as(u8, 0x08), BaseClass.base_system_peripheral.raw());
+        try testing.expectEqual(@as(u8, 0x09), BaseClass.input_device.raw());
+        try testing.expectEqual(@as(u8, 0x0A), BaseClass.docking_station.raw());
+        try testing.expectEqual(@as(u8, 0x0B), BaseClass.processor.raw());
+        try testing.expectEqual(@as(u8, 0x0C), BaseClass.serial_bus_controller.raw());
+        try testing.expectEqual(@as(u8, 0x0D), BaseClass.wireless_controller.raw());
+        try testing.expectEqual(@as(u8, 0x0E), BaseClass.intelligent_controller.raw());
+        try testing.expectEqual(@as(u8, 0x0F), BaseClass.satellite_comm.raw());
+        try testing.expectEqual(@as(u8, 0x10), BaseClass.encryption_controller.raw());
+        try testing.expectEqual(@as(u8, 0x11), BaseClass.signal_processing.raw());
+        try testing.expectEqual(@as(u8, 0x12), BaseClass.processing_accelerator.raw());
+        try testing.expectEqual(@as(u8, 0x13), BaseClass.non_essential_instr.raw());
+        try testing.expectEqual(@as(u8, 0x40), BaseClass.coprocessor.raw());
+        try testing.expectEqual(@as(u8, 0xFF), BaseClass.unassigned.raw());
     }
 
     test "BaseClass preserves unknown assignment values" {
         const unknown = BaseClass.from(0x42);
 
-        try testing.expectEqual(@as(u8, 0x42), @intFromEnum(unknown));
+        try testing.expectEqual(@as(u8, 0x42), unknown.raw());
     }
 
     test "ClassCode.from stores PCI-SIG notation in wire byte order" {
@@ -202,10 +230,10 @@ pub const unit = struct {
     }
 
     test "uncatalogued identifiers preserve encoded values" {
-        try testing.expectEqual(@as(u16, 0xFFFF), @intFromEnum(SegmentId.from(0xFFFF)));
-        try testing.expectEqual(@as(u16, 0xFEDC), @intFromEnum(DeviceId.from(0xFEDC)));
-        try testing.expectEqual(@as(u8, 0xFF), @intFromEnum(RevisionId.from(0xFF)));
-        try testing.expectEqual(@as(u8, 0xFE), @intFromEnum(Subclass.from(0xFE)));
-        try testing.expectEqual(@as(u8, 0xFD), @intFromEnum(ProgIf.from(0xFD)));
+        try testing.expectEqual(@as(u16, 0xFFFF), SegmentId.from(0xFFFF).raw());
+        try testing.expectEqual(@as(u16, 0xFEDC), DeviceId.from(0xFEDC).raw());
+        try testing.expectEqual(@as(u8, 0xFF), RevisionId.from(0xFF).raw());
+        try testing.expectEqual(@as(u8, 0xFE), Subclass.from(0xFE).raw());
+        try testing.expectEqual(@as(u8, 0xFD), ProgIf.from(0xFD).raw());
     }
 };

@@ -299,9 +299,9 @@ pub const unit = struct {
 
         try testing.expectEqual(HeaderFormat.type0, try function.format());
         try testing.expect(!try function.multifunction());
-        try testing.expectEqual(@as(u16, 0x1234), @intFromEnum(try function.vendorId()));
-        try testing.expectEqual(@as(u16, 0x5678), @intFromEnum(try function.deviceId()));
-        try testing.expectEqual(@as(u8, 0x9A), @intFromEnum(try function.revisionId()));
+        try testing.expectEqual(@as(u16, 0x1234), (try function.vendorId()).raw());
+        try testing.expectEqual(@as(u16, 0x5678), (try function.deviceId()).raw());
+        try testing.expectEqual(@as(u8, 0x9A), (try function.revisionId()).raw());
         try testing.expect((try function.classCode()).eql(ClassCode.from(0x01, 0x08, 0x02)));
     }
 

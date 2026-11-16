@@ -160,7 +160,7 @@ pub const Sbdf = packed struct(u32) {
     pub fn format(self: Sbdf, writer: *Writer) !void {
         try writer.print(
             "{x:0>4}:{f}",
-            .{ @intFromEnum(self.segment), self.bdf },
+            .{ self.segment.raw(), self.bdf },
         );
     }
 
@@ -244,7 +244,7 @@ pub const unit = struct {
     test "Sbdf.from packs segment into the high half of the source id" {
         const x = Sbdf.from(.from(0xBEEF), 0x12, 0x03, 0x02);
 
-        try testing.expectEqual(@as(u16, 0xBEEF), @intFromEnum(x.segment));
+        try testing.expectEqual(@as(u16, 0xBEEF), x.segment.raw());
         try testing.expectEqual(@as(u8, 0x12), x.bdf.bus);
         try testing.expectEqual(@as(u32, 0xBEEF_121A), x.raw());
     }
@@ -282,7 +282,7 @@ pub const unit = struct {
         const s = Sbdf.from(.from(3), 0x10, 5, 4);
         const f0 = s.function0();
 
-        try testing.expectEqual(@as(u16, 3), @intFromEnum(f0.segment));
+        try testing.expectEqual(@as(u16, 3), f0.segment.raw());
         try testing.expectEqual(@as(u8, 0x10), f0.bdf.bus);
         try testing.expectEqual(@as(u5, 5), f0.bdf.device);
         try testing.expectEqual(@as(u3, 0), f0.bdf.function);

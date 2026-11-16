@@ -229,7 +229,7 @@ pub const unit = struct {
         }
 
         try testing.expectEqual(@as(u32, 0xCAFE_BABE), try view.cardbusCisPtr());
-        try testing.expectEqual(@as(u16, 0x1AF4), @intFromEnum(try view.subsystemVendorId()));
+        try testing.expectEqual(@as(u16, 0x1AF4), (try view.subsystemVendorId()).raw());
         try testing.expectEqual(DeviceId.from(0x1042), try view.subsystemId());
         try testing.expectEqual(Subsystem{ .vendor_id = .from(0x1AF4), .id = .from(0x1042) }, try view.subsystem());
         try testing.expectEqual(@as(u32, 0xD5E6_5AAB), ExpansionRom.raw(try view.rom()));
