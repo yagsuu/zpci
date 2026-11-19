@@ -45,4 +45,5 @@ test {
     _ = capabilities.pcie.root.unit;
     _ = capabilities.ari.unit;
     _ = capabilities.sriov.unit;
+    _ = capabilities.aer.unit;
 }
