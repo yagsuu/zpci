@@ -22,7 +22,7 @@ Register extents are checked on access.
 
 ## Control updates
 
-- `update*Control*()` performs a partial, non-atomic read-modify-write. Omitted
+- `Capability.update*Control*()` performs a partial, non-atomic read-modify-write. Omitted
   fields and other raw bits are preserved except the action bits below.
 - Checks register applicability. Callers supply valid field values and establish
   feature and platform support.
@@ -40,25 +40,25 @@ field-update rules.
 
 | Operation | Additional validation/effect |
 | --- | --- |
-| `setMaxPayloadSize()` | Known size within local advertised maximum; no hierarchy-wide check. |
-| `setMaxReadRequestSize()` | Known size encoding only. |
-| `setCompletionTimeout()` | v2, known encoding, advertised range for non-default values. Does not change timeout-disable. |
-| `setTargetLinkSpeed()` | v2, Gen1–6 scalar encoding advertised in Supported Link Speeds; does not retrain. |
+| `Capability.setMaxPayloadSize()` | Known size within local advertised maximum; no hierarchy-wide check. |
+| `Capability.setMaxReadRequestSize()` | Known size encoding only. |
+| `Capability.setCompletionTimeout()` | v2, known encoding, advertised range for non-default values. Does not change timeout-disable. |
+| `Capability.setTargetLinkSpeed()` | v2, Gen1–6 scalar encoding advertised in Supported Link Speeds; does not retrain. |
 
 Unknown requests return `InvalidValue`; locally unsupported requests return
 `UnsupportedFeature`, before a control write.
 
 ## Acknowledgements and actions
 
-`ack*Status(observed, fields)` writes only selected W1C bits set in the supplied
+`Capability.ack*Status(observed, fields)` writes only selected W1C bits set in the supplied
 observation, without rereading status. Invalid/non-W1C selectors fail compilation.
 Acknowledgement can also clear a same-bit event raised after the observation.
 
 | Action | Requirement |
 | --- | --- |
-| `retrainLink()` | Root port, downstream port, or `pci_to_pcie`. |
-| `toggleInterlock()` | Slot-group applicability and advertised interlock. |
-| `requestFlr()` | Endpoint, legacy endpoint, or RCiEP, with advertised FLR support. Preserves ordinary Device Control fields without replaying other actions. |
+| `Capability.retrainLink()` | Root port, downstream port, or `pci_to_pcie`. |
+| `Capability.toggleInterlock()` | Slot-group applicability and advertised interlock. |
+| `Capability.requestFlr()` | Endpoint, legacy endpoint, or RCiEP, with advertised FLR support. Preserves ordinary Device Control fields without replaying other actions. |
 
 Actions issue requests without waiting or polling. FLR callers handle Command
 decoding, bus mastering, and pending transactions. Callers own quiescing,

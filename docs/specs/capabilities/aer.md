@@ -8,9 +8,9 @@ feature support and Root Port/RCEC applicability for root registers.
 
 | Value/operation | Contract |
 | --- | --- |
-| `update*()` | Non-atomic partial read-modify-write; preserves unselected and reserved bits. Uncorrectable Mask updates force bit 0 to 1. |
-| `ack*Status(observed, fields)` | Writes selected W1C bits set in the observation, without rereading. Uncorrectable bit 0 is undefined and excluded. |
-| `ackFirstError(status, control)` | Writes only the defined, observed bit selected by First Error Pointer. Invalid or inactive pointers cause no write. |
+| `Capability.update*()` | Non-atomic partial read-modify-write; preserves unselected and reserved bits. Uncorrectable Mask updates force bit 0 to 1. |
+| `Capability.ack*Status(observed, fields)` | Writes selected W1C bits set in the observation, without rereading. Uncorrectable bit 0 is undefined and excluded. |
+| `Capability.ackFirstError(status, control)` | Writes only the defined, observed bit selected by First Error Pointer. Invalid or inactive pointers cause no write. |
 | Mask | Set suppresses reporting; status still latches. Uncorrectable masks also suppress header/prefix logging and First Error Pointer updates. |
 | Severity | Set selects fatal; clear selects non-fatal. |
 | Root status/source IDs | Status bits 0–6 are W1C; subclass and interrupt-message fields are read-only. Source IDs are raw Requester IDs. |

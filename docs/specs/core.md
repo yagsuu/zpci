@@ -14,13 +14,13 @@ Canonical PCI identities, addresses, wire values, and typed configuration offset
 | Component domains | 256 buses, 32 devices, 8 conventional functions. ARI uses the eight device/function bits; `function.Index` remains three bits wide. |
 
 `Bdf.from()` and `Sbdf.from()` accept width-constrained components without runtime
-validation. Equality and ordering use their raw encodings. `function0()` and
-`withFunction()` preserve the other components.
+validation. Equality and ordering use their raw encodings. `Bdf.function0()`,
+`Sbdf.function0()`, and `Bdf.withFunction()` preserve the other components.
 
 | Text operation | Contract |
 | --- | --- |
-| Format | Zero-padded lowercase `bb:dd.f` or `ssss:bb:dd.f`. |
-| Parse | Exactly those widths and separators; upper/lowercase hex accepted. No whitespace, prefixes, or out-of-range components; failures return `InvalidIdentifier`. |
+| `Bdf.format()` / `Sbdf.format()` | Zero-padded lowercase `bb:dd.f` or `ssss:bb:dd.f`. |
+| `Bdf.parse()` / `Sbdf.parse()` | Expects the same format as above; upper/lowercase hex accepted. No whitespace, prefixes, or out-of-range components; failures return `InvalidIdentifier`. |
 
 ## Configuration offsets
 
@@ -29,9 +29,9 @@ validation. Equality and ordering use their raw encodings. `function0()` and
 | `Offset(T)` | Absolute byte position in one function's configuration space. |
 | `RelativeOffset(T)` | Distinct capability-relative byte position; capability access binds and checks the absolute extent. |
 | Width | Only `u8`, `u16`, `u32`; width and offset kind are part of the type. |
-| `tryFrom(position)` | Requires the complete access inside 4096 bytes and alignment to `@sizeOf(T)`. Bounds errors precede alignment errors. |
-| `from(position)` | Same requirements, assumed valid by the caller; invalid input is unreachable, including compile-time rejection for constant evaluation. |
-| `raw()` | Byte position. |
+| `Offset(T).tryFrom()` / `RelativeOffset(T).tryFrom()` | Requires the complete access inside 4096 bytes and alignment to `@sizeOf(T)`. Bounds errors precede alignment errors. |
+| `Offset(T).from()` / `RelativeOffset(T).from()` | Same requirements, assumed valid by the caller; invalid input is unreachable, including compile-time rejection for constant evaluation. |
+| `Offset(T).raw()` / `RelativeOffset(T).raw()` | Byte position. |
 
 Typed configuration APIs trust these values; callers must not forge invalid enum
 encodings. A valid 4 KiB offset can still exceed a backend's supported window.

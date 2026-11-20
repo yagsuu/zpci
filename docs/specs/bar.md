@@ -8,8 +8,9 @@ Decodes BAR slots and measures sizes through temporary configuration writes.
 | --- | --- |
 | `Bar.index` | Index of the BAR's low slot. |
 | `Bar.type` | None, I/O, or memory; memory carries encoding width and prefetchability. |
-| `base` / `size` | Byte address/length. Decode leaves size null; probing measures it. |
-| `numSlots()` | Two for 64-bit memory, one otherwise; Type 0 has six slots, Type 1 two. |
+| `Bar.Io.base` / `Bar.Memory.base` | Byte address. |
+| `Bar.Io.size` / `Bar.Memory.size` | Byte length; decode leaves it null, probing measures it. |
+| `Bar.numSlots()` | Two for 64-bit memory, one otherwise; Type 0 has six slots, Type 1 two. |
 | `Ref.from()` | Binds a function and index without I/O. Checks the generic six-slot bound only; callers supply a valid low slot for the actual header. |
 
 ## Decoding
@@ -17,9 +18,9 @@ Decodes BAR slots and measures sizes through temporary configuration writes.
 | Operation | Contract |
 | --- | --- |
 | `Bars.from()` | Caller supplies the matching Type 0/1 format; no I/O or presence validation. |
-| `tryFrom()` | Reads header type; unsupported formats return null. Backend errors propagate. |
-| `decode(index)` | Reads one BAR, strips attribute bits from the base, and combines 64-bit pairs. No writes or sizing. |
-| Iterator | Ascending low slots, skipping the upper half of 64-bit BARs. |
+| `Bars.tryFrom()` | Reads header type; unsupported formats return null. Backend errors propagate. |
+| `Bars.decode(index)` | Reads one BAR, strips attribute bits from the base, and combines 64-bit pairs. No writes or sizing. |
+| `Bars.iterator()` | Ascending low slots, skipping the upper half of 64-bit BARs. |
 
 Indices must name valid low slots; callers exclude upper-half indices. Zero raw
 words decode as none. Use sizing to inspect unassigned BARs.
@@ -33,8 +34,8 @@ Bus Master Enable remains unchanged.
 
 | Operation | Decode window |
 | --- | --- |
-| `probe(index)` | Disables the selected BAR's I/O or memory decode; preserves other Command bits. |
-| `probeAll()` | Disables both decodes for the complete ascending-slot walk; returns a compact, allocation-free result. |
+| `Bars.probe(index)` | Disables the selected BAR's I/O or memory decode; preserves other Command bits. |
+| `Bars.probeAll()` | Disables both decodes for the complete ascending-slot walk; returns a compact, allocation-free result. |
 
 Probing saves BAR values, writes all ones, reads size masks, and attempts BAR
 restoration before restoring Command. Returned bases are the saved addresses.

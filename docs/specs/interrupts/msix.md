@@ -12,9 +12,9 @@ remain live.
 | --- | --- |
 | Vector count | `table_size_minus_one + 1`, in 1–2048. |
 | `Location` | BAR index 0–5 and expanded byte offset, aligned to eight bytes. BIR 6/7 returns `MalformedField`; BAR 0 at offset 0 is valid. |
-| `table()` / `pba()` | Independent locations; may reference different BARs. |
-| `enable()` / `disable()` | Change enable only; preserve function mask and other Control bits. The table remains unchanged. |
-| `setFunctionMask()` | Change the MSI-X function mask; enable remains unchanged. |
+| `Capability.table()` / `Capability.pba()` | Independent locations; may reference different BARs. |
+| `Capability.enable()` / `Capability.disable()` | Change enable only; preserve function mask and other Control bits. The table remains unchanged. |
+| `Capability.setFunctionMask()` | Change the MSI-X function mask; enable remains unchanged. |
 
 The caller resolves each location and supplies [BAR memory](../memory.md) whose
 offset zero is the Table or PBA start. Callers provide usable BAR mappings, allocate
@@ -42,9 +42,9 @@ before I/O. Read failures propagate unchanged.
 
 | Operation | Success |
 | --- | --- |
-| `program(index, entry)` | Mask the vector before address/data writes; apply `entry.masked` last. Preserve reserved Vector Control bits. Address/data are caller-encoded 64/32-bit payloads. |
-| `setMasked(index, masked)` | Change only the mask bit; preserve address/data and reserved bits. |
-| `programAll(first_index, entries)` | Program contiguous entries in ascending order; each reaches its requested final mask before the next begins. Empty input performs no I/O. |
+| `Table.program(index, entry)` | Mask the vector before address/data writes; apply `entry.masked` last. Preserve reserved Vector Control bits. Address/data are caller-encoded 64/32-bit payloads. |
+| `Table.setMasked(index, masked)` | Change only the mask bit; preserve address/data and reserved bits. |
+| `Table.programAll(first_index, entries)` | Program contiguous entries in ascending order; each reaches its requested final mask before the next begins. Empty input performs no I/O. |
 
 Nonempty batches check the complete requested count and memory extent before I/O.
 Capability enable and Function Mask remain unchanged. Entry programming accepts

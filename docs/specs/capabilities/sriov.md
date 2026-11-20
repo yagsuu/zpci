@@ -6,7 +6,7 @@ Uses [extended capability access](access.md). Construction checks the full exten
 through Migration State Array. The extended capability version is unchecked;
 reads remain live.
 
-## `setAriHierarchy()`
+## `Capability.setAriHierarchy()`
 
 The caller MUST select the device's lowest SR-IOV PF, exclude RC integrated
 endpoints, and keep VFs disabled across all PFs. The method checks this PF's VF Enable.
@@ -14,7 +14,7 @@ endpoints, and keep VFs disabled across all PFs. The method checks this PF's VF 
 Preserves other control bits and verifies a changed value by readback. An unchanged
 value needs no write. Failed updates may leave changed hierarchy state.
 
-## `reserveBuses(capacity)`
+## `Capability.reserveBuses(capacity)`
 
 Probes geometry and returns the inclusive highest VF bus number. Capacity zero
 returns the PF's bus. [Topology configuration](../topology.md) allocates bus ranges

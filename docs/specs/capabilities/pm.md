@@ -10,12 +10,12 @@ reads remain live. Optional bytes are checked when accessed.
 
 | Operation/value | Contract |
 | --- | --- |
-| `updateControl()` | Mechanical partial update of ordinary controls; no state/support checks. Write payload excludes W1C, read-only, and reserved bits. |
-| `bridgeSupport()` | Requires a live Type 1 header; otherwise `UnsupportedRegister`. |
-| `data()` | Raw selected data byte; zero is valid. |
+| `Capability.updateControl()` | Mechanical partial update of ordinary controls; no state/support checks. Write payload excludes W1C, read-only, and reserved bits. |
+| `Capability.bridgeSupport()` | Requires a live Type 1 header; otherwise `UnsupportedRegister`. |
+| `Capability.data()` | Raw selected data byte; zero is valid. |
 | Power state | PMCSR targets: D0, D1, D2, D3hot. PME support categories also include D3cold. |
 
-## `setPowerState()`
+## `Capability.setPowerState()`
 
 | Request | Validation |
 | --- | --- |
@@ -28,7 +28,7 @@ Unsupported D1/D2 returns `UnsupportedFeature`; a shallower non-D0 request retur
 controls and write the PME Status bit as zero. Callers handle intermediate
 transitions, timing, readback, resets, and device restoration.
 
-## `ackPmeStatus(observed)`
+## `Capability.ackPmeStatus(observed)`
 
 - False observed PME: no I/O.
 - True observed PME: reread Control, preserve its current ordinary fields, and

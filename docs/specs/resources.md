@@ -10,10 +10,10 @@ Resource requirements, aperture placement, bridge-window encoding, and programmi
 | `Assignment` | Absolute base, requested requirement, and selected pool. |
 | `Aperture.bounds` | Half-open byte range. Default pools are empty. Callers establish address width, hardware coverage, and non-overlap. |
 | `Aperture.allocate()` | Positive size and power-of-two alignment required. Success consumes padding and the allocated range; no fit/overflow returns null without mutation. |
-| `contains()` | Entire requested range fits; false for an empty aperture. |
+| `Aperture.contains()` | Entire requested range fits; false for an empty aperture. |
 | `Requirement.fromBar()` | Requires a sized BAR from the same function; absent/zero-sized returns null, missing size returns `UnsizedBar`. Alignment equals size. |
-| `fromRom()` | Caller-supplied power-of-two size; zero returns null, otherwise non-prefetchable MMIO32 with alignment equal to size. Does not probe the ROM. |
-| `fromBars()` | Allocated requirements in BAR order, filtering null entries; caller frees the slice. |
+| `Requirement.fromRom()` | Caller-supplied power-of-two size; zero returns null, otherwise non-prefetchable MMIO32 with alignment equal to size. Does not probe the ROM. |
+| `Requirement.fromBars()` | Allocated requirements in BAR order, filtering null entries; caller frees the slice. |
 
 ## `assign()`
 

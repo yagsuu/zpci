@@ -88,15 +88,15 @@ Traversal performs no hardware I/O.
 
 | Operation | Result |
 | --- | --- |
-| `nodes()` | Discovery-order preorder storage. |
-| `preorder()` | SBDF-sorted roots, each subtree in discovery order. |
-| `preorderFrom(id)` | Selected node and descendants. |
-| `children(id)` | Immediate children; requires Type 1. |
-| `root(segment)` | First matching root; use `roots` for all matches. |
-| `pathTo(allocator, id)` | Allocated root-to-node path, endpoints included; caller frees it. |
+| `Tree.nodes()` | Discovery-order preorder storage. |
+| `Tree.preorder()` | SBDF-sorted roots, each subtree in discovery order. |
+| `Tree.preorderFrom(id)` | Selected node and descendants. |
+| `Tree.children(id)` | Immediate children; requires Type 1. |
+| `Tree.root(segment)` | First matching root; use `Tree.roots` for all matches. |
+| `Tree.pathTo(allocator, id)` | Allocated root-to-node path, endpoints included; caller frees it. |
 
 IDs must belong to the queried tree. Storage/pointers remain stable until
-`deinit()` with the creating allocator, which invalidates IDs and iterators.
+`Tree.deinit()` with the creating allocator, which invalidates IDs and iterators.
 Stored metadata remains unchanged after hardware changes. `Node.function` accesses
 live state through a borrowed backend.
 

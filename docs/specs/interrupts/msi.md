@@ -10,16 +10,16 @@ use live Control. Multi-register payload reads are non-atomic.
 
 | Value/operation | Contract |
 | --- | --- |
-| `VectorCount` | Encodes 1, 2, 4, 8, 16, or 32 vectors. `count()` rejects reserved encodings with `MalformedField`. |
-| `address()` / `data()` | Select the 32/64-bit layout from live Control; 32-bit addresses zero-extend. |
-| `extData()` | Caller must check extended-data capability first; unsupported use is a programmer error. |
-| `mask()` / `pending()` | Require per-vector masking support. A set mask bit suppresses that vector; pending is read-only. |
-| `readRouting()` | Read payload and supported mask/data registers. `control()` provides enable state. |
+| `VectorCount` | Encodes 1, 2, 4, 8, 16, or 32 vectors. `VectorCount.count()` rejects reserved encodings with `MalformedField`. |
+| `Capability.address()` / `Capability.data()` | Select the 32/64-bit layout from live Control; 32-bit addresses zero-extend. |
+| `Capability.extData()` | Caller must check extended-data capability first; unsupported use is a programmer error. |
+| `Capability.mask()` / `Capability.pending()` | Require per-vector masking support. A set mask bit suppresses that vector; pending is read-only. |
+| `Capability.readRouting()` | Read payload and supported mask/data registers. `Capability.control()` provides enable state. |
 
 Callers supply platform message encoding, allocate vectors, coordinate INTx/MSI-X,
 and serialize updates.
 
-## `program(routing)`
+## `Capability.program(routing)`
 
 | Input | Validation |
 | --- | --- |
@@ -39,9 +39,9 @@ Control bits, including reserved bits, are preserved. Command is unchanged.
 
 | Other write | Effect |
 | --- | --- |
-| `disable()` | Clear enable only; preserve payload, mask, and other Control bits. |
-| `setMask()` | Replace the complete 32-bit mask; requires masking support. |
-| `setVectorMasked()` | Change one bit; requires masking support and index below advertised capacity. |
+| `Capability.disable()` | Clear enable only; preserve payload, mask, and other Control bits. |
+| `Capability.setMask()` | Replace the complete 32-bit mask; requires masking support. |
+| `Capability.setVectorMasked()` | Change one bit; requires masking support and index below advertised capacity. |
 
 Mask support/index violations are programmer errors enforced by assertions.
 Mask/disable operations do not wait for in-flight interrupts.

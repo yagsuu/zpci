@@ -8,7 +8,7 @@ through Control. The extended capability version is unchecked; reads remain live
 | Value/operation | Contract |
 | --- | --- |
 | Next Function Number | Next PF's eight-bit function number; zero terminates. SR-IOV supplies VF addresses. |
-| `updateControl()` | Non-atomic partial update; preserves unselected and reserved bits. Callers check group support and selection. |
+| `Capability.updateControl()` | Non-atomic partial update; preserves unselected and reserved bits. Callers check group support and selection. |
 
 Upstream PCIe Device Control 2 controls ARI forwarding.
 [Topology configuration](../topology.md) negotiates forwarding and rejects missing
