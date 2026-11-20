@@ -33,19 +33,6 @@ validation. Equality and ordering use their raw encodings. `Bdf.function0()`,
 | `Offset(T).from()` / `RelativeOffset(T).from()` | Same requirements, assumed valid by the caller; invalid input is unreachable, including compile-time rejection for constant evaluation. |
 | `Offset(T).raw()` / `RelativeOffset(T).raw()` | Byte position. |
 
-Typed configuration APIs trust these values; callers must not forge invalid enum
-encodings. A valid 4 KiB offset can still exceed a backend's supported window.
-Raw offset catalogues remain scalar byte positions for direct wire access.
-
-## Wire values
-
-- `header.Type0` and `header.Type1` describe 64-byte wire headers with alignment 4.
-  `ClassCode` has size 3 and alignment 1.
-- `header.Format` preserves the seven-bit encoding, including CardBus and unknown
-  values. Operational support is a separate [configuration](config.md) check.
-- Canonical BAR, bridge, and capability records describe encodings. Their operational
-  namespaces own access, feature checks, allocation, and programming policy.
-
 ### Register words
 
 | Operation/metadata | Meaning |
