@@ -195,7 +195,7 @@ pub const unit = struct {
 
     test "ClassCode.from stores PCI-SIG notation in wire byte order" {
         const cc = ClassCode.from(0x06, 0x04, 0x00);
-        const bytes: [3]u8 = @bitCast(cc);
+        const bytes = std.mem.asBytes(&cc);
 
         try testing.expectEqual(@as(u8, 0x00), bytes[0]);
         try testing.expectEqual(@as(u8, 0x04), bytes[1]);

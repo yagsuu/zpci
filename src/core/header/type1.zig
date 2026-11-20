@@ -106,7 +106,7 @@ pub const unit = struct {
     const testing = std.testing;
 
     test "complete bridge header separates bus, window, and ROM registers" {
-        var bytes = [_]u8{0} ** 64;
+        var bytes: [64]u8 = @splat(0);
         bytes[0x18] = 1;
         bytes[0x19] = 2;
         bytes[0x1A] = 7;
@@ -118,7 +118,8 @@ pub const unit = struct {
         std.mem.writeInt(u32, bytes[0x38..0x3C], 0xD000_0001, .little);
         std.mem.writeInt(u16, bytes[0x3E..0x40], 0x0040, .little);
 
-        var decoded: Header = @bitCast(bytes);
+        var decoded: Header = undefined;
+        @memcpy(std.mem.asBytes(&decoded), &bytes);
 
         try testing.expectEqual(@as(u8, 1), decoded.primary_bus);
         try testing.expectEqual(@as(u8, 2), decoded.secondary_bus);

@@ -80,7 +80,7 @@ pub const unit = struct {
     const testing = std.testing;
 
     test "complete endpoint header preserves typed fields and reserved bytes" {
-        var bytes = [_]u8{0xA5} ** 64;
+        var bytes: [64]u8 = @splat(0xA5);
         std.mem.writeInt(u16, bytes[0..2], 0x1234, .little);
         std.mem.writeInt(u16, bytes[2..4], 0x5678, .little);
         std.mem.writeInt(u16, bytes[4..6], 0x0007, .little);
@@ -93,7 +93,8 @@ pub const unit = struct {
         std.mem.writeInt(u16, bytes[0x2E..0x30], 0xFFFF, .little);
         std.mem.writeInt(u32, bytes[0x30..0x34], 0xC000_0001, .little);
 
-        var decoded: Header = @bitCast(bytes);
+        var decoded: Header = undefined;
+        @memcpy(std.mem.asBytes(&decoded), &bytes);
 
         try testing.expectEqual(VendorId.from(0x1234), decoded.vendor_id);
         try testing.expectEqual(DeviceId.from(0x5678), decoded.device_id);

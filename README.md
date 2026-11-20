@@ -4,7 +4,7 @@
 
 ## Requirements
 
-Zig `0.16.0` and `zstdx`. Configuration access uses caller-mapped ECAM regions
+Zig `0.17.x` and `zstdx`. Configuration access uses caller-mapped ECAM regions
 or PIO on x86_64.
 
 ## Build integration
