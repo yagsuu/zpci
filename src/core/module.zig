@@ -47,4 +47,5 @@ test {
     _ = capabilities.sriov.unit;
     _ = capabilities.aer.unit;
     _ = capabilities.acs.unit;
+    _ = capabilities.dpc.unit;
 }

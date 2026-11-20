@@ -8,7 +8,7 @@ Package module: `pci`.
 | `pci.config` | [Configuration access, functions, ECAM, PIO](config.md) |
 | `pci.header` | [Live headers and decoded bridge windows](header.md) |
 | `pci.bar` | [BAR decoding and sizing](bar.md) |
-| `pci.capabilities` | [List/register access](capabilities/access.md), [PCIe](capabilities/pcie.md), [PM](capabilities/pm.md), [ARI](capabilities/ari.md), [SR-IOV](capabilities/sriov.md), [AER](capabilities/aer.md), [ACS](capabilities/acs.md) |
+| `pci.capabilities` | [List/register access](capabilities/access.md), [PCIe](capabilities/pcie.md), [PM](capabilities/pm.md), [ARI](capabilities/ari.md), [SR-IOV](capabilities/sriov.md), [AER](capabilities/aer.md), [ACS](capabilities/acs.md), [DPC](capabilities/dpc.md) |
 | `pci.memory` | [BAR-memory access](memory.md) |
 | `pci.resources` | [Placement, bridge encoding, programming](resources.md) |
 | `pci.interrupts` | [MSI](interrupts/msi.md), [MSI-X](interrupts/msix.md) |
