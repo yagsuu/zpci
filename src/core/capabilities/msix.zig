@@ -6,10 +6,9 @@ const standard = @import("standard.zig");
 
 const BitField = stdx.bits.BitField;
 const BitFieldExt = stdx.bits.BitFieldExt;
-const Id = standard.Id;
 const Struct = stdx.layout.Struct;
 
-pub const id: Id = .msix;
+pub const id: standard.Id = .msix;
 
 pub const max_vectors: u16 = @as(u16, std.math.maxInt(@FieldType(Control.Word, "table_size_minus_one"))) + 1;
 

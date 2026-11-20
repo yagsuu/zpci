@@ -2,7 +2,6 @@ const stdx = @import("stdx");
 
 const standard = @import("standard.zig");
 
-const Id = standard.Id;
 const BitFieldExt = stdx.bits.BitFieldExt;
 
 pub const device = @import("pcie/device.zig");
@@ -10,7 +9,7 @@ pub const link = @import("pcie/link.zig");
 pub const slot = @import("pcie/slot.zig");
 pub const root = @import("pcie/root.zig");
 
-pub const id: Id = .pcie;
+pub const id: standard.Id = .pcie;
 
 pub const Capabilities = BitFieldExt(u16, .{
     .version = .{ .type = u4, .access = .ro },

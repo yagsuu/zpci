@@ -15,20 +15,29 @@ const Rel32 = core.RelativeOffset(u32);
 const Function = config.Function;
 const Entry = extended.Entry;
 const Registers = extended.Registers;
+
 const UncorrectableStatus = uncorrectable.Status.Word;
 const UncorrectableMask = uncorrectable.Mask.Word;
 const UncorrectableMaskArgs = uncorrectable.Mask.AssignArgs;
 const UncorrectableSeverity = uncorrectable.Severity.Word;
 const UncorrectableSeverityArgs = uncorrectable.Severity.AssignArgs;
+
 const CorrectableStatus = correctable.Status.Word;
 const CorrectableMask = correctable.Mask.Word;
 const CorrectableMaskArgs = correctable.Mask.AssignArgs;
+
 const Control = aer.Control.Word;
 const ControlArgs = aer.Control.AssignArgs;
+
 const RootCommand = root.Command.Word;
 const RootCommandArgs = root.Command.AssignArgs;
 const RootStatus = root.Status.Word;
 const RootSourceIds = root.SourceIds.Word;
+
+const HeaderLog = aer.HeaderLog;
+const PrefixLog = aer.PrefixLog;
+const FlitHeaderLog = flit.HeaderLog;
+
 const PcieCapabilities = core.capabilities.pcie.Capabilities.Word;
 
 pub const Error = extended.Error;
@@ -125,12 +134,12 @@ pub const Capability = struct {
         return self.registers.write(offsets.control, aer.Control.raw(updated));
     }
 
-    pub fn headerLog(self: Capability, args: LogArgs) LogError!?aer.HeaderLog {
+    pub fn headerLog(self: Capability, args: LogArgs) LogError!?HeaderLog {
         if (!try args.defaultAvailable()) {
             return null;
         }
 
-        var words: aer.HeaderLog = undefined;
+        var words: HeaderLog = undefined;
         for (&words, offsets.header_log) |*word, offset| {
             word.* = try self.registers.read(offset);
         }
@@ -142,7 +151,7 @@ pub const Capability = struct {
         return words;
     }
 
-    pub fn prefixLog(self: Capability, args: LogArgs) LogError!?aer.PrefixLog {
+    pub fn prefixLog(self: Capability, args: LogArgs) LogError!?PrefixLog {
         if (!try args.defaultAvailable() or !args.control.prefix_log_present) {
             return null;
         }
@@ -155,12 +164,46 @@ pub const Capability = struct {
             return error.MalformedCapability;
         }
 
-        var words: aer.PrefixLog = undefined;
+        var words: PrefixLog = undefined;
         for (&words, offsets.prefix_log) |*word, offset| {
             word.* = try self.registers.read(offset);
         }
 
         return words;
+    }
+
+    pub fn flitHeaderLog(self: Capability, args: LogArgs) LogError!?FlitHeaderLog {
+        if (!args.hasLog()) {
+            return null;
+        }
+
+        if (!args.pcie.flit_mode_supported or !args.control.logged_tlp_flit) {
+            return error.UnexpectedLogMode;
+        }
+
+        const len = args.control.logged_tlp_size;
+        if (len == 0) {
+            return null;
+        }
+
+        if (args.control.header_log_size < 4 or len > args.control.header_log_size or len > flit.offsets.header_log.len) {
+            return error.MalformedCapability;
+        }
+
+        if (!self.registers.contains(flit.offsets.header_log[len - 1])) {
+            return error.MalformedCapability;
+        }
+
+        var log: FlitHeaderLog = .{ .words = undefined, .len = @intCast(len) };
+        for (log.words[0..len], flit.offsets.header_log[0..len]) |*word, offset| {
+            word.* = try self.registers.read(offset);
+        }
+
+        if (std.mem.allEqual(u32, log.slice(), 0xFFFF_FFFF)) {
+            return null;
+        }
+
+        return log;
     }
 
     pub fn rootCommand(self: Capability) Error!RootCommand {
@@ -241,44 +284,10 @@ pub const flit = struct {
         words: aer.flit.HeaderLog,
         len: u4,
 
-        pub fn slice(self: *const HeaderLog) []const u32 {
+        pub fn slice(self: *const FlitHeaderLog) []const u32 {
             return self.words[0..self.len];
         }
     };
-
-    pub fn headerLog(cap: Capability, args: LogArgs) LogError!?HeaderLog {
-        if (!args.hasLog()) {
-            return null;
-        }
-
-        if (!args.pcie.flit_mode_supported or !args.control.logged_tlp_flit) {
-            return error.UnexpectedLogMode;
-        }
-
-        const len = args.control.logged_tlp_size;
-        if (len == 0) {
-            return null;
-        }
-
-        if (args.control.header_log_size < 4 or len > args.control.header_log_size or len > flit.offsets.header_log.len) {
-            return error.MalformedCapability;
-        }
-
-        if (!cap.registers.contains(flit.offsets.header_log[len - 1])) {
-            return error.MalformedCapability;
-        }
-
-        var log: HeaderLog = .{ .words = undefined, .len = @intCast(len) };
-        for (log.words[0..len], flit.offsets.header_log[0..len]) |*word, offset| {
-            word.* = try cap.registers.read(offset);
-        }
-
-        if (std.mem.allEqual(u32, log.slice(), 0xFFFF_FFFF)) {
-            return null;
-        }
-
-        return log;
-    }
 
     pub const offsets = struct {
         pub const header_log = values: {
@@ -628,7 +637,7 @@ pub const unit = struct {
         for ([_]u5{ 0, 1, 11 }) |index| {
             args.control.first_error = @enumFromInt(index);
             try testing.expectEqual(@as(?aer.HeaderLog, null), try cap.headerLog(args));
-            try testing.expectEqual(@as(?flit.HeaderLog, null), try flit.headerLog(cap, args));
+            try testing.expectEqual(@as(?flit.HeaderLog, null), try cap.flitHeaderLog(args));
         }
 
         args = log_args;
@@ -687,7 +696,7 @@ pub const unit = struct {
             args.control.header_log_size = len;
             args.control.logged_tlp_size = len;
 
-            const log = (try flit.headerLog(cap, args)).?;
+            const log = (try cap.flitHeaderLog(args)).?;
             try testing.expectEqualSlices(u32, expected[0..len], log.slice());
             try testing.expectEqual(@as(usize, len), backend.reads);
 
@@ -705,7 +714,7 @@ pub const unit = struct {
         const cap = try backend.capability();
         var args = log_args;
 
-        try testing.expectError(error.UnexpectedLogMode, flit.headerLog(cap, args));
+        try testing.expectError(error.UnexpectedLogMode, cap.flitHeaderLog(args));
 
         args.pcie.flit_mode_supported = true;
         args.control.logged_tlp_flit = true;
@@ -717,7 +726,7 @@ pub const unit = struct {
         for ([_][2]u5{ .{ 4, 6 }, .{ 14, 15 }, .{ 3, 3 } }) |sizes| {
             args.control.header_log_size = sizes[0];
             args.control.logged_tlp_size = sizes[1];
-            try testing.expectError(error.MalformedCapability, flit.headerLog(cap, args));
+            try testing.expectError(error.MalformedCapability, cap.flitHeaderLog(args));
         }
 
         args.control.header_log_size = 4;
@@ -743,7 +752,7 @@ pub const unit = struct {
         args.control.logged_tlp_flit = true;
         args.control.header_log_size = 14;
         args.control.logged_tlp_size = 6;
-        try testing.expectError(error.MalformedCapability, flit.headerLog(near_end, args));
+        try testing.expectError(error.MalformedCapability, near_end.flitHeaderLog(args));
         try testing.expectEqual(@as(usize, 0), backend.reads);
     }
 
@@ -757,7 +766,7 @@ pub const unit = struct {
         try testing.expectEqual(@as(?aer.HeaderLog, null), try cap.headerLog(args));
 
         args.control.logged_tlp_flit = true;
-        try testing.expectEqual(@as(?flit.HeaderLog, null), try flit.headerLog(cap, args));
+        try testing.expectEqual(@as(?flit.HeaderLog, null), try cap.flitHeaderLog(args));
         try testing.expectEqual(@as(usize, 0), backend.reads);
     }
 
@@ -782,7 +791,7 @@ pub const unit = struct {
         args.control.header_log_size = 14;
         args.control.logged_tlp_size = 6;
 
-        try testing.expectError(error.UnsupportedAccessWidth, flit.headerLog(cap, args));
+        try testing.expectError(error.UnsupportedAccessWidth, cap.flitHeaderLog(args));
         try testing.expectEqual(@as(usize, 6), backend.reads);
         try testing.expectEqual(@as(usize, 0), backend.writes);
     }
@@ -894,7 +903,7 @@ pub const unit = struct {
             args.control.header_log_size = 14;
             args.control.logged_tlp_size = 6;
 
-            try testing.expectEqual(@as(?flit.HeaderLog, null), try flit.headerLog(cap, args));
+            try testing.expectEqual(@as(?flit.HeaderLog, null), try cap.flitHeaderLog(args));
         }
 
         try testing.expectEqual(@as(usize, 0), backend.reads);
@@ -928,7 +937,7 @@ pub const unit = struct {
         args.control.header_log_size = 14;
         args.control.logged_tlp_size = 6;
 
-        const flit_header = (try flit.headerLog(cap, args)).?;
+        const flit_header = (try cap.flitHeaderLog(args)).?;
         try testing.expectEqualSlices(u32, &.{
             0x2000_0001, 0x1122_3344, 0x5566_7788, 0, 0x9100_1234, 0x9200_5678,
         }, flit_header.slice());

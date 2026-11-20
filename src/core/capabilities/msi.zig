@@ -5,9 +5,8 @@ const standard = @import("standard.zig");
 const msi = @This();
 
 const BitFieldExt = stdx.bits.BitFieldExt;
-const Id = standard.Id;
 
-pub const id: Id = .msi;
+pub const id: standard.Id = .msi;
 
 pub const Control = BitFieldExt(u16, .{
     .enable = bool,

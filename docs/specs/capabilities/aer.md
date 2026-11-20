@@ -27,9 +27,9 @@ Uncorrectable Status.
 
 | Operation/value | Contract |
 | --- | --- |
-| `headerLog(args)` | Optional raw `HeaderLog`: four dwords. The fourth is undefined for a three-dword header; malformed captures remain unparsed. |
-| `prefixLog(args)` | Optional raw `PrefixLog`: four dwords when `prefix_log_present` is set. Unused positions read zero. |
-| `flit.headerLog(cap, args)` | Optional counted log, up to fourteen dwords; skips the root-register hole. Only `words[0..len]` is initialized; `slice()` exposes it. |
+| `Capability.headerLog(args)` | Optional raw `HeaderLog`: four dwords. The fourth is undefined for a three-dword header; malformed captures remain unparsed. |
+| `Capability.prefixLog(args)` | Optional raw `PrefixLog`: four dwords when `prefix_log_present` is set. Unused positions read zero. |
+| `Capability.flitHeaderLog(args)` | Optional counted log, up to fourteen dwords; skips the root-register hole. Only `words[0..len]` is initialized; `flit.HeaderLog.slice()` exposes it. |
 | `header_log_size` | Implemented capacity in dwords. |
 | `logged_tlp_flit`, `logged_tlp_size` | Captured mode and dword count; interpreted only with Flit support. |
 | `null` | No defined, active First Error Pointer; error without header logging; absent prefix log; zero captured length on Flit-capable hardware; or all-one header. |

@@ -3,9 +3,8 @@ const stdx = @import("stdx");
 const standard = @import("standard.zig");
 
 const BitFieldExt = stdx.bits.BitFieldExt;
-const Id = standard.Id;
 
-pub const id: Id = .pm;
+pub const id: standard.Id = .pm;
 
 pub const Capabilities = BitFieldExt(u16, .{
     .version = .{ .type = u3, .access = .ro },

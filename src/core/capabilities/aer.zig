@@ -5,9 +5,7 @@ const extended = @import("extended.zig");
 const BitField = stdx.bits.BitField;
 const BitFieldExt = stdx.bits.BitFieldExt;
 
-const Id = extended.Id;
-
-pub const id: Id = .aer;
+pub const id: extended.Id = .aer;
 
 pub const uncorrectable = struct {
     pub const Status = Register(.status);

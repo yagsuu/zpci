@@ -3,9 +3,8 @@ const extended = @import("extended.zig");
 
 const BitFieldExt = stdx.bits.BitFieldExt;
 const BitField = stdx.bits.BitField;
-const Id = extended.Id;
 
-pub const id: Id = .sriov;
+pub const id: extended.Id = .sriov;
 
 pub const Capabilities = BitFieldExt(u32, .{
     .vf_migration = .{ .type = bool, .access = .ro },
