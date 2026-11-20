@@ -7,3 +7,4 @@ pub const pm = @import("pm.zig");
 pub const ari = @import("ari.zig");
 pub const sriov = @import("sriov.zig");
 pub const aer = @import("aer.zig");
+pub const acs = @import("acs.zig");

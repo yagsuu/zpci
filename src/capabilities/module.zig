@@ -5,6 +5,7 @@ pub const pm = @import("pm.zig");
 pub const ari = @import("ari.zig");
 pub const sriov = @import("sriov.zig");
 pub const aer = @import("aer.zig");
+pub const acs = @import("acs.zig");
 
 test {
     _ = standard.unit;
@@ -14,4 +15,5 @@ test {
     _ = ari.unit;
     _ = sriov.unit;
     _ = aer.unit;
+    _ = acs.unit;
 }

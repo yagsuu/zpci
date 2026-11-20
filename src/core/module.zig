@@ -46,4 +46,5 @@ test {
     _ = capabilities.ari.unit;
     _ = capabilities.sriov.unit;
     _ = capabilities.aer.unit;
+    _ = capabilities.acs.unit;
 }
