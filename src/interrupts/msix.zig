@@ -250,7 +250,8 @@ pub const Table = struct {
             .control = tx.read(offset + msix.table.offsets.control) catch return error.ProgrammingWriteFailed,
         };
 
-        const masked_control = VectorControl.replace(VectorControl.from(saved.control), .{ .masked = true });
+        const observed = VectorControl.from(saved.control);
+        const masked_control = VectorControl.replace(observed, .{ .masked = true });
         const masked_raw = VectorControl.raw(masked_control);
 
         const address_lo: u32 = @truncate(entry.address);
@@ -262,7 +263,7 @@ pub const Table = struct {
         try tx.write(offset + msix.table.offsets.address_hi, address_hi, saved.address_hi);
         try tx.write(offset + msix.table.offsets.data, entry.data, saved.data);
 
-        const final_control = VectorControl.replace(VectorControl.from(saved.control), .{ .masked = entry.masked });
+        const final_control = VectorControl.replace(observed, .{ .masked = entry.masked });
         const final_raw = VectorControl.raw(final_control);
 
         try tx.write(offset + msix.table.offsets.control, final_raw, masked_raw);

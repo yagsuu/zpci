@@ -378,6 +378,8 @@ const SizingProbe = struct {
                 };
             },
             .mem => {
+                const memory = MemoryRegister.from(self.saved.lo);
+
                 if (self.offset.hi != null) {
                     return .{
                         .index = self.index,
@@ -385,7 +387,7 @@ const SizingProbe = struct {
                             .base = Memory64.from(self.saved.lo, self.saved.hi).base(),
                             .size = ~Memory64.from(probed.lo, probed.hi).base() +% 1,
                             .width = .bits_64,
-                            .prefetchable = MemoryRegister.from(self.saved.lo).prefetchable,
+                            .prefetchable = memory.prefetchable,
                         } },
                     };
                 }
@@ -393,10 +395,10 @@ const SizingProbe = struct {
                 return .{
                     .index = self.index,
                     .type = .{ .memory = .{
-                        .base = MemoryRegister.from(self.saved.lo).base(),
+                        .base = memory.base(),
                         .size = @as(u64, ~MemoryRegister.from(probed.lo).base()) + 1,
                         .width = .bits_32,
-                        .prefetchable = MemoryRegister.from(self.saved.lo).prefetchable,
+                        .prefetchable = memory.prefetchable,
                     } },
                 };
             },
