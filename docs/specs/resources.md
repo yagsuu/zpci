@@ -6,12 +6,13 @@ Resource requirements, aperture placement, bridge-window encoding, and programmi
 
 | Value/operation | Contract |
 | --- | --- |
-| `Requirement` | Byte size/alignment, resource type, and target source. `Source.bar` names a low BAR slot; `rom` a function; `bridge` a function/window pair. |
+| `Requirement` | Byte size/alignment, resource type, and target source. `Source.bar` names a PF low BAR slot; `vf_bar` a bound VF BAR slot; `rom` a function; `bridge` a function/window pair. |
 | `Assignment` | Absolute base, requested requirement, and selected pool. |
 | `Aperture.bounds` | Half-open byte range. Default pools are empty. Callers establish address width, hardware coverage, and non-overlap. |
 | `Aperture.allocate()` | Positive size and power-of-two alignment required. Success consumes padding and the allocated range; no fit/overflow returns null without mutation. |
 | `Aperture.contains()` | Entire requested range fits; false for an empty aperture. |
 | `Requirement.fromBar()` | Requires a sized BAR from the same function; absent/zero-sized returns null, missing size returns `UnsizedBar`. Alignment equals size. |
+| `Requirement.fromVfBar(bars, entry, capacity)` | Sized per-VF memory BAR; zero capacity/absent BAR returns null. Aggregate size = size × capacity; alignment = size. `UnsizedBar` for missing size, `InvalidValue` for invalid BAR/size, `ResourceExhausted` for aggregate/width overflow. Caller checks TotalVFs and bus capacity. |
 | `Requirement.fromRom()` | Caller-supplied power-of-two size; zero returns null, otherwise non-prefetchable MMIO32 with alignment equal to size. Does not probe the ROM. |
 | `Requirement.fromBars()` | Allocated requirements in BAR order, filtering null entries; caller frees the slice. |
 
@@ -24,7 +25,7 @@ aggregates. Inputs remain unchanged; no hardware I/O. Errors release partial out
 | --- | --- |
 | Forest | Valid distinct roots with null parents; each non-null parent precedes its child and is a bridge. |
 | Requirements | Positive size and power-of-two alignment; targets and types match the hardware. |
-| Capacity | At most 65,535 nodes and 32 levels including roots; seven requirements per endpoint, five per bridge. Violations are programmer errors. |
+| Capacity | At most 65,535 nodes and 32 levels including roots; thirteen requirements per endpoint, five per bridge. Violations are programmer errors. |
 
 Each root uses an independent copy of `Args.apertures`; addresses may overlap
 across roots. Callers supply non-overlapping usable pools and coordinate shared
@@ -76,21 +77,25 @@ addresses. Bus Master Enable remains unchanged.
 Adjacent assignments with equal `Function` bindings form a commit group; input
 order is preserved. Duplicate targets within a group are programmer errors.
 
-- Saves affected registers, disables I/O and memory decode, programs BARs then ROM
-  then bridge windows, and writes back saved Command. BAR writes use low-slot order.
+- Saves affected registers, disables applicable decode, programs PF/VF BARs then ROM
+  then bridge windows, and restores saved decode controls. BAR writes use low-slot order.
+- PF resources use Command I/O and memory decode. VF resources require VF Enable
+  clear and use VF Memory Space Enable. VF-only groups leave PF Command untouched;
+  commit never clears VF Enable.
 - Preserves BAR attributes and ROM enable; clears ROM reserved bits. Narrow bridge
   encodings clear upper words. Omitted registers/windows remain untouched.
 - Verifies successful writes by readback: exact for resource registers, masked for
-  Command. Bus numbers remain unchanged.
+  Command, exact for VF Control. Bus numbers remain unchanged.
 
 ### Failure state
 
 | Stage/error | Result |
 | --- | --- |
 | Save/format failure | `ProgrammingWriteFailed`; no writes. |
-| Initial decode-disable failure | `ProgrammingWriteFailed` or `ProgrammingReadbackMismatch`; no base writes or rollback. Command may have changed. |
-| Programming/final Command restoration failure | Attempts reverse restoration of resource writes reported successful, then Command. Prior completed groups remain; processing stops at the failing group. |
-| Rollback failure | Stops immediately, including before Command restoration if a base restore fails. `ProgrammingPartial` overrides the initiating failure. |
+| Initial decode-disable failure, PF-only group | `ProgrammingWriteFailed` or `ProgrammingReadbackMismatch`; no base writes or rollback. Command may have changed. |
+| Initial decode-disable failure, group with VF resources | Attempts to re-disable decode and roll back; failure returns `ProgrammingPartial`. |
+| Programming/final decode restoration failure | Attempts reverse restoration of resource writes reported successful, then saved Command/VF Control. Prior completed groups remain; processing stops at the failing group. |
+| Rollback failure | Stops immediately; base-restore failure skips decode restoration. `ProgrammingPartial` overrides the initiating failure. |
 
 Backend/header/encoding failures map to `ProgrammingWriteFailed`; differing
 readback returns `ProgrammingReadbackMismatch`. Successful rollback returns the

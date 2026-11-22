@@ -5,6 +5,7 @@ const std = @import("std");
 const cfg = @import("config");
 const core = @import("core");
 const header = @import("header");
+const sriov = @import("capabilities").sriov;
 
 const bridge = @import("bridge.zig");
 const resources = @import("module.zig");
@@ -26,12 +27,15 @@ const Type0 = header.Type0;
 const Type1 = header.Type1;
 const Assignment = resources.Assignment;
 const Type = resources.Type;
+const VfBars = sriov.Bars;
+const VfBarRef = sriov.BarRef;
 
 const num_bar_slots = core.header.type0.num_bar_slots;
+const num_vf_bar_slots = core.capabilities.sriov.num_bar_slots;
 
 const command_decode_mask: u16 = 0x0003;
 const command_compare_mask: u16 = 0x0547;
-const max_records: usize = num_bar_slots * 2 + 1 + 10;
+const max_records: usize = num_bar_slots * 2 + 1 + 10 + num_vf_bar_slots + 1;
 
 pub const Error = error{
     ProgrammingReadbackMismatch,
@@ -55,6 +59,9 @@ const Commit = struct {
     snapshot: Snapshot = .{},
     journal: Journal = .{},
     bar_offsets: [num_bar_slots]Offset(u32) = undefined,
+    vf_control: ?Offset(u16) = null,
+    vf_saved_control: u16 = 0,
+    has_pf: bool = false,
 
     fn from(assignments: []const Assignment) Commit {
         return .{ .assignments = assignments };
@@ -71,7 +78,13 @@ const Commit = struct {
         self.assertShape();
 
         try self.save();
-        try self.disableDecode();
+        self.disableDecode() catch |err| {
+            if (self.vf_control != null) {
+                return self.rollback(err);
+            }
+
+            return err;
+        };
 
         self.writePhase() catch |err| return self.rollback(err);
         self.restoreDecode() catch |err| return self.rollback(err);
@@ -94,6 +107,9 @@ const Commit = struct {
         self.format = undefined;
         self.snapshot.reset();
         self.journal.reset();
+        self.vf_control = null;
+        self.vf_saved_control = 0;
+        self.has_pf = false;
         self.next_index = end;
 
         return true;
@@ -114,6 +130,7 @@ const Commit = struct {
 
                     seen_bars[source.index] = true;
                 },
+                .vf_bar => {},
                 .rom => {
                     std.debug.assert(!seen_rom);
 
@@ -129,7 +146,17 @@ const Commit = struct {
     }
 
     fn save(self: *Commit) Error!void {
-        try self.snapshot.captureCommand(self.function);
+        for (self.group) |item| {
+            if (item.requirement.source != .vf_bar) {
+                self.has_pf = true;
+            }
+        }
+
+        try self.saveVfBars();
+        if (self.has_pf) {
+            try self.snapshot.captureCommand(self.function);
+        }
+
         try self.saveBars();
         try self.saveRom();
         try self.saveWindows();
@@ -148,6 +175,104 @@ const Commit = struct {
                 self.bar_offsets[index + 1] = hi;
                 try self.snapshot.capture(self.function, hi);
             }
+        }
+    }
+
+    fn saveVfBars(self: *Commit) Error!void {
+        var occupied: [num_vf_bar_slots]bool = @splat(false);
+        for (self.group) |item| {
+            const source = switch (item.requirement.source) {
+                .vf_bar => |source| source,
+                else => continue,
+            };
+            const registers = source.bars.registers;
+            if (!registers.contains(VfBars.offset(num_vf_bar_slots - 1)) or
+                !registers.contains(sriov.offsets.control))
+            {
+                return error.ProgrammingWriteFailed;
+            }
+
+            const control = Offset(u16).from(@as(usize, registers.base) + sriov.offsets.control.raw());
+            if (self.vf_control) |saved| {
+                if (saved != control) {
+                    return error.ProgrammingWriteFailed;
+                }
+            } else {
+                self.vf_control = control;
+                self.vf_saved_control = self.function.read(control) catch return error.ProgrammingWriteFailed;
+                if (self.vf_saved_control & 1 != 0) {
+                    return error.ProgrammingWriteFailed;
+                }
+            }
+
+            if (source.index >= num_vf_bar_slots or occupied[source.index]) {
+                return error.ProgrammingWriteFailed;
+            }
+
+            occupied[source.index] = true;
+            const offset = vfOffset(source, source.index);
+            try self.snapshot.capture(self.function, offset);
+
+            const raw = self.snapshot.get(offset);
+            const width = (raw >> 1) & 3;
+            if (raw & 1 != 0 or (width != 0 and width != 2) or
+                item.requirement.type == .io or is64(item.requirement.type) != (width == 2) or
+                ((raw & 8 != 0) != (item.requirement.type == .mmio32_prefetch or item.requirement.type == .mmio64_prefetch)))
+            {
+                return error.ProgrammingWriteFailed;
+            }
+
+            const requirement = item.requirement;
+            if (requirement.size == 0 or requirement.alignment == 0 or
+                !std.math.isPowerOfTwo(requirement.alignment) or
+                requirement.size % requirement.alignment != 0 or
+                item.base % requirement.alignment != 0)
+            {
+                return error.ProgrammingWriteFailed;
+            }
+
+            const end = std.math.add(u64, item.base, requirement.size - 1) catch return error.ProgrammingWriteFailed;
+            if (width == 0 and end > std.math.maxInt(u32)) {
+                return error.ProgrammingWriteFailed;
+            }
+
+            if (width == 2) {
+                if (source.index == num_vf_bar_slots - 1 or occupied[source.index + 1]) {
+                    return error.ProgrammingWriteFailed;
+                }
+
+                occupied[source.index + 1] = true;
+                try self.snapshot.capture(self.function, vfOffset(source, source.index + 1));
+            }
+        }
+    }
+
+    fn vfOffset(source: VfBarRef, index: usize) Offset(u32) {
+        return Offset(u32).from(@as(usize, source.bars.registers.base) + VfBars.offset(index).raw());
+    }
+
+    fn writeVfBars(self: *Commit) Error!void {
+        for (self.group) |item| {
+            const source = switch (item.requirement.source) {
+                .vf_bar => |source| source,
+                else => continue,
+            };
+            const offset = vfOffset(source, source.index);
+            const saved = self.snapshot.get(offset);
+            try self.writeReadback(offset, MemoryBar.from(saved).withBase(@truncate(item.base)).raw(), saved);
+            if (is64(item.requirement.type)) {
+                try self.writeBarHi(vfOffset(source, source.index + 1), item.base);
+            }
+        }
+    }
+
+    fn writeVfControl(self: *Commit, value: u16) Error!void {
+        const offset = self.vf_control orelse return;
+        self.function.write(offset, value) catch return error.ProgrammingWriteFailed;
+
+        const readback = self.function.read(offset) catch return error.ProgrammingWriteFailed;
+        if (readback != value) {
+            return error.ProgrammingReadbackMismatch;
         }
     }
 
@@ -189,6 +314,14 @@ const Commit = struct {
     }
 
     fn disableDecode(self: *Commit) Error!void {
+        if (self.vf_control != null) {
+            try self.writeVfControl(self.vf_saved_control & ~@as(u16, 8));
+        }
+
+        if (!self.has_pf) {
+            return;
+        }
+
         const disabled = self.snapshot.command & ~command_decode_mask;
         try self.writeReadbackCommand(.{
             .value = disabled,
@@ -199,6 +332,7 @@ const Commit = struct {
 
     fn writePhase(self: *Commit) Error!void {
         try self.writeBars();
+        try self.writeVfBars();
         try self.writeRom();
         try self.writeWindows();
     }
@@ -301,26 +435,25 @@ const Commit = struct {
     }
 
     fn restoreDecode(self: *Commit) Error!void {
-        try self.writeReadbackCommand(.{
-            .value = self.snapshot.command,
-            .access_error = error.ProgrammingWriteFailed,
-            .mismatch_error = error.ProgrammingReadbackMismatch,
-        });
+        if (self.has_pf) {
+            try self.writeReadbackCommand(.{
+                .value = self.snapshot.command,
+                .access_error = error.ProgrammingWriteFailed,
+                .mismatch_error = error.ProgrammingReadbackMismatch,
+            });
+        }
+
+        try self.writeVfControl(self.vf_saved_control);
     }
 
     fn rollback(self: *Commit, original: Error) Error {
+        if (self.vf_control != null) {
+            self.disableDecode() catch return error.ProgrammingPartial;
+        }
         self.journal.rollback(self.function) catch return error.ProgrammingPartial;
-        self.restoreCommand() catch return error.ProgrammingPartial;
+        self.restoreDecode() catch return error.ProgrammingPartial;
 
         return original;
-    }
-
-    fn restoreCommand(self: *Commit) Error!void {
-        try self.writeReadbackCommand(.{
-            .value = self.snapshot.command,
-            .access_error = error.ProgrammingPartial,
-            .mismatch_error = error.ProgrammingPartial,
-        });
     }
 
     const WriteCommand = struct {
@@ -594,6 +727,8 @@ pub const unit = struct {
     const Sbdf = core.Sbdf;
 
     const BarRef = bar.Ref;
+    const Bar = bar.Bar;
+    const BarWidth = Bar.Memory.Width;
 
     const RequirementShape = struct {
         size: u64,
@@ -1081,6 +1216,227 @@ pub const unit = struct {
         try expectNoAccess(&backend, sbdf(2));
     }
 
+    test "VF capacity three allocates aggregate space and commits without PF Command writes" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        seedHeader(&bytes, .type0, command_all);
+        store16(&bytes, 0x108, 0x18);
+        var backend = LoggedConfig.from(&.{.{ .sbdf = sbdf(0), .bytes = &bytes }});
+        const function = backend.function(sbdf(0));
+        const requirement = try vfRequirement(function, 0, .bits_32, 3);
+        try testing.expectEqual(@as(u64, 0x3000), requirement.size);
+        try testing.expectEqual(@as(u64, 0x1000), requirement.alignment);
+        const nodes = [_]resources.assignment.Node{.{
+            .parent = null,
+            .type = .endpoint,
+            .requirements = &.{requirement},
+        }};
+        const assignments = try resources.assign(testing.allocator, .{
+            .nodes = &nodes,
+            .roots = &.{0},
+            .apertures = .{ .mmio32 = .{ .type = .mmio32, .bounds = .{ .start = 0x8000_1000, .end = 0x8000_4000 } } },
+        });
+        defer testing.allocator.free(assignments);
+        try testing.expect(assignments[0].function().eql(function));
+        try commit(assignments);
+        try testing.expectEqual(@as(u32, 0x8000_1000), load32(&bytes, 0x124));
+        try testing.expectEqual(@as(u16, 0x18), load16(&bytes, 0x108));
+        try testing.expectEqual(@as(u16, command_all), load16(&bytes, offset.command));
+        for (backend.log[0..backend.log_len]) |access| {
+            try testing.expect(access.offset != offset.command);
+            if (access.operation == .write16 and access.offset == 0x108) {
+                try testing.expect(access.value & 1 == 0);
+            }
+        }
+    }
+
+    test "mixed PF and VF commit restores both decode controls" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        seedHeader(&bytes, .type0, command_all);
+        store16(&bytes, 0x108, 8);
+        store32(&bytes, 0x124, 4);
+        var backend = LoggedConfig.from(&.{.{ .sbdf = sbdf(0), .bytes = &bytes }});
+        const function = backend.function(sbdf(0));
+        const assignments = [_]Assignment{
+            assignmentFor(barRequirement(function, 0, .mmio32, .{ .size = 0x1000, .alignment = 0x1000 }), .mmio32, 0x8000_0000),
+            assignmentFor(try vfRequirement(function, 0, .bits_64, 3), .mmio64, 0x1_0000_1000),
+        };
+        try commit(&assignments);
+        try testing.expectEqual(@as(u32, 0x8000_0000), load32(&bytes, offset.bar0));
+        try testing.expectEqual(@as(u32, 0x1004), load32(&bytes, 0x124));
+        try testing.expectEqual(@as(u32, 1), load32(&bytes, 0x128));
+        try testing.expectEqual(@as(u16, 8), load16(&bytes, 0x108));
+        try testing.expectEqual(@as(u16, command_all), load16(&bytes, offset.command));
+    }
+
+    test "mixed VF readback failure rolls back PF and VF bases before decode" {
+        for ([_]bool{ false, true }) |fail_rollback| {
+            var bytes: [pcie_window_size]u8 = @splat(0);
+            seedHeader(&bytes, .type0, command_all);
+            store16(&bytes, 0x108, 8);
+            var backend = LoggedConfig.from(&.{.{ .sbdf = sbdf(0), .bytes = &bytes }});
+            const function = backend.function(sbdf(0));
+            const assignments = [_]Assignment{
+                assignmentFor(barRequirement(function, 0, .mmio32, .{ .size = 0x1000, .alignment = 0x1000 }), .mmio32, 0x8000_0000),
+                assignmentFor(try vfRequirement(function, 0, .bits_32, 3), .mmio32, 0x9000_0000),
+            };
+            backend.corrupt_on = .{ .operation = 13, .value = 0xFFFF_FFFF };
+            if (fail_rollback) {
+                backend.fail_on = 18;
+            }
+
+            try testing.expectError(if (fail_rollback) error.ProgrammingPartial else error.ProgrammingReadbackMismatch, commit(&assignments));
+            if (fail_rollback) {
+                try testing.expectEqual(@as(u16, 0), load16(&bytes, 0x108));
+                try testing.expectEqual(@as(u16, command_all & ~command_decode_mask), load16(&bytes, offset.command));
+            } else {
+                try testing.expectEqual(@as(u32, 0), load32(&bytes, offset.bar0));
+                try testing.expectEqual(@as(u32, 0), load32(&bytes, 0x124));
+                try testing.expectEqual(@as(u16, 8), load16(&bytes, 0x108));
+                try testing.expectEqual(@as(u16, command_all), load16(&bytes, offset.command));
+            }
+        }
+    }
+
+    test "VF active decode and malformed assignments fail before writes" {
+        for (0..5) |scenario| {
+            var bytes: [pcie_window_size]u8 = @splat(0);
+            seedHeader(&bytes, .type0, command_all);
+            if (scenario == 0) {
+                store16(&bytes, 0x108, 1);
+            }
+
+            if (scenario == 1) {
+                store32(&bytes, 0x124, 1);
+            }
+
+            var backend = LoggedConfig.from(&.{.{ .sbdf = sbdf(0), .bytes = &bytes }});
+            var requirement = try vfRequirement(backend.function(sbdf(0)), 0, .bits_32, 3);
+            if (scenario == 2) {
+                requirement.type = .mmio64;
+            }
+
+            const base: u64 = if (scenario == 3) 0xFFFF_F000 else if (scenario == 4) 0x8000_0001 else 0x8000_0000;
+            const assignments = [_]Assignment{assignmentFor(requirement, requirement.type, base)};
+            try testing.expectError(error.ProgrammingWriteFailed, commit(&assignments));
+            try expectNoWrites(&backend);
+        }
+    }
+
+    test "VF-only readback failure rolls back without accessing PF Command" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        seedHeader(&bytes, .type0, command_all);
+        store16(&bytes, 0x108, 8);
+        var backend = LoggedConfig.from(&.{.{ .sbdf = sbdf(0), .bytes = &bytes }});
+        const assignments = [_]Assignment{assignmentFor(
+            try vfRequirement(backend.function(sbdf(0)), 0, .bits_32, 3),
+            .mmio32,
+            0x8000_0000,
+        )};
+        backend.corrupt_on = .{ .operation = 7, .value = 0xFFFF_FFFF };
+        try testing.expectError(error.ProgrammingReadbackMismatch, commit(&assignments));
+        try testing.expectEqual(@as(u32, 0), load32(&bytes, 0x124));
+        try testing.expectEqual(@as(u16, 8), load16(&bytes, 0x108));
+        for (backend.log[0..backend.log_len]) |access| {
+            try testing.expect(access.offset != offset.command);
+        }
+    }
+
+    test "VF pair collision and 64-bit range overflow fail before writes" {
+        for ([_]bool{ false, true }) |overflow| {
+            var bytes: [pcie_window_size]u8 = @splat(0);
+            seedHeader(&bytes, .type0, command_all);
+            store32(&bytes, 0x124, 4);
+            var backend = LoggedConfig.from(&.{.{ .sbdf = sbdf(0), .bytes = &bytes }});
+            const function = backend.function(sbdf(0));
+            const assignments = [_]Assignment{
+                assignmentFor(try vfRequirement(function, 0, .bits_64, 3), .mmio64, if (overflow) 0xFFFF_FFFF_FFFF_F000 else 0x8000_0000),
+                assignmentFor(try vfRequirement(function, 1, .bits_32, 3), .mmio32, 0x9000_0000),
+            };
+            try testing.expectError(error.ProgrammingWriteFailed, commit(&assignments));
+            try expectNoWrites(&backend);
+        }
+    }
+
+    test "VF requirements fit a downstream bridge memory window" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        var backend = LoggedConfig.from(&.{.{ .sbdf = sbdf(0), .bytes = &bytes }});
+        const function = backend.function(sbdf(0));
+        const nodes = [_]resources.assignment.Node{
+            .{ .parent = null, .type = .bridge, .requirements = &.{
+                windowRequirement(function, .mem, .mmio32, .{ .size = 0x100000, .alignment = 0x100000 }),
+            } },
+            .{ .parent = 0, .type = .endpoint, .requirements = &.{try vfRequirement(function, 0, .bits_32, 3)} },
+        };
+        const assignments = try resources.assign(testing.allocator, .{
+            .nodes = &nodes,
+            .roots = &.{0},
+            .apertures = .{ .mmio32 = .{ .type = .mmio32, .bounds = .{ .start = 0x8000_0000, .end = 0x8010_0000 } } },
+        });
+        defer testing.allocator.free(assignments);
+        try testing.expectEqual(@as(usize, 2), assignments.len);
+        try testing.expectEqual(assignments[0].base, assignments[1].base);
+        try testing.expectEqual(@as(u64, 0x3000), assignments[1].requirement.size);
+    }
+
+    test "combined PF ROM and VF endpoint uses all thirteen requirements" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        var backend = LoggedConfig.from(&.{.{ .sbdf = sbdf(0), .bytes = &bytes }});
+        const function = backend.function(sbdf(0));
+        var requirements: [num_bar_slots + num_vf_bar_slots + 1]Requirement = undefined;
+        for (0..num_bar_slots) |index| {
+            requirements[index] = barRequirement(function, index, .mmio32, .{ .size = 0x1000, .alignment = 0x1000 });
+        }
+
+        for (0..num_vf_bar_slots) |index| {
+            requirements[index + num_bar_slots] = try vfRequirement(function, index, .bits_32, 3);
+        }
+
+        requirements[requirements.len - 1] = romRequirement(function, .{ .size = 0x1000, .alignment = 0x1000 });
+        const nodes = [_]resources.assignment.Node{.{ .parent = null, .type = .endpoint, .requirements = &requirements }};
+        const assignments = try resources.assign(testing.allocator, .{
+            .nodes = &nodes,
+            .roots = &.{0},
+            .apertures = .{ .mmio32 = .{ .type = .mmio32, .bounds = .{ .start = 0x8000_0000, .end = 0x8001_9000 } } },
+        });
+        defer testing.allocator.free(assignments);
+        try testing.expectEqual(@as(usize, 13), assignments.len);
+        for (assignments) |item| {
+            try testing.expect(item.function().eql(function));
+        }
+
+        try expectNoWrites(&backend);
+    }
+
+    test "VF constructor rejects unsized IO and aggregate overflow without config access" {
+        var bytes: [pcie_window_size]u8 = @splat(0);
+        var backend = LoggedConfig.from(&.{.{ .sbdf = sbdf(0), .bytes = &bytes }});
+        const bars: VfBars = .{ .registers = .{ .function = backend.function(sbdf(0)), .base = 0x100 } };
+        var entry = Bar{ .index = 0, .type = .{ .memory = .{ .base = 0, .size = null, .width = .bits_32, .prefetchable = false } } };
+        try testing.expectEqual(@as(?Requirement, null), try Requirement.fromVfBar(bars, entry, 0));
+        try testing.expectError(error.UnsizedBar, Requirement.fromVfBar(bars, entry, 3));
+        entry.type.memory.size = 0;
+        try testing.expectError(error.InvalidValue, Requirement.fromVfBar(bars, entry, 3));
+        entry.type.memory.size = 0x3000;
+        try testing.expectError(error.InvalidValue, Requirement.fromVfBar(bars, entry, 3));
+        entry.type.memory.size = 0x8000_0000;
+        try testing.expectError(error.ResourceExhausted, Requirement.fromVfBar(bars, entry, 3));
+        entry.type.memory.width = .bits_64;
+        entry.type.memory.size = @as(u64, 1) << 63;
+        try testing.expectError(error.ResourceExhausted, Requirement.fromVfBar(bars, entry, 3));
+        entry.type = .{ .io = .{ .base = 0, .size = 0x100 } };
+        try testing.expectError(error.InvalidValue, Requirement.fromVfBar(bars, entry, 3));
+        entry.type = .none;
+        try testing.expectEqual(@as(?Requirement, null), try Requirement.fromVfBar(bars, entry, 3));
+        try testing.expectEqual(@as(usize, 0), backend.log_len);
+    }
+
+    fn vfRequirement(function: Function, index: usize, width: BarWidth, capacity: u16) !Requirement {
+        return (try Requirement.fromVfBar(.{ .registers = .{ .function = function, .base = 0x100 } }, .{
+            .index = index,
+            .type = .{ .memory = .{ .base = 0, .size = 0x1000, .width = width, .prefetchable = false } },
+        }, capacity)).?;
+    }
+
     fn oneBarAssignments(function: Function, resource_type: Type, base: u64) [1]Assignment {
         return .{assignmentFor(
             barRequirement(function, 0, resource_type, .{ .size = 0x1000, .alignment = 0x1000 }),
@@ -1126,7 +1482,7 @@ pub const unit = struct {
     }
 
     fn seedHeader(bytes: []u8, format: HeaderFormat, command: u16) void {
-        bytes[offset.type] = @intFromEnum(format);
+        bytes[offset.type] = @backingInt(format);
         store16(bytes, offset.command, command);
     }
 

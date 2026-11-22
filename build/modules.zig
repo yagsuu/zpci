@@ -90,6 +90,7 @@ pub const Modules = struct {
 
         addImports(modules.capabilities, &.{
             .{ "stdx", stdx },
+            .{ "bar", modules.bar },
             .{ "config", modules.config },
             .{ "core", modules.core },
             .{ "testing", modules.testing },
@@ -104,6 +105,7 @@ pub const Modules = struct {
 
         addImports(modules.resources, &.{
             .{ "stdx", stdx },
+            .{ "capabilities", modules.capabilities },
             .{ "bar", modules.bar },
             .{ "config", modules.config },
             .{ "core", modules.core },

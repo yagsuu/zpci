@@ -5,6 +5,7 @@ const BitFieldExt = stdx.bits.BitFieldExt;
 const BitField = stdx.bits.BitField;
 
 pub const id: extended.Id = .sriov;
+pub const num_bar_slots: usize = 6;
 
 pub const Capabilities = BitFieldExt(u32, .{
     .vf_migration = .{ .type = bool, .access = .ro },

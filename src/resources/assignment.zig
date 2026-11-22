@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const stdx = @import("stdx");
+const core = @import("core");
 
 const resources = @import("module.zig");
 
@@ -19,7 +20,8 @@ pub const NodeIndex = u16;
 pub const max_nodes: usize = std.math.maxInt(NodeIndex);
 pub const max_depth: u8 = 32;
 
-const max_endpoint_requirements: usize = 7;
+const max_endpoint_requirements: usize = core.header.type0.num_bar_slots + 1 +
+    core.capabilities.sriov.num_bar_slots;
 const max_bridge_requirements: usize = 5;
 const max_node_requirements: usize = max_endpoint_requirements;
 
@@ -151,7 +153,7 @@ fn childApertures(assignments: []const Assignment) Apertures {
                     .mmio64_prefetch => child.mmio64_prefetch = aperture,
                 }
             },
-            .bar, .rom => {},
+            .bar, .vf_bar, .rom => {},
         }
     }
 
@@ -304,7 +306,6 @@ comptime {
 pub const unit = struct {
     const bar = @import("bar");
     const config = @import("config");
-    const core = @import("core");
     const support = @import("testing");
 
     const testing = std.testing;

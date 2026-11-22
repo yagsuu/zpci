@@ -5,6 +5,7 @@ const std = @import("std");
 const stdx = @import("stdx");
 
 const bar = @import("bar");
+const sriov = @import("capabilities").sriov;
 const config = @import("config");
 const core = @import("core");
 
@@ -19,8 +20,12 @@ const Bar = bar.Bar;
 const BarRef = bar.Ref;
 const BarType = Bar.Type;
 const BarMemory = Bar.Memory;
+const VfBars = sriov.Bars;
+const VfBarRef = sriov.BarRef;
 const WindowType = core.bridge.Type;
 const Range = stdx.ranges.Range(u64);
+
+const num_vf_bar_slots = core.capabilities.sriov.num_bar_slots;
 
 pub const assign = assignment.assign;
 pub const commit = programming.commit;
@@ -50,6 +55,7 @@ pub const Type = enum(u3) {
 
 pub const Source = union(enum) {
     bar: BarRef,
+    vf_bar: VfBarRef,
     rom: Function,
     bridge: Bridge,
 
@@ -65,7 +71,7 @@ pub const Requirement = struct {
     alignment: u64,
     source: Source,
 
-    pub const Error = error{UnsizedBar};
+    pub const Error = error{ UnsizedBar, InvalidValue, ResourceExhausted };
 
     pub fn fromBar(function: Function, entry: Bar) Error!?Requirement {
         const resource_type, const size = switch (entry.type) {
@@ -85,6 +91,35 @@ pub const Requirement = struct {
             .size = size,
             .alignment = size,
             .source = .{ .bar = BarRef.from(function, entry.index) },
+        };
+    }
+
+    pub fn fromVfBar(bars: VfBars, entry: Bar, capacity: u16) Error!?Requirement {
+        if (capacity == 0 or entry.type == .none) {
+            return null;
+        }
+
+        const memory = switch (entry.type) {
+            .memory => |memory| memory,
+            else => return error.InvalidValue,
+        };
+        const size = memory.size orelse return error.UnsizedBar;
+        if (size == 0 or !std.math.isPowerOfTwo(size) or entry.index >= num_vf_bar_slots or
+            (memory.width == .bits_64 and entry.index == num_vf_bar_slots - 1))
+        {
+            return error.InvalidValue;
+        }
+
+        const aggregate = std.math.mul(u64, size, capacity) catch return error.ResourceExhausted;
+        if (memory.width == .bits_32 and aggregate > @as(u64, 1) << 32) {
+            return error.ResourceExhausted;
+        }
+
+        return .{
+            .type = memoryType(memory),
+            .size = aggregate,
+            .alignment = size,
+            .source = .{ .vf_bar = VfBarRef.from(bars, entry.index) },
         };
     }
 
@@ -165,6 +200,7 @@ pub const Assignment = struct {
     pub fn function(self: Assignment) Function {
         return switch (self.requirement.source) {
             .bar => |source| source.function,
+            .vf_bar => |source| source.bars.registers.function,
             .rom => |owner| owner,
             .bridge => |source| source.function,
         };

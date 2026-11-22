@@ -506,6 +506,12 @@ pub const unit = struct {
                 try testing.expectEqual(bar.index, options.actual.source.bar.index);
                 try testing.expect(bar.function.eql(options.actual.source.bar.function));
             },
+            .vf_bar => |source| {
+                const actual = options.actual.source.vf_bar;
+                try testing.expectEqual(source.index, actual.index);
+                try testing.expectEqual(source.bars.registers.base, actual.bars.registers.base);
+                try testing.expect(source.bars.registers.function.eql(actual.bars.registers.function));
+            },
         }
     }
 
