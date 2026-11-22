@@ -13,6 +13,7 @@ pub const Header = BitField(u32, .{
 
 pub const Id = enum(u16) {
     aer = 0x0001,
+    dsn = 0x0003,
     acs = 0x000D,
     ari = 0x000E,
     sriov = 0x0010,

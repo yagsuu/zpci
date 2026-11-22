@@ -9,3 +9,4 @@ pub const sriov = @import("sriov.zig");
 pub const aer = @import("aer.zig");
 pub const acs = @import("acs.zig");
 pub const dpc = @import("dpc.zig");
+pub const dsn = @import("dsn.zig");
