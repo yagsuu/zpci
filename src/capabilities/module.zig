@@ -8,6 +8,9 @@ pub const aer = @import("aer.zig");
 pub const acs = @import("acs.zig");
 pub const dpc = @import("dpc.zig");
 pub const dsn = @import("dsn.zig");
+pub const ats = @import("ats.zig");
+pub const pasid = @import("pasid.zig");
+pub const pri = @import("pri.zig");
 
 test {
     _ = standard.unit;
@@ -20,4 +23,7 @@ test {
     _ = acs.unit;
     _ = dpc.unit;
     _ = dsn.unit;
+    _ = ats.unit;
+    _ = pasid.unit;
+    _ = pri.unit;
 }

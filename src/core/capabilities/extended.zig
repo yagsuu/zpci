@@ -16,7 +16,10 @@ pub const Id = enum(u16) {
     dsn = 0x0003,
     acs = 0x000D,
     ari = 0x000E,
+    ats = 0x000F,
     sriov = 0x0010,
+    pri = 0x0013,
+    pasid = 0x001B,
     dpc = 0x001D,
     _,
 };
