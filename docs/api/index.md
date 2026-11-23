@@ -37,4 +37,4 @@ Package module: `pci`.
 
 - [Source conventions](../guidelines/conventions.md)
 - [Testing](../guidelines/testing.md)
-- [Contract writing](../guidelines/spec-writing.md)
+- [API writing](../guidelines/api-writing.md)

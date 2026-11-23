@@ -52,7 +52,7 @@ Priorities, in order: correctness and safety, predictable performance, developer
 - Do not introduce catch-all modules, registries, object systems, or vtables without a defined need.
 - Put constructors and operations on the type they serve. Use `Type.init` for non-allocating construction unless a narrower convention applies.
 - Do not hide allocation, I/O, synchronization, architecture probing, or privileged operations behind a pure-looking API.
-- Update every caller after a rename. Do not retain compatibility aliases unless the specification requires them.
+- Update every caller after a rename. Do not retain compatibility aliases unless the API contract requires them.
 - Prefer the simplest return type that represents the contract without pushing avoidable branching into callers.
 
 ### Safety, bounds, and errors
