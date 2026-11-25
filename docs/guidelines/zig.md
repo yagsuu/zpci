@@ -1,6 +1,6 @@
 # Zig engineering guidelines
 
-This document sets the local defaults for Zig source. An approved specification or narrower project convention overrides these rules.
+This document sets the local defaults for Zig source. A narrower project convention overrides these defaults.
 
 Priorities, in order: correctness and safety, predictable performance, developer experience. Prefer explicit, bounded designs over clever abstractions.
 
@@ -11,10 +11,17 @@ Priorities, in order: correctness and safety, predictable performance, developer
 - Run `zig fmt`.
 - Use four spaces. Do not use hard tabs.
 - Keep lines at or below 120 columns. Use trailing commas and let `zig fmt` wrap expressions, calls, literals, and type declarations.
-- Use braces for every multi-line `if`, `while`, `for`, and `switch` body. A braceless body is allowed only when the whole construct fits on one line, contains one statement, and has no nested control flow.
-- Use one blank line to separate declarations and logical statement groups. Do not use consecutive blank lines or decorative spacing.
+- Use multiline braces for every statement-form `if` and `else` body, including single-statement guards. Keep `else if` chains. A compact value-producing `if` expression is allowed.
+- Use braces for every multi-line `while`, `for`, and `switch` body. A braceless body is allowed only when the whole construct fits on one line, contains one statement, and has no nested control flow.
+- Use one blank line between operation groups with different purposes. Separate validation from normal work, completed control flow from subsequent work, and result construction from publication or ownership transfer. Do not use consecutive blank lines or decorative spacing.
+- Keep related operations together: acquisition and cleanup registration, reads or writes of related registers, assertions for one invariant, updates for one state transition, and setup for the loop it serves.
+- Review spacing by meaning, not by syntax alone. Do not add a blank line after every declaration, assertion, or closing brace. Keep small accessors compact.
 - Put module imports and aliases at the head of a file. Group imports as `std`/`builtin`, external packages, then local modules. Follow imports with type aliases, value aliases, then function aliases. Separate non-empty groups with one blank line. Do not add comments that only name these groups.
-- Order source from the most important declaration to supporting details. Within a type: fields, nested types, `const Self = @This();` when needed, `init`, then other methods. Move complex nested types to module scope.
+- Define clean local type aliases for imported types used in fields, signatures, and implementations. Instantiate repeated concrete container types once. Keep namespace qualification for operation and constant families, not repeated type paths; do not alias mutable state merely to shorten expressions.
+- Put the public contract and primary operations before implementation details. Keep supporting representations together after the primary API when a large catalogue would obscure it. Put source-local unit tests last.
+- Within a type, put fields and relevant nested contract types first, then `const Self = @This();` when needed, constructors and lifecycle methods, public operation families, and private support. Private dispatch-table instances belong with backend implementation wiring, not above the public API.
+- Keep orchestrators before detailed phase helpers. Group helpers by purpose rather than forcing strict call-graph or alphabetical order. Pair register getters and setters within their hardware families.
+- Preserve type owners and physical register layout. Declaration ordering alone does not justify a namespace change, file split, or helper extraction.
 - Group an acquisition with its matching `defer` or `errdefer`.
 - Put a local binding immediately before the block that first uses it.
 - Put a comment immediately before the declaration, statement, or block that it explains.
@@ -41,14 +48,14 @@ Priorities, in order: correctness and safety, predictable performance, developer
 - Use consistent labelled contract lines when they improve scanning: `Requirements:`, `Ordering:`, `Effects:`, `Returns:`, `Faults:`, or `Clobbers:`.
 - Document public behavior that the type and signature cannot express: allocation, ownership, invalidation, waiting, capacity, concurrency, ordering, and errors.
 - Do not retain changelog notes, process narration, task references, TODOs, commented-out code, or decorative banners in landed source.
-- Give each non-trivial test a one-line description of its goal and method.
+- Test names state observable behavior; add comments only for non-obvious setup or constraints.
 
 ## Engineering
 
 ### Design, modules, and APIs
 
-- Approved specifications define public behavior. Resolve an unclear public contract before implementation.
-- Give each file one concept or type family. Keep dependency direction explicit. Keep facades as re-exports and aliases only.
+- Resolve an unclear public contract before implementation.
+- Give each file one concept or type family. Keep dependency direction explicit. Namespace entry points may own namespace-level types and operations; avoid redundant forwarding-only model files.
 - Do not introduce catch-all modules, registries, object systems, or vtables without a defined need.
 - Put constructors and operations on the type they serve. Use `Type.init` for non-allocating construction unless a narrower convention applies.
 - Do not hide allocation, I/O, synchronization, architecture probing, or privileged operations behind a pure-looking API.
