@@ -1197,7 +1197,7 @@ pub const unit = struct {
         try testing.expectEqual(@as(usize, 5), count);
 
         const result = try bars.probeAll();
-        const entries = result.asSlice();
+        const entries = result.slice();
 
         try testing.expectEqual(@as(usize, 5), entries.len);
         try testing.expectEqual(@as(usize, 0), entries[0].index);

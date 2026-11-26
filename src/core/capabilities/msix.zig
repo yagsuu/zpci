@@ -18,7 +18,7 @@ pub const Control = BitFieldExt(u16, .{
     .enable = bool,
 }, .{ .unnamed = .reserved });
 
-pub const Location = BitField(u32, .{
+pub const BarLocation = BitField(u32, .{
     .bir = .{ .type = u3, .access = .ro },
     .offset_shifted = .{ .type = u29, .access = .ro },
 });
@@ -53,13 +53,13 @@ pub const unit = struct {
     const testing = std.testing;
 
     test "MSI-X location preserves BIR and encoded offset bits" {
-        const location = Location.from(0x1234_5005);
+        const location = BarLocation.from(0x1234_5005);
 
         try testing.expectEqual(@as(u3, 5), location.bir);
         try testing.expectEqual(@as(u29, 0x1234_5000 >> 3), location.offset_shifted);
-        try testing.expectEqual(@as(u32, 0x1234_5005), Location.raw(location));
+        try testing.expectEqual(@as(u32, 0x1234_5005), BarLocation.raw(location));
 
-        const maximum = Location.from(0xFFFF_FFFF);
+        const maximum = BarLocation.from(0xFFFF_FFFF);
 
         try testing.expectEqual(@as(u3, 7), maximum.bir);
         try testing.expectEqual(@as(u29, 0x1FFF_FFFF), maximum.offset_shifted);

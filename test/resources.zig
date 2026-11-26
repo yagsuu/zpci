@@ -231,7 +231,7 @@ test "cold configuration sizes and programs a downstream memory BAR" {
         &.{requirement},
     );
     const nodes = [_]AssignmentNode{
-        .{ .parent = null, .type = .bridge, .requirements = bridge_requirements.asSlice() },
+        .{ .parent = null, .type = .bridge, .requirements = bridge_requirements.slice() },
         .{ .parent = 0, .type = .endpoint, .requirements = &.{requirement} },
     };
     const assignments = try pci.resources.assign(testing.allocator, .{

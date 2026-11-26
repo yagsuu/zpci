@@ -35,10 +35,9 @@ exe.root_module.addImport("stdx", zstdx.module("stdx"));
 | `pci.config` | Configuration access through ECAM or PIO |
 | `pci.header` | Type 0/1 header access and bridge windows |
 | `pci.bar` | BAR decoding, iteration, and sizing |
-| `pci.capabilities` | Standard, extended, and PCIe capability traversal and decoding |
+| `pci.capabilities` | Capability traversal, typed access, and programming |
 | `pci.memory` | BAR-mapped memory access |
 | `pci.resources` | Resource assignment, bridge windows, and programming |
-| `pci.interrupts` | MSI and MSI-X capability and table programming |
 | `pci.topology` | Enumeration, bus numbering, traversal, and paths |
 | `pci.testing` | Byte-backed configuration and BAR-memory test backends |
 
@@ -132,64 +131,76 @@ try pci.resources.commit(assignments);
 
 ### MSI
 
+Interrupt sources quiesced; MSI-X disabled.
+
 ```zig
 const pci = @import("pci");
 
-const Msi = pci.interrupts.msi.Capability;
+const Msi = pci.capabilities.msi.Capability;
 
 const msi = (try Msi.find(function)) orelse return error.NoMsi;
+
+try msi.updateControl(.{ .enable = false });
 
 try msi.program(.{
     .address = 0xFEE0_0000, // x86 local APIC, destination 0.
     .data = vector_data,
     .num_vectors = .one,
 });
+
+try msi.updateControl(.{ .enable = true });
 ```
 
 ### MSI-X
 
+Requires quiesced interrupt sources and platform-specific MMIO ordering, barriers,
+and completion.
+
 ```zig
 const pci = @import("pci");
 
-const Msi = pci.interrupts.msi.Capability;
-const Msix = pci.interrupts.msix.Capability;
-const Table = pci.interrupts.msix.Table;
+const Msi = pci.capabilities.msi.Capability;
+const Msix = pci.capabilities.msix.Capability;
+const Table = pci.capabilities.msix.Table;
 
 const msix = (try Msix.find(function)) orelse return error.NoMsix;
-const control = try msix.control();
-
-try msix.setFunctionMask(true);
-try msix.disable();
 
 if (try Msi.find(function)) |msi| {
-    try msi.disable();
+    try msi.updateControl(.{ .enable = false });
 }
 
-const num_vectors = @as(u16, control.table_size_minus_one) + 1;
+const num_vectors = try msix.numVectors();
 const table = Table.from(table_memory, num_vectors);
 
+try msix.updateControl(.{ .enable = true, .function_mask = true });
+
+// Establish Function Mask visibility before table access.
 // Keep unused entries masked.
 for (0..num_vectors) |index| {
     try table.setMasked(@intCast(index), true);
 }
 
+// Establish mask visibility before payload writes.
 try table.program(0, .{
     .address = 0xFEE0_0000, // x86 local APIC, destination 0.
     .data = vector_data,
-    .masked = true,
 });
 
-try msix.enable();
+// Establish payload visibility before unmasking.
 try table.setMasked(0, false);
-try msix.setFunctionMask(false);
+
+// Establish entry-mask visibility before clearing Function Mask.
+try msix.updateControl(.{ .function_mask = false });
 ```
 
 Disable MSI-X:
 
 ```zig
-try msix.setFunctionMask(true);
-try table.setMasked(0, true);
-try msix.disable();
+try msix.updateControl(.{ .function_mask = true });
+
+// Establish Function Mask visibility.
+// Synchronize in-flight interrupts before disabling and releasing resources.
+try msix.updateControl(.{ .enable = false });
 ```
 
 ## Configuration registers
@@ -230,8 +241,8 @@ try function.setCommand(Command.replace(command, .{
 | `zig build test` | Run host tests and compile fixtures |
 | `zig fmt --check build.zig build.zig.zon build src test` | Check formatting |
 
-Host categories: `core`, `config`, `header`, `bar`, `capabilities`, `interrupts`,
-`memory`, `resources`, `topology`, `testing`, and `integration`.
+Host categories: `core`, `config`, `header`, `bar`, `capabilities`, `memory`,
+`resources`, `topology`, `testing`, and `integration`.
 
 Tests: `src/` (unit), `test/` (integration tests), `test/compile/` (API rejection fixtures).
 

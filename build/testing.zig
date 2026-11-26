@@ -38,7 +38,6 @@ pub fn addHostTests(
         .{ .name = "header", .module = modules.header },
         .{ .name = "bar", .module = modules.bar },
         .{ .name = "capabilities", .module = modules.capabilities },
-        .{ .name = "interrupts", .module = modules.interrupts },
         .{ .name = "memory", .module = modules.memory },
         .{ .name = "resources", .module = modules.resources },
         .{ .name = "topology", .module = modules.topology },

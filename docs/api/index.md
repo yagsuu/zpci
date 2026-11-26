@@ -8,10 +8,9 @@ Package module: `pci`.
 | `pci.config` | [Configuration access, functions, ECAM, PIO](config.md) |
 | `pci.header` | [Live headers and decoded bridge windows](header.md) |
 | `pci.bar` | [BAR decoding and sizing](bar.md) |
-| `pci.capabilities` | [List/register access](capabilities/access.md), [PCIe](capabilities/pcie.md), [PM](capabilities/pm.md), [ARI](capabilities/ari.md), [SR-IOV](capabilities/sriov.md), [AER](capabilities/aer.md), [ACS](capabilities/acs.md), [DPC](capabilities/dpc.md), [DSN](capabilities/dsn.md), [ATS](capabilities/ats.md), [PASID](capabilities/pasid.md), [PRI](capabilities/pri.md) |
+| `pci.capabilities` | [List/register access](capabilities/access.md), [PCIe](capabilities/pcie.md), [PM](capabilities/pm.md), [MSI](capabilities/msi.md), [MSI-X](capabilities/msix.md), [ARI](capabilities/ari.md), [SR-IOV](capabilities/sriov.md), [AER](capabilities/aer.md), [ACS](capabilities/acs.md), [DPC](capabilities/dpc.md), [DSN](capabilities/dsn.md), [ATS](capabilities/ats.md), [PASID](capabilities/pasid.md), [PRI](capabilities/pri.md) |
 | `pci.memory` | [BAR-memory access](memory.md) |
 | `pci.resources` | [Placement, bridge encoding, programming](resources.md) |
-| `pci.interrupts` | [MSI](interrupts/msi.md), [MSI-X](interrupts/msix.md) |
 | `pci.topology` | [Enumeration, cold configuration, trees](topology.md) |
 | `pci.testing` | [Host-test accessors and fixture guidance](../guidelines/testing.md) |
 

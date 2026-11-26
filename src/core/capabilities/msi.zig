@@ -28,12 +28,12 @@ pub const VectorCount = enum(u3) {
     _,
 
     pub fn from(raw: u3) VectorCount {
-        return @enumFromInt(raw);
+        return @fromBackingInt(raw);
     }
 
     pub fn count(self: VectorCount) error{MalformedField}!u6 {
-        return switch (@intFromEnum(self)) {
-            0...5 => @as(u6, 1) << @as(u3, @intCast(@intFromEnum(self))),
+        return switch (@backingInt(self)) {
+            0...5 => @as(u6, 1) << @as(u3, @intCast(@backingInt(self))),
             else => error.MalformedField,
         };
     }
@@ -87,9 +87,11 @@ pub const unit = struct {
             const encoding: u3 = @intCast(raw);
             const bits = (@as(u16, encoding) << 1) | (@as(u16, encoding) << 4);
             const word = Control.from(bits);
-            try testing.expectEqual(encoding, @intFromEnum(word.multi_msg_capable));
-            try testing.expectEqual(encoding, @intFromEnum(word.multi_msg_enable));
+
+            try testing.expectEqual(encoding, @backingInt(word.multi_msg_capable));
+            try testing.expectEqual(encoding, @backingInt(word.multi_msg_enable));
             try testing.expectEqual(bits, Control.raw(word));
+
             if (encoding <= 5) {
                 try testing.expectEqual(@as(u6, 1) << encoding, try word.multi_msg_capable.count());
             } else {
@@ -97,7 +99,19 @@ pub const unit = struct {
                 try testing.expectError(error.MalformedField, word.multi_msg_enable.count());
             }
         }
+
         try testing.expectEqual(@as(u16, 0), Control.raw(.{}));
+    }
+
+    test "vector counts accept powers of two through 32" {
+        for ([_]u6{ 1, 2, 4, 8, 16, 32 }, 0..) |count, encoding| {
+            const expected = VectorCount.from(@intCast(encoding));
+            try testing.expectEqual(expected, try VectorCount.fromCount(count));
+        }
+
+        for ([_]u6{ 0, 3, 33, 63 }) |count| {
+            try testing.expectError(error.InvalidRouting, VectorCount.fromCount(count));
+        }
     }
 
     test "access masks distinguish writable, sticky, action, and reserved bits" {

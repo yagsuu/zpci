@@ -800,7 +800,7 @@ pub const unit = struct {
         const bars = Bars.from(Function.from(backend.config(), backend.sbdf), .type0);
 
         const result = try bars.probeAll();
-        const entries = result.asSlice();
+        const entries = result.slice();
 
         try testing.expectEqual(@as(usize, 5), entries.len);
         try expectIo(entries[0], .{ .index = 0, .base = 0x0000_C000, .size = 0x100 });

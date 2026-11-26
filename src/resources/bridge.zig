@@ -213,7 +213,7 @@ pub const unit = struct {
         const original = children;
 
         const result = try aggregate(testing.allocator, function, &children);
-        const windows = result.asSlice();
+        const windows = result.slice();
 
         try testing.expectEqual(@as(usize, 3), windows.len);
         try expectBridgeRequirement(function, windows[0], .io, .io, 0x1000, Io.alignment);
@@ -244,7 +244,7 @@ pub const unit = struct {
             childRequirement(function, .{ .type = .mmio64_prefetch, .size = 0x20_0000, .alignment = 0x20_0000 }),
         };
         const result = try aggregate(testing.allocator, function, &children);
-        const windows = result.asSlice();
+        const windows = result.slice();
 
         try testing.expectEqual(@as(usize, 1), windows.len);
         try expectBridgeRequirement(function, windows[0], .mem_prefetch, .mmio64_prefetch, 0x40_0000, 0x20_0000);
@@ -270,7 +270,7 @@ pub const unit = struct {
         var tracking = FailingAllocator.init(testing.allocator, .{});
         const result = try aggregate(tracking.allocator(), function, &children);
 
-        try expectBridgeRequirement(function, result.asSlice()[0], .mem, .mmio32, 0x10_0000, Memory.alignment);
+        try expectBridgeRequirement(function, result.slice()[0], .mem, .mmio32, 0x10_0000, Memory.alignment);
         try testing.expectEqual(tracking.allocated_bytes, tracking.freed_bytes);
         try expectSameRequirement(.{
             .expected = childRequirement(function, .{ .type = .mmio32, .size = 0x10_0000, .alignment = 0x10_0000 }),
@@ -289,7 +289,7 @@ pub const unit = struct {
         const original = children;
 
         const result = try aggregate(testing.allocator, function, &children);
-        const windows = result.asSlice();
+        const windows = result.slice();
 
         try testing.expectEqual(@as(usize, 1), windows.len);
         try expectBridgeRequirement(function, windows[0], .io, .io, 0x20_0000, 0x10_0000);
@@ -308,7 +308,7 @@ pub const unit = struct {
         const children = [_]Requirement{childRequirement(function, .{ .type = .io, .size = 0x200, .alignment = 0x200 })};
 
         const result = try aggregate(testing.allocator, function, &children);
-        const windows = result.asSlice();
+        const windows = result.slice();
 
         try expectBridgeRequirement(function, windows[0], .io, .io, Io.alignment, Io.alignment);
     }
@@ -319,10 +319,10 @@ pub const unit = struct {
         var failing = FailingAllocator.init(testing.allocator, .{ .fail_index = 0 });
 
         const zero_result = try aggregate(failing.allocator(), function, &children);
-        try testing.expectEqual(@as(usize, 0), zero_result.asSlice().len);
+        try testing.expectEqual(@as(usize, 0), zero_result.len());
 
         const empty_result = try aggregate(failing.allocator(), function, &.{});
-        try testing.expectEqual(@as(usize, 0), empty_result.asSlice().len);
+        try testing.expectEqual(@as(usize, 0), empty_result.len());
     }
 
     test "aggregate reports child size addition overflow and releases workspace" {
@@ -369,8 +369,8 @@ pub const unit = struct {
 
         const result = try aggregate(testing.allocator, function, &children);
 
-        try testing.expectEqual(@as(usize, 1), result.asSlice().len);
-        try expectBridgeRequirement(function, result.asSlice()[0], .mem, .mmio32, size, Memory.alignment);
+        try testing.expectEqual(@as(usize, 1), result.len());
+        try expectBridgeRequirement(function, result.slice()[0], .mem, .mmio32, size, Memory.alignment);
     }
 
     test "encode emits canonical disabled encodings for zero-sized windows" {

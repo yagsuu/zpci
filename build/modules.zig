@@ -14,7 +14,6 @@ pub const Modules = struct {
     config: *Module,
     core: *Module,
     header: *Module,
-    interrupts: *Module,
     memory: *Module,
     resources: *Module,
     topology: *Module,
@@ -45,7 +44,6 @@ pub const Modules = struct {
             .config = addModule(b, "config", target, optimize),
             .core = addModule(b, "core", target, optimize),
             .header = addModule(b, "header", target, optimize),
-            .interrupts = addModule(b, "interrupts", target, optimize),
             .memory = addModule(b, "memory", target, optimize),
             .resources = addModule(b, "resources", target, optimize),
             .topology = addModule(b, "topology", target, optimize),
@@ -58,7 +56,6 @@ pub const Modules = struct {
             .{ "config", modules.config },
             .{ "core", modules.core },
             .{ "header", modules.header },
-            .{ "interrupts", modules.interrupts },
             .{ "memory", modules.memory },
             .{ "resources", modules.resources },
             .{ "topology", modules.topology },
@@ -93,14 +90,8 @@ pub const Modules = struct {
             .{ "bar", modules.bar },
             .{ "config", modules.config },
             .{ "core", modules.core },
-            .{ "testing", modules.testing },
-        });
-
-        addImports(modules.interrupts, &.{
-            .{ "config", modules.config },
-            .{ "core", modules.core },
-            .{ "capabilities", modules.capabilities },
             .{ "memory", modules.memory },
+            .{ "testing", modules.testing },
         });
 
         addImports(modules.resources, &.{
